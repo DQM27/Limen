@@ -85,6 +85,17 @@ mat-nav-list {
   padding: 8px 12px;
 }
 
+// Lo que todavía no existe se ve como texto atenuado, no como un botón apagado.
+.proximamente {
+  --mat-list-list-item-container-color: transparent;
+  --mat-list-list-item-hover-state-layer-opacity: 0;
+  --mat-list-list-item-disabled-state-layer-opacity: 0;
+  background: transparent;
+  color: var(--mat-sys-on-surface-variant);
+  opacity: 0.65;
+  cursor: default;
+}
+
 .barra-pie {
   display: flex;
   align-items: center;

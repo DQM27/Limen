@@ -21,22 +21,39 @@
     <nav id="menu-principal" aria-label="Secciones">
       <mat-nav-list>
         @for (seccion of secciones; track seccion.etiqueta) {
-          <a
-            mat-list-item
-            [routerLink]="seccion.ruta"
-            routerLinkActive
-            #activa="routerLinkActive"
-            [activated]="activa.isActive"
-            [attr.aria-current]="activa.isActive ? 'page' : null"
-            [matTooltip]="expandida() ? '' : seccion.etiqueta"
-            matTooltipPosition="right"
-            [attr.aria-label]="expandida() ? null : seccion.etiqueta"
-          >
-            <mat-icon matListItemIcon aria-hidden="true">{{ seccion.icono }}</mat-icon>
-            @if (expandida()) {
-              <span matListItemTitle>{{ seccion.etiqueta }}</span>
-            }
-          </a>
+          @if (seccion.ruta) {
+            <a
+              mat-list-item
+              [routerLink]="seccion.ruta"
+              routerLinkActive
+              #activa="routerLinkActive"
+              [activated]="activa.isActive"
+              [attr.aria-current]="activa.isActive ? 'page' : null"
+              [matTooltip]="expandida() ? '' : seccion.etiqueta"
+              matTooltipPosition="right"
+              [attr.aria-label]="expandida() ? null : seccion.etiqueta"
+            >
+              <mat-icon matListItemIcon aria-hidden="true">{{ seccion.icono }}</mat-icon>
+              @if (expandida()) {
+                <span matListItemTitle>{{ seccion.etiqueta }}</span>
+              }
+            </a>
+          } @else {
+            <a
+              mat-list-item
+              class="proximamente"
+              role="link"
+              [disabled]="true"
+              [matTooltip]="seccion.etiqueta + ' · próximamente'"
+              matTooltipPosition="right"
+              [attr.aria-label]="seccion.etiqueta + ', próximamente'"
+            >
+              <mat-icon matListItemIcon aria-hidden="true">{{ seccion.icono }}</mat-icon>
+              @if (expandida()) {
+                <span matListItemTitle>{{ seccion.etiqueta }}</span>
+              }
+            </a>
+          }
         }
       </mat-nav-list>
     </nav>

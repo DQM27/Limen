@@ -1,15 +1,20 @@
-/** Una entrada de la barra lateral. */
+/** Una entrada de la barra lateral. Sin `ruta`, la pantalla todavía no existe. */
 export interface Seccion {
   etiqueta: string;
   icono: string;
-  ruta: string;
+  ruta?: string;
 }
 
 /**
- * Sólo lo que ya funciona: una sección sin pantalla se ve como un botón roto.
- * Cada pantalla nueva agrega aquí su entrada (previstas: Dentro, Proveedores,
- * Correo, Personal KOF, Gafetes e Historial).
+ * Todas las secciones previstas, para que se vea la forma de la app. Cada
+ * pantalla nueva sólo agrega su `ruta`.
  */
 export const SECCIONES: readonly Seccion[] = [
+  { etiqueta: 'Dentro', icono: 'groups' },
   { etiqueta: 'Contratistas', icono: 'engineering', ruta: '/contratistas' },
+  { etiqueta: 'Proveedores', icono: 'local_shipping' },
+  { etiqueta: 'Correo', icono: 'mail' },
+  { etiqueta: 'Personal KOF', icono: 'badge' },
+  { etiqueta: 'Gafetes', icono: 'confirmation_number' },
+  { etiqueta: 'Historial', icono: 'history' },
 ];

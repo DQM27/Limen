@@ -33,18 +33,25 @@ describe('carcasa de la app', () => {
     expect(raiz.querySelector('main#contenido')).not.toBeNull();
   });
 
-  it('la navegación tiene nombre y sólo ofrece lo que ya funciona', async () => {
+  it('la navegación tiene nombre y sólo Contratistas es un enlace activo', async () => {
     const { raiz } = await crear(true);
 
     expect(raiz.querySelector('nav')?.getAttribute('aria-label')).toBe('Secciones');
     const enlaces = [...raiz.querySelectorAll<HTMLAnchorElement>('nav a[mat-list-item]')];
+    const disponibles = enlaces.filter((a) => a.getAttribute('aria-disabled') !== 'true');
+    const proximamente = enlaces.filter((a) => a.getAttribute('aria-disabled') === 'true');
 
-    expect(enlaces.map((a) => a.textContent?.trim())).toEqual([
+    expect(disponibles.map((a) => a.textContent?.trim())).toEqual([
       expect.stringContaining('Contratistas'),
     ]);
-    // Todo lo que se ve es un enlace real: nada de botones apagados.
-    expect(enlaces.every((a) => a.hasAttribute('href'))).toBe(true);
-    expect(raiz.querySelector('nav [aria-disabled="true"]')).toBeNull();
+    expect(disponibles.every((a) => a.hasAttribute('href'))).toBe(true);
+    expect(proximamente).toHaveLength(6);
+    // Lo que no existe aún se anuncia como tal y no recibe el foco del teclado
+    // (un enlace sin `href` no entra en el orden de tabulación).
+    expect(proximamente.every((a) => a.getAttribute('aria-label')?.endsWith('próximamente'))).toBe(
+      true,
+    );
+    expect(proximamente.some((a) => a.hasAttribute('href'))).toBe(false);
   });
 
   it('marca la página actual para los lectores de pantalla', async () => {
