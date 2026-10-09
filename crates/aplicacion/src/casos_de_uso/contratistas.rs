@@ -83,6 +83,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarContratista<
 
         uow.contratistas().guardar(&contratista);
         uow.auditoria().anotar(EntradaAuditoria::nueva(
+            self.ids.nuevo(),
             EntidadAuditada::Contratista,
             id.uuid(),
             AccionAuditada::Alta,
@@ -98,14 +99,19 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarContratista<
 }
 
 #[derive(Debug)]
-pub struct EditarContratista<F, R> {
+pub struct EditarContratista<F, R, G> {
     fabrica: F,
     reloj: R,
+    ids: G,
 }
 
-impl<F: FabricaUnidadDeTrabajo, R: Reloj> EditarContratista<F, R> {
-    pub const fn new(fabrica: F, reloj: R) -> Self {
-        Self { fabrica, reloj }
+impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> EditarContratista<F, R, G> {
+    pub const fn new(fabrica: F, reloj: R, ids: G) -> Self {
+        Self {
+            fabrica,
+            reloj,
+            ids,
+        }
     }
 
     /// Devuelve lo que cambió (vacío si no cambió nada: entonces no se
@@ -137,6 +143,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj> EditarContratista<F, R> {
 
         uow.contratistas().guardar(&contratista);
         uow.auditoria().anotar(EntradaAuditoria::nueva(
+            self.ids.nuevo(),
             EntidadAuditada::Contratista,
             id.uuid(),
             AccionAuditada::Edicion,

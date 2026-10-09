@@ -51,6 +51,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarEmpresa<F, R
 
         uow.empresas().guardar(&empresa);
         uow.auditoria().anotar(EntradaAuditoria::nueva(
+            self.ids.nuevo(),
             EntidadAuditada::Empresa,
             id.uuid(),
             AccionAuditada::Alta,
@@ -66,14 +67,19 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarEmpresa<F, R
 }
 
 #[derive(Debug)]
-pub struct RenombrarEmpresa<F, R> {
+pub struct RenombrarEmpresa<F, R, G> {
     fabrica: F,
     reloj: R,
+    ids: G,
 }
 
-impl<F: FabricaUnidadDeTrabajo, R: Reloj> RenombrarEmpresa<F, R> {
-    pub const fn new(fabrica: F, reloj: R) -> Self {
-        Self { fabrica, reloj }
+impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RenombrarEmpresa<F, R, G> {
+    pub const fn new(fabrica: F, reloj: R, ids: G) -> Self {
+        Self {
+            fabrica,
+            reloj,
+            ids,
+        }
     }
 
     /// Devuelve lo que cambió (vacío si el nombre ya era ese: entonces no se
@@ -106,6 +112,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj> RenombrarEmpresa<F, R> {
 
         uow.empresas().guardar(&empresa);
         uow.auditoria().anotar(EntradaAuditoria::nueva(
+            self.ids.nuevo(),
             EntidadAuditada::Empresa,
             id.uuid(),
             AccionAuditada::Edicion,

@@ -1,20 +1,18 @@
 [package]
-name = "limen-infra-memoria"
-description = "Implementación en memoria de los puertos de Limen, para pruebas"
+name = "limen-pruebas-contrato"
+description = "Batería de pruebas de contrato de los puertos de persistencia de Limen"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+# Sólo se usa como dependencia de desarrollo de los adaptadores
+# (`infra-memoria`, `infra-surreal`): nunca llega a un binario.
 [dependencies]
 limen-dominio.workspace = true
 limen-aplicacion.workspace = true
 chrono.workspace = true
 uuid.workspace = true
-
-[dev-dependencies]
-limen-pruebas-contrato.workspace = true
-tokio.workspace = true
 
 [lints]
 workspace = true

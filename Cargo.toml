@@ -1,6 +1,12 @@
 [workspace]
 resolver = "3"
-members = ["crates/dominio", "crates/aplicacion", "crates/infra-memoria"]
+members = [
+    "crates/dominio",
+    "crates/aplicacion",
+    "crates/infra-memoria",
+    "crates/infra-surreal",
+    "crates/pruebas-contrato",
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -14,11 +20,18 @@ thiserror = "2"
 uuid = { version = "1", features = ["v7"] }
 proptest = "1"
 tokio = { version = "1", default-features = false, features = ["macros", "rt"] }
+# Sólo motores escritos en Rust: `kv-mem` (pruebas) y `kv-surrealkv` (equipos).
+# RocksDB (`kv-rocksdb`) está prohibido: compila C++ y alarga muchísimo la
+# compilación. `default-features = false` evita que entren TLS y el cliente
+# WebSocket mientras no se usen.
+surrealdb = { version = "3.3", default-features = false, features = ["kv-mem", "kv-surrealkv"] }
 
 # Crates internos
 limen-dominio = { path = "crates/dominio" }
 limen-aplicacion = { path = "crates/aplicacion" }
 limen-infra-memoria = { path = "crates/infra-memoria" }
+limen-infra-surreal = { path = "crates/infra-surreal" }
+limen-pruebas-contrato = { path = "crates/pruebas-contrato" }
 
 # Lints: lo de Lattis (pedantic + nursery + su lista de `deny`) y más estricto
 # todavía. La CI corre clippy con `-D warnings`, así que todo `warn` también

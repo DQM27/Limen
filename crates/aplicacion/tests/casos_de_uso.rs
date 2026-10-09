@@ -74,8 +74,10 @@ mod tests {
         RegistrarContratista::new(almacen.clone(), reloj(), almacen.ids())
     }
 
-    fn editar(almacen: &AlmacenMemoria) -> EditarContratista<AlmacenMemoria, RelojFijo> {
-        EditarContratista::new(almacen.clone(), reloj())
+    fn editar(
+        almacen: &AlmacenMemoria,
+    ) -> EditarContratista<AlmacenMemoria, RelojFijo, IdsSecuenciales> {
+        EditarContratista::new(almacen.clone(), reloj(), almacen.ids())
     }
 
     /// Registra el contratista de `comando` y devuelve su ID.
@@ -248,6 +250,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn cada_entrada_de_auditoria_tiene_su_propio_id_en_orden() {
+        let (almacen, empresa) = almacen_con_empresa();
+        let id = con_contratista(&almacen, empresa).await;
+        let mut cambio = comando(empresa);
+        cambio.tiene_acceso = false;
+        editar(&almacen)
+            .ejecutar(&sesion(), id, &cambio)
+            .await
+            .unwrap();
+
+        let auditoria = almacen.auditoria();
+        assert_eq!(
+            auditoria[0].en, auditoria[1].en,
+            "misma hora: el reloj está detenido"
+        );
+        assert!(
+            auditoria[0].id_entrada < auditoria[1].id_entrada,
+            "el ID desempata y respeta el orden en que ocurrieron"
+        );
+    }
+
+    #[tokio::test]
     async fn editar_sin_cambios_no_escribe_nada() {
         let (almacen, empresa) = almacen_con_empresa();
         let id = con_contratista(&almacen, empresa).await;
@@ -310,7 +334,8 @@ mod tests {
     async fn con_el_praind_vencido_se_le_puede_quitar_el_acceso() {
         let (almacen, empresa) = almacen_con_empresa();
         let id = con_contratista(&almacen, empresa).await;
-        let meses_despues = EditarContratista::new(almacen.clone(), reloj_en("2027-06-01"));
+        let meses_despues =
+            EditarContratista::new(almacen.clone(), reloj_en("2027-06-01"), almacen.ids());
         let mut quitar_acceso = comando(empresa);
         quitar_acceso.tiene_acceso = false;
         assert!(
@@ -397,8 +422,10 @@ mod tests {
         RegistrarEmpresa::new(almacen.clone(), reloj(), almacen.ids())
     }
 
-    fn renombrar_empresa(almacen: &AlmacenMemoria) -> RenombrarEmpresa<AlmacenMemoria, RelojFijo> {
-        RenombrarEmpresa::new(almacen.clone(), reloj())
+    fn renombrar_empresa(
+        almacen: &AlmacenMemoria,
+    ) -> RenombrarEmpresa<AlmacenMemoria, RelojFijo, IdsSecuenciales> {
+        RenombrarEmpresa::new(almacen.clone(), reloj(), almacen.ids())
     }
 
     #[tokio::test]

@@ -9,7 +9,10 @@
 //!   Unit of Work;
 //! - `confirmar()` aplica todo o nada;
 //! - al confirmar se revisan las mismas restricciones de unicidad que la
-//!   base (cédula de contratista, nombre de empresa).
+//!   base (cédula de contratista, nombre de empresa), paso a paso como ella.
+//!
+//! La batería de `limen-pruebas-contrato` corre contra este doble y contra
+//! `SurrealDB` para garantizar que se comportan igual.
 //!
 //! Además permite sembrar datos y simular fallas para las pruebas.
 
@@ -178,8 +181,20 @@ impl UnidadDeTrabajo for UowMemoria {
         if let Some(error) = datos.falla_proxima_confirmacion.take() {
             return Err(error);
         }
-        verificar_cedulas_unicas(&datos.contratistas, &self.contratistas.pendientes)?;
-        verificar_nombres_unicos(&datos.empresas, &self.empresas.pendientes)?;
+        verificar_unicos(
+            &datos.contratistas,
+            &self.contratistas.pendientes,
+            Contratista::id,
+            |c| c.cedula().as_str(),
+            Restriccion::CedulaContratista,
+        )?;
+        verificar_unicos(
+            &datos.empresas,
+            &self.empresas.pendientes,
+            Empresa::id,
+            |e| e.nombre().as_str(),
+            Restriccion::NombreEmpresa,
+        )?;
 
         // Todas las restricciones pasaron: se aplica todo junto.
         for contratista in self.contratistas.pendientes {
@@ -195,45 +210,30 @@ impl UnidadDeTrabajo for UowMemoria {
     }
 }
 
-/// Lo que hará el índice único de la base: ninguna cédula repetida entre
-/// contratistas distintos, ni contra lo guardado ni dentro de lo pendiente.
-fn verificar_cedulas_unicas(
-    guardados: &BTreeMap<ContratistaId, Contratista>,
-    pendientes: &[Contratista],
+/// Lo que hace el índice único de la base: la unicidad se revisa en cada
+/// escritura, en orden, contra el estado que va quedando (como `SurrealDB`,
+/// sentencia por sentencia).
+fn verificar_unicos<Id: Ord + Copy, E>(
+    guardados: &BTreeMap<Id, E>,
+    pendientes: &[E],
+    id: impl Fn(&E) -> Id,
+    clave: impl Fn(&E) -> &str,
+    restriccion: Restriccion,
 ) -> Result<(), ErrorPersistencia> {
-    let conflicto = ErrorPersistencia::Conflicto(Restriccion::CedulaContratista);
-    let mut vistas: BTreeMap<&str, ContratistaId> = guardados
-        .values()
-        .filter(|guardado| pendientes.iter().all(|p| p.id() != guardado.id()))
-        .map(|guardado| (guardado.cedula().as_str(), guardado.id()))
+    let mut claves: BTreeMap<Id, &str> = guardados
+        .iter()
+        .map(|(id_guardado, entidad)| (*id_guardado, clave(entidad)))
         .collect();
     for pendiente in pendientes {
-        if let Some(otro) = vistas.insert(pendiente.cedula().as_str(), pendiente.id())
-            && otro != pendiente.id()
-        {
-            return Err(conflicto);
+        let id_pendiente = id(pendiente);
+        let clave_pendiente = clave(pendiente);
+        let ocupada = claves
+            .iter()
+            .any(|(otro, valor)| *otro != id_pendiente && *valor == clave_pendiente);
+        if ocupada {
+            return Err(ErrorPersistencia::Conflicto(restriccion));
         }
-    }
-    Ok(())
-}
-
-/// Lo que hará el índice único de la base para el nombre de empresa.
-fn verificar_nombres_unicos(
-    guardadas: &BTreeMap<EmpresaId, Empresa>,
-    pendientes: &[Empresa],
-) -> Result<(), ErrorPersistencia> {
-    let conflicto = ErrorPersistencia::Conflicto(Restriccion::NombreEmpresa);
-    let mut vistos: BTreeMap<&str, EmpresaId> = guardadas
-        .values()
-        .filter(|guardada| pendientes.iter().all(|p| p.id() != guardada.id()))
-        .map(|guardada| (guardada.nombre().as_str(), guardada.id()))
-        .collect();
-    for pendiente in pendientes {
-        if let Some(otra) = vistos.insert(pendiente.nombre().as_str(), pendiente.id())
-            && otra != pendiente.id()
-        {
-            return Err(conflicto);
-        }
+        claves.insert(id_pendiente, clave_pendiente);
     }
     Ok(())
 }

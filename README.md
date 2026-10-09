@@ -12,10 +12,11 @@ crates/
   dominio/        reglas de negocio puras (compila también a WebAssembly)
   aplicacion/     casos de uso, puertos (traits) y modelo de errores
   infra-memoria/  implementación en memoria de los puertos, para pruebas
+  infra-surreal/  SurrealDB embebido (SurrealKV en disco, kv-mem en pruebas)
+  pruebas-contrato/  batería que corre contra todos los adaptadores
 ```
 
-Próximas capas, en orden: `infra-surreal` (SurrealDB embebido), `composicion` y las
-apps.
+Próximas capas, en orden: `composicion` y las apps.
 
 ## Desarrollo
 

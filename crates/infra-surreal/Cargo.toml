@@ -1,6 +1,6 @@
 [package]
-name = "limen-infra-memoria"
-description = "Implementación en memoria de los puertos de Limen, para pruebas"
+name = "limen-infra-surreal"
+description = "Adaptador de SurrealDB embebido para los puertos de Limen"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,11 +10,13 @@ publish.workspace = true
 limen-dominio.workspace = true
 limen-aplicacion.workspace = true
 chrono.workspace = true
+surrealdb.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+limen-infra-memoria.workspace = true
 limen-pruebas-contrato.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["time"] }
 
 [lints]
 workspace = true

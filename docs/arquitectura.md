@@ -98,11 +98,12 @@ Cargo.toml                  workspace + lints estrictos compartidos
 crates/
   dominio/                  ✅ reglas puras
   aplicacion/               ✅ casos_de_uso/, puertos/, errores.rs
-  infra-surreal/            repositorios, consultas .surql, Unit of Work, esquema
+  infra-surreal/            ✅ repositorios, consultas, Unit of Work, esquema .surql
   infra-nube/               sincronización con SurrealDB Cloud, avisos en vivo
   infra-plataforma/         DPAPI (Windows), Android Keystore, reloj del sistema
   infra-memoria/            ✅ dobles en memoria para pruebas
   composicion/              construir `Aplicacion`
+  pruebas-contrato/         ✅ batería que corre contra todos los adaptadores (sólo pruebas)
 apps/
   escritorio/               Tauri + React (comandos delgados)
   movil/                    uniffi + Kotlin (fachada delgada)
@@ -173,10 +174,15 @@ Así, para saber qué reglas tiene un contratista basta con leer `contratista.rs
 
 ### 4.5 Auditoría
 
-Todo cambio queda auditado, por insignificante que parezca (regla B11). El dominio
-decide **qué** cambió: los métodos de edición devuelven `Vec<CambioCampo>` con el campo,
-el valor anterior y el nuevo. El caso de uso agrega **quién** y **cuándo**, y lo guarda
-en la misma Unit of Work que el cambio.
+Todo cambio queda auditado, por insignificante que parezca (regla B11), también el alta.
+El dominio decide **qué** cambió: cada entidad describe sus campos auditables una sola
+vez, y de esa lista salen el alta (`cambios_de_alta()`) y las diferencias de una edición
+(`Vec<CambioCampo>` con el campo, el valor anterior y el nuevo). El caso de uso agrega
+**quién** y **cuándo**, y lo guarda en la misma Unit of Work que el cambio.
+
+Cada entrada de auditoría tiene su propio ID ordenable (UUID v7) y **el historial se ordena
+por ese ID, no por la hora**: dos cambios en el mismo instante empatan en la hora, nunca en
+el ID.
 
 ---
 
@@ -376,6 +382,15 @@ cruzada para Android. El crate `surrealdb` se declara con `default-features = fa
 activando a mano sólo las features necesarias, para que ninguna dependencia traiga
 RocksDB por accidente.
 
+El núcleo de SurrealDB trae internamente tres librerías en C (`aws-lc-sys` para validar
+JWT, `lz4-sys` para compresión y `ring`). No dependen de nuestras features y no se pueden
+quitar sin modificar SurrealDB. Son pequeñas comparadas con RocksDB, pero `aws-lc-sys`
+necesita `cmake`: hay que tenerlo en cuenta al compilar para Android.
+
+**Una sola apertura por proceso.** El archivo de la base queda tomado mientras viva algún
+clon de `AlmacenSurreal`; al soltar el último, el motor lo libera en segundo plano (el SDK
+no ofrece un cierre que se pueda esperar).
+
 SurrealDB embebido **no cifra la base en disco** como lo hacía SQLite3MC en Lattis. Se
 compensa con el cifrado del sistema operativo (BitLocker, cifrado de Android) y cifrando
 en el adaptador los campos sensibles si hace falta.
@@ -497,7 +512,7 @@ resuelve con una tabla `conexion` actualizada cada 2 minutos con la app en prime
 |---|---|---|---|
 | Dominio | Cada regla, casos límite y propiedades | Pruebas unitarias + `proptest` | `crates/dominio/src/*` |
 | Casos de uso | Orquestación: qué se lee, qué se decide, qué se confirma | Dobles de `infra-memoria` (sin base de datos) | `crates/aplicacion/tests` |
-| Contrato | Que el doble en memoria y SurrealDB se comportan igual | **La misma batería** contra ambos adaptadores | `infra-memoria` + `infra-surreal` |
+| Contrato | Que el doble en memoria y SurrealDB se comportan igual | **La misma batería** (`crates/pruebas-contrato`) contra ambos adaptadores, con la macro `bateria_de_contrato!` | `tests/contrato.rs` de cada adaptador |
 | Integración | Esquema, índices, permisos y consultas reales | SurrealDB embebido `kv-mem` | `crates/infra-surreal/tests` |
 | Arquitectura | Que ninguna capa interna dependa de infraestructura | Prueba sobre el `Cargo.toml` | `tests/arquitectura.rs` de cada crate |
 
@@ -556,7 +571,8 @@ Se avanza por capas, completando cada una para un módulo antes de pasar al sigu
 2. ✅ **`aplicacion`:** puertos, Unit of Work, modelo de errores y casos de uso de
    contratistas y empresas.
 3. ✅ **`infra-memoria`:** dobles y pruebas de casos de uso.
-4. **`infra-surreal`:** esquema, repositorios, Unit of Work real y pruebas de contrato.
+4. ✅ **`infra-surreal`:** esquema, repositorios, Unit of Work real, pruebas de
+   integración y la batería de contrato compartida (`pruebas-contrato`).
 5. **`composicion`** y una app mínima de escritorio para contratistas.
 6. Resto del dominio, en orden: ingreso y salida (E), gafetes (F), proveedores (H),
    ingreso por correo (I), personal KOF (K), usuarios (L) y equipos (M).
