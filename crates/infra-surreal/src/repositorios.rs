@@ -17,7 +17,7 @@ use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoId};
 use limen_dominio::ingreso_correo::{IngresoCorreo, IngresoCorreoId};
 use limen_dominio::ingreso_proveedor::{IngresoProveedor, IngresoProveedorId};
 use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
-use limen_dominio::presencia::Via;
+use limen_dominio::presencia::{Identidad, Via};
 use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofId};
 use surrealdb::Surreal;
 use surrealdb::engine::local::Db;
@@ -204,11 +204,11 @@ impl PresenciasSurreal {
 }
 
 impl RepositorioPresencias for PresenciasSurreal {
-    async fn via_adentro(&self, cedula: &Cedula) -> Result<Option<Via>, ErrorPersistencia> {
+    async fn via_adentro(&self, identidad: &Identidad) -> Result<Option<Via>, ErrorPersistencia> {
         let mut respuesta = self
             .db
             .query("SELECT VALUE via FROM ONLY $id")
-            .bind(("id", id_presencia(cedula)))
+            .bind(("id", id_presencia(identidad)))
             .await
             .map_err(tecnica)?;
         let via: Option<String> = respuesta.take(0).map_err(tecnica)?;
@@ -219,11 +219,11 @@ impl RepositorioPresencias for PresenciasSurreal {
         .transpose()
     }
 
-    /// Crea `presencia:⟨cédula⟩`: si la persona ya está adentro, la base
+    /// Crea `presencia:⟨identidad⟩`: si la persona ya está adentro, la base
     /// rechaza la transacción.
-    fn anotar_entrada(&mut self, cedula: &Cedula, via: Via, desde: DateTime<Utc>) {
+    fn anotar_entrada(&mut self, identidad: &Identidad, via: Via, desde: DateTime<Utc>) {
         self.pendientes.push(Escritura::crear(
-            id_presencia(cedula),
+            id_presencia(identidad),
             PresenciaDatos {
                 via: via.codigo().to_owned(),
                 desde,
@@ -231,9 +231,9 @@ impl RepositorioPresencias for PresenciasSurreal {
         ));
     }
 
-    fn anotar_salida(&mut self, cedula: &Cedula) {
+    fn anotar_salida(&mut self, identidad: &Identidad) {
         self.pendientes
-            .push(Escritura::Borrar(id_presencia(cedula)));
+            .push(Escritura::Borrar(id_presencia(identidad)));
     }
 }
 

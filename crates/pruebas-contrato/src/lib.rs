@@ -31,6 +31,7 @@ use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::{Contratista, ContratistaGuardado, ContratistaId};
 use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
 use limen_dominio::nombre::NombrePersona;
+use limen_dominio::presencia::Identidad;
 use limen_dominio::tipo_ingreso::TipoIngreso;
 use uuid::Uuid;
 
@@ -92,7 +93,7 @@ macro_rules! bateria_de_contrato {
             la_devolucion_libera_a_la_persona_y_al_gafete,
             una_persona_no_recibe_dos_provisionales_a_la_vez,
             // Consultas de lectura (`consultas`).
-            quienes_estan_adentro_junta_las_tres_vias_del_mas_reciente_al_mas_antiguo,
+            quienes_estan_adentro_junta_las_cuatro_vias_del_mas_reciente_al_mas_antiguo,
             quienes_estan_adentro_ignora_a_quienes_ya_salieron,
             buscar_contratistas_da_lo_mismo_que_recorrer_todo_con_la_regla_del_dominio,
             buscar_contratistas_tolera_tildes_enie_orden_y_errores_de_tecleo,
@@ -258,7 +259,10 @@ pub async fn lo_inexistente_no_se_encuentra<F: FabricaUnidadDeTrabajo>(fabrica: 
         "no existe"
     );
     assert_eq!(
-        uow.presencias().via_adentro(&cedula).await.unwrap(),
+        uow.presencias()
+            .via_adentro(&Identidad::from(&cedula))
+            .await
+            .unwrap(),
         None,
         "nadie está adentro"
     );

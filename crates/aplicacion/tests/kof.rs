@@ -14,8 +14,10 @@ mod tests {
     };
     use limen_aplicacion::sesion::{OperadorId, Sesion};
     use limen_dominio::gafete::{ErrorPrestamoGafete, NumeroGafete, TipoGafete};
-    use limen_dominio::personal_kof::{ErrorPersonalKof, PersonalKofId};
+    use limen_dominio::personal_kof::{CodigoEmpleado, ErrorPersonalKof, PersonalKofId};
+    use limen_dominio::presencia::{Identidad, Via};
     use limen_dominio::prestamo_kof::{ErrorDevolucionKof, ErrorPrestamoKof, PrestamoKofId};
+    use limen_dominio::reloj::RelojAtrasado;
     use limen_infra_memoria::{AlmacenMemoria, IdsSecuenciales, RelojFijo};
     use uuid::Uuid;
 
@@ -274,6 +276,100 @@ mod tests {
         assert!(almacen.prestamos_kof().is_empty(), "nada se aplicó");
     }
 
+    // --- Estar adentro ---
+
+    fn identidad(codigo: &str) -> Identidad {
+        Identidad::from(&CodigoEmpleado::nuevo(codigo).unwrap())
+    }
+
+    #[tokio::test]
+    async fn entregar_el_gafete_es_la_entrada_y_devolverlo_la_salida() {
+        let (almacen, ana, _) = preparado().await;
+        assert_eq!(almacen.via_adentro(identidad("5040017")), None, "afuera");
+
+        entregar(&almacen)
+            .ejecutar(&sesion(), ana, 3)
+            .await
+            .unwrap();
+        assert_eq!(
+            almacen.via_adentro(identidad("5040017")),
+            Some(Via::Kof),
+            "con el gafete provisional está adentro"
+        );
+        assert_eq!(
+            almacen.ultimo_movimiento(),
+            Some(instante(ENTREGA)),
+            "la entrega es un movimiento"
+        );
+
+        devolver(&almacen).por_gafete(&sesion(), 3).await.unwrap();
+        assert_eq!(
+            almacen.via_adentro(identidad("5040017")),
+            None,
+            "al devolverlo sale"
+        );
+        assert_eq!(
+            almacen.ultimo_movimiento(),
+            Some(instante(DEVOLUCION)),
+            "la devolución también"
+        );
+    }
+
+    #[tokio::test]
+    async fn aparece_en_la_lista_de_quienes_estan_adentro() {
+        use limen_aplicacion::casos_de_uso::consultas::QuienesEstanAdentro;
+        use limen_aplicacion::puertos::IngresoAbierto;
+
+        let (almacen, ana, _) = preparado().await;
+        let id = entregar(&almacen)
+            .ejecutar(&sesion(), ana, 3)
+            .await
+            .unwrap();
+        let adentro = QuienesEstanAdentro::new(almacen.clone())
+            .ejecutar()
+            .await
+            .unwrap();
+        assert_eq!(adentro.len(), 1, "una persona");
+        assert_eq!(adentro[0].ingreso, IngresoAbierto::Kof(id));
+        assert_eq!(adentro[0].identidad.to_string(), "5040017");
+        assert_eq!(adentro[0].nombre.as_str(), "ANA MORA");
+        assert_eq!(adentro[0].procedencia, "Personal KOF");
+
+        devolver(&almacen).ejecutar(&sesion(), id).await.unwrap();
+        assert!(
+            QuienesEstanAdentro::new(almacen.clone())
+                .ejecutar()
+                .await
+                .unwrap()
+                .is_empty(),
+            "ya no está"
+        );
+    }
+
+    #[tokio::test]
+    async fn no_se_entrega_con_el_reloj_atrasado() {
+        let (almacen, ana, _) = preparado().await;
+        almacen.fijar_ultimo_movimiento(instante("2026-10-09T09:00:00Z"));
+        assert_eq!(
+            entregar(&almacen).ejecutar(&sesion(), ana, 3).await,
+            Err(ErrorCaso::Negocio(ErrorPrestamoKof::Reloj(RelojAtrasado)))
+        );
+        assert!(almacen.prestamos_kof().is_empty(), "no se prestó nada");
+    }
+
+    #[tokio::test]
+    async fn si_otro_equipo_ya_lo_dejo_entrar_es_el_mismo_error_de_negocio() {
+        let (almacen, ana, _) = preparado().await;
+        almacen.fallar_proxima_confirmacion(ErrorPersistencia::Conflicto(
+            Restriccion::PresenciaPersona,
+        ));
+        assert_eq!(
+            entregar(&almacen).ejecutar(&sesion(), ana, 3).await,
+            Err(ErrorCaso::Negocio(ErrorPrestamoKof::YaTienePrestamo)),
+            "tener el provisional y estar adentro es lo mismo"
+        );
+    }
+
     // --- Devolución ---
 
     #[tokio::test]
@@ -292,15 +388,17 @@ mod tests {
             !almacen.prestado(TipoGafete::ProvisionalKof, numero(3)),
             "el gafete quedó libre"
         );
-        // Ana puede recibir otro y Beto puede recibir el 3.
-        entregar(&almacen)
-            .ejecutar(&sesion(), ana, 4)
-            .await
-            .unwrap();
-        entregar(&almacen)
-            .ejecutar(&sesion(), beto, 3)
-            .await
-            .unwrap();
+        // Ana puede recibir otro y Beto puede recibir el 3 (más tarde: el
+        // reloj no retrocede).
+        let despues = || {
+            EntregarGafeteKof::new(
+                almacen.clone(),
+                reloj_a("2026-10-09T18:00:00Z"),
+                almacen.ids(),
+            )
+        };
+        despues().ejecutar(&sesion(), ana, 4).await.unwrap();
+        despues().ejecutar(&sesion(), beto, 3).await.unwrap();
 
         assert_eq!(
             devolver(&almacen).ejecutar(&sesion(), id).await,
@@ -345,7 +443,8 @@ mod tests {
             DevolverGafeteKof::new(almacen.clone(), reloj_a("2026-10-09T07:00:00Z"))
                 .ejecutar(&sesion(), id)
                 .await,
-            Err(ErrorCaso::Negocio(ErrorDevolucionKof::AnteriorALaEntrega))
+            Err(ErrorCaso::Negocio(ErrorDevolucionKof::Reloj(RelojAtrasado))),
+            "devolver antes de la entrega es devolver con el reloj atrasado"
         );
         assert!(
             almacen.prestado(TipoGafete::ProvisionalKof, numero(3)),

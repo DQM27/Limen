@@ -200,12 +200,21 @@ mod tests {
             .unwrap();
 
         let adentro = app.quienes_estan_adentro.ejecutar().await.unwrap();
-        assert_eq!(adentro.len(), 3, "contratista, proveedor y visita");
+        assert_eq!(
+            adentro.len(),
+            4,
+            "contratista, proveedor, visita y personal KOF"
+        );
         let vias: Vec<_> = adentro
             .iter()
             .map(|p| p.ingreso.via().to_string())
             .collect();
-        for via in ["contratista", "proveedor", "ingreso por correo"] {
+        for via in [
+            "contratista",
+            "proveedor",
+            "ingreso por correo",
+            "personal KOF",
+        ] {
             assert!(
                 vias.iter().any(|v| v == via),
                 "{via} está adentro: {vias:?}"
@@ -223,6 +232,14 @@ mod tests {
                 .any(|p| matches!(p.ingreso, IngresoAbierto::Proveedor(_))
                     && p.procedencia == "GAS ZETA"),
             "el proveedor con su empresa"
+        );
+        assert!(
+            adentro
+                .iter()
+                .any(|p| matches!(p.ingreso, IngresoAbierto::Kof(_))
+                    && p.identidad.to_string() == "5040017"
+                    && p.medio.is_none()),
+            "el personal KOF por su código de empleado, sin medio"
         );
     }
 

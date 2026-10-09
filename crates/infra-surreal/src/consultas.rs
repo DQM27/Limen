@@ -20,7 +20,10 @@ use limen_dominio::ingreso_correo::IngresoCorreoId;
 use limen_dominio::ingreso_proveedor::IngresoProveedorId;
 use limen_dominio::nombre::NombrePersona;
 use limen_dominio::operador::OperadorId;
+use limen_dominio::personal_kof::CodigoEmpleado;
 use limen_dominio::personal_kof::PersonalKof;
+use limen_dominio::presencia::Identidad;
+use limen_dominio::prestamo_kof::PrestamoKofId;
 use surrealdb::types::{RecordId, RecordIdKey, SurrealValue};
 
 use crate::almacen::AlmacenSurreal;
@@ -29,7 +32,7 @@ use crate::registros::clave_gafete;
 use crate::registros::{
     ContratistaLeido, EmpresaLeida, EmpresaProveedoraLeida, GafeteDatos, PersonalKofLeido,
     TABLA_AUDITORIA, TABLA_INGRESO_CONTRATISTA, TABLA_INGRESO_CORREO, TABLA_INGRESO_PROVEEDOR,
-    medio_de, numero_de, uuid_de,
+    TABLA_PRESTAMO_KOF, medio_de, numero_de, uuid_de,
 };
 
 /// Sólo el nombre plegado de una fila: lo que necesita la búsqueda
@@ -58,8 +61,25 @@ const ADENTRO_CONTRATISTAS: &str = "SELECT id, cedula, contratista.nombre AS nom
     FROM ingreso_contratista WHERE salida_en = NONE";
 const ADENTRO_PROVEEDORES: &str = "SELECT id, cedula, nombre, empresa.nombre AS procedencia, \
     placa, gafete, entrada_en FROM ingreso_proveedor WHERE salida_en = NONE";
+const ADENTRO_KOF: &str = "SELECT id, codigo_empleado AS cedula, nombre, \
+    'Personal KOF' AS procedencia, gafete, entrega_en AS entrada_en \
+    FROM prestamo_kof WHERE devolucion_en = NONE";
 const ADENTRO_CORREO: &str = "SELECT id, cedula, nombre, motivo AS procedencia, \
     placa, gafete, entrada_en FROM ingreso_correo WHERE salida_en = NONE";
+
+/// La identidad de quien entró con cédula.
+fn de_cedula(texto: &str) -> Result<Identidad, String> {
+    Cedula::normalizar(texto)
+        .map(|cedula| Identidad::from(&cedula))
+        .map_err(|e| e.to_string())
+}
+
+/// La identidad de quien está adentro con un gafete provisional del KOF.
+fn de_empleado(texto: &str) -> Result<Identidad, String> {
+    CodigoEmpleado::nuevo(texto)
+        .map(|codigo| Identidad::from(&codigo))
+        .map_err(|e| e.to_string())
+}
 
 impl FilaAdentro {
     /// `None` si la fila no tiene nombre (el contratista ya no existe): no
@@ -68,6 +88,8 @@ impl FilaAdentro {
         self,
         tabla: &str,
         ingreso: fn(uuid::Uuid) -> IngresoAbierto,
+        identidad: fn(&str) -> Result<Identidad, String>,
+        registra_medio: bool,
     ) -> Result<Option<PersonaAdentro>, ErrorPersistencia> {
         let corrupto = |detalle: String| dato_corrupto(tabla, detalle);
         let Some(nombre) = self.nombre else {
@@ -75,10 +97,14 @@ impl FilaAdentro {
         };
         Ok(Some(PersonaAdentro {
             ingreso: ingreso(uuid_de(&self.id, tabla)?),
-            cedula: Cedula::normalizar(&self.cedula).map_err(|e| corrupto(e.to_string()))?,
+            identidad: identidad(&self.cedula).map_err(corrupto)?,
             nombre: NombrePersona::nuevo(&nombre).map_err(|e| corrupto(e.to_string()))?,
             procedencia: self.procedencia.unwrap_or_default(),
-            medio: medio_de(self.placa, tabla)?,
+            medio: if registra_medio {
+                Some(medio_de(self.placa, tabla)?)
+            } else {
+                None
+            },
             gafete: self.gafete.map(|n| numero_de(n, tabla)).transpose()?,
             desde: self.entrada_en,
         }))
@@ -277,24 +303,42 @@ impl Consultas for AlmacenSurreal {
     async fn quienes_estan_adentro(&self) -> Result<Vec<PersonaAdentro>, ErrorPersistencia> {
         let mut adentro = Vec::new();
         for fila in self.filas_adentro(ADENTRO_CONTRATISTAS).await? {
-            adentro.extend(fila.a_persona(TABLA_INGRESO_CONTRATISTA, |uuid| {
-                IngresoAbierto::Contratista(IngresoId::desde_uuid(uuid))
-            })?);
+            adentro.extend(fila.a_persona(
+                TABLA_INGRESO_CONTRATISTA,
+                |uuid| IngresoAbierto::Contratista(IngresoId::desde_uuid(uuid)),
+                de_cedula,
+                true,
+            )?);
         }
         for fila in self.filas_adentro(ADENTRO_PROVEEDORES).await? {
-            adentro.extend(fila.a_persona(TABLA_INGRESO_PROVEEDOR, |uuid| {
-                IngresoAbierto::Proveedor(IngresoProveedorId::desde_uuid(uuid))
-            })?);
+            adentro.extend(fila.a_persona(
+                TABLA_INGRESO_PROVEEDOR,
+                |uuid| IngresoAbierto::Proveedor(IngresoProveedorId::desde_uuid(uuid)),
+                de_cedula,
+                true,
+            )?);
         }
         for fila in self.filas_adentro(ADENTRO_CORREO).await? {
-            adentro.extend(fila.a_persona(TABLA_INGRESO_CORREO, |uuid| {
-                IngresoAbierto::Correo(IngresoCorreoId::desde_uuid(uuid))
-            })?);
+            adentro.extend(fila.a_persona(
+                TABLA_INGRESO_CORREO,
+                |uuid| IngresoAbierto::Correo(IngresoCorreoId::desde_uuid(uuid)),
+                de_cedula,
+                true,
+            )?);
+        }
+        for fila in self.filas_adentro(ADENTRO_KOF).await? {
+            // El personal KOF no registra cómo llegó.
+            adentro.extend(fila.a_persona(
+                TABLA_PRESTAMO_KOF,
+                |uuid| IngresoAbierto::Kof(PrestamoKofId::desde_uuid(uuid)),
+                de_empleado,
+                false,
+            )?);
         }
         adentro.sort_by(|a, b| {
             b.desde
                 .cmp(&a.desde)
-                .then_with(|| a.cedula.as_str().cmp(b.cedula.as_str()))
+                .then_with(|| a.identidad.to_string().cmp(&b.identidad.to_string()))
         });
         Ok(adentro)
     }

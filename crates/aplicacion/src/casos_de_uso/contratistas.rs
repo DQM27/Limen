@@ -8,6 +8,7 @@ use limen_dominio::contratista::{
     cedula_de_contratista,
 };
 use limen_dominio::empresa::EmpresaId;
+use limen_dominio::presencia::Identidad;
 use limen_dominio::tipo_ingreso::TipoIngreso;
 
 use crate::errores::ErrorCaso;
@@ -133,7 +134,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> EditarContratista<F, 
             empresa_existe: uow.empresas().existe(comando.empresa).await?,
             esta_adentro: uow
                 .presencias()
-                .via_adentro(contratista.cedula())
+                .via_adentro(&Identidad::from(contratista.cedula()))
                 .await?
                 .is_some(),
         };

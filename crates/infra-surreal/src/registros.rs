@@ -24,6 +24,7 @@ use limen_dominio::movimiento::Marca;
 use limen_dominio::nombre::NombrePersona;
 use limen_dominio::operador::OperadorId;
 use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
+use limen_dominio::presencia::Identidad;
 use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofGuardado, PrestamoKofId};
 use limen_dominio::tipo_ingreso::TipoIngreso;
 use limen_dominio::visitante::Visitante;
@@ -111,8 +112,8 @@ pub fn id_prestamo(tipo: TipoGafete, numero: NumeroGafete) -> RecordId {
     id_natural(TABLA_PRESTAMO_GAFETE, clave_gafete(tipo, numero))
 }
 
-pub fn id_presencia(cedula: &Cedula) -> RecordId {
-    id_natural(TABLA_PRESENCIA, cedula.as_str().to_owned())
+pub fn id_presencia(identidad: &Identidad) -> RecordId {
+    id_natural(TABLA_PRESENCIA, identidad.clave())
 }
 
 /// Un solo registro guarda la hora del último movimiento del equipo.
@@ -636,6 +637,8 @@ impl TryFrom<PersonalKofLeido> for PersonalKof {
 #[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
 pub struct PrestamoKofDatos {
     pub personal: RecordId,
+    pub codigo_empleado: String,
+    pub nombre: String,
     pub gafete: i64,
     pub entrega_en: DateTime<Utc>,
     pub entrega_operador: Uuid,
@@ -647,6 +650,8 @@ pub struct PrestamoKofDatos {
 pub struct PrestamoKofLeido {
     pub id: RecordId,
     pub personal: RecordId,
+    pub codigo_empleado: String,
+    pub nombre: String,
     pub gafete: i64,
     pub entrega_en: DateTime<Utc>,
     pub entrega_operador: Uuid,
@@ -659,6 +664,8 @@ impl From<&PrestamoKof> for PrestamoKofDatos {
         let devolucion = prestamo.devolucion();
         Self {
             personal: id_personal_kof(prestamo.personal()),
+            codigo_empleado: prestamo.codigo().as_str().to_owned(),
+            nombre: prestamo.nombre().as_str().to_owned(),
             gafete: i64::from(prestamo.gafete().valor()),
             entrega_en: prestamo.entrega().en,
             entrega_operador: prestamo.entrega().operador.uuid(),
@@ -673,9 +680,13 @@ impl TryFrom<PrestamoKofLeido> for PrestamoKof {
 
     fn try_from(leido: PrestamoKofLeido) -> Result<Self, ErrorPersistencia> {
         let tabla = TABLA_PRESTAMO_KOF;
+        let corrupto = |detalle: String| dato_corrupto(tabla, detalle);
         Ok(Self::restaurar(PrestamoKofGuardado {
             id: PrestamoKofId::desde_uuid(uuid_de(&leido.id, tabla)?),
             personal: PersonalKofId::desde_uuid(uuid_de(&leido.personal, TABLA_PERSONAL_KOF)?),
+            codigo: CodigoEmpleado::nuevo(&leido.codigo_empleado)
+                .map_err(|e| corrupto(e.to_string()))?,
+            nombre: NombrePersona::nuevo(&leido.nombre).map_err(|e| corrupto(e.to_string()))?,
             gafete: numero_de(leido.gafete, tabla)?,
             entrega: Marca {
                 en: leido.entrega_en,

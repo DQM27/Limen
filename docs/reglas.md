@@ -14,7 +14,7 @@ Estado: ✅ implementada en `crates/dominio` · ⏳ acordada, pendiente de imple
 | A3 | Contratistas, proveedores y correo: sólo cédula nacional o de extranjero, números de 9 a 13 dígitos. | ✅ |
 | A5 | Nombre de persona: sólo letras de la A a la Z, la Ñ y espacios. Las tildes y la diéresis se quitan solas ("José" → "JOSE"); números y símbolos (incluidos apóstrofo y guion) se rechazan. | ✅ |
 | A6 | Todo nombre de persona o empresa se guarda en MAYÚSCULAS y sin espacios de más. | ✅ |
-| A7 | Una persona sólo puede estar adentro por una vía a la vez (contratista, proveedor, correo o KOF). El personal KOF se identifica por código de empleado, no por cédula. | ✅ contratista, proveedor y correo. El personal KOF no entra a la presencia: sólo se controla su gafete provisional (K3). ⏳ confirmar |
+| A7 | Una persona sólo puede estar adentro por una vía a la vez (contratista, proveedor, correo o KOF). El personal KOF se identifica por código de empleado, no por cédula. | ✅ las cuatro vías. El personal KOF está adentro mientras tenga un gafete provisional sin devolver (se le reconoce por el código de empleado). |
 | A8 | Veto por persona: una cédula con acceso denegado se rechaza por cualquier vía. | ✅ |
 
 ## B. Contratistas
@@ -99,7 +99,7 @@ reconstruir cómo estaba el contratista el día que entró.
 |---|---|---|
 | K1 | El gafete provisional existe en el inventario KOF y está disponible. | ✅ |
 | K2 | La persona se identifica por código de empleado (5 a 7 dígitos, único) y debe estar activa. Se desactiva, no se borra. | ✅ |
-| K3 | Un provisional por persona a la vez, y un número prestado a una sola persona. Es un préstamo de gafete, no un ingreso: no usa la presencia ni el reloj. | ✅ |
+| K3 | Un provisional por persona a la vez, y un número prestado a una sola persona. Entregar el gafete provisional es la entrada (queda en la presencia y mueve el reloj) y devolverlo es la salida. | ✅ |
 
 ## L. Usuarios
 

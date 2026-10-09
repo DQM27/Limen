@@ -13,7 +13,7 @@ use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoGuardado, In
 use limen_dominio::medio::{Medio, Placa};
 use limen_dominio::movimiento::Marca;
 use limen_dominio::operador::OperadorId;
-use limen_dominio::presencia::Via;
+use limen_dominio::presencia::{Identidad, Via};
 use uuid::Uuid;
 
 use super::{contratista, id_contratista, sembrar};
@@ -59,7 +59,7 @@ fn ingreso(n: u128, salida: Option<Marca>) -> IngresoContratista {
 // --- Presencias ---
 
 pub async fn una_persona_entra_y_sale<F: FabricaUnidadDeTrabajo>(fabrica: F) {
-    let persona = cedula("111111111");
+    let persona = Identidad::from(&cedula("111111111"));
     let mut uow = fabrica.nueva();
     uow.presencias()
         .anotar_entrada(&persona, Via::Proveedor, instante("2026-10-09T14:00:00Z"));
@@ -88,7 +88,8 @@ pub async fn una_persona_entra_y_sale<F: FabricaUnidadDeTrabajo>(fabrica: F) {
 
 pub async fn salir_sin_estar_adentro_no_falla<F: FabricaUnidadDeTrabajo>(fabrica: F) {
     let mut uow = fabrica.nueva();
-    uow.presencias().anotar_salida(&cedula("111111111"));
+    uow.presencias()
+        .anotar_salida(&Identidad::from(&cedula("111111111")));
     assert_eq!(uow.confirmar().await, Ok(()), "la salida es idempotente");
 }
 
@@ -99,7 +100,7 @@ pub async fn dos_equipos_registran_a_la_misma_persona_y_el_segundo_choca<
 >(
     fabrica: F,
 ) {
-    let persona = cedula("111111111");
+    let persona = Identidad::from(&cedula("111111111"));
     let mut primero = fabrica.nueva();
     let mut segundo = fabrica.nueva();
     assert_eq!(
@@ -438,7 +439,7 @@ pub async fn un_choque_no_aplica_nada_de_ningun_repositorio<F: FabricaUnidadDeTr
         .anotar_prestamo(tipo, numero(7), instante("2026-10-09T13:00:00Z"));
     previo.confirmar().await.unwrap();
 
-    let persona = cedula("111111111");
+    let persona = Identidad::from(&cedula("111111111"));
     let mut uow = fabrica.nueva();
     uow.gafetes().agregar(&disponible(tipo, 1));
     uow.presencias()

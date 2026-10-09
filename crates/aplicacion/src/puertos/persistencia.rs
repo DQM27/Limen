@@ -21,7 +21,7 @@ use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoId};
 use limen_dominio::ingreso_correo::{IngresoCorreo, IngresoCorreoId};
 use limen_dominio::ingreso_proveedor::{IngresoProveedor, IngresoProveedorId};
 use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
-use limen_dominio::presencia::Via;
+use limen_dominio::presencia::{Identidad, Via};
 use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofId};
 
 use super::auditoria::RegistroAuditoria;
@@ -142,15 +142,15 @@ pub trait RepositorioEmpresas: Send + Sync {
 pub trait RepositorioPresencias: Send + Sync {
     fn via_adentro(
         &self,
-        cedula: &Cedula,
+        identidad: &Identidad,
     ) -> impl Future<Output = Result<Option<Via>, ErrorPersistencia>> + Send;
 
     /// Anota que la persona entró. Al confirmar choca
     /// ([`Restriccion::PresenciaPersona`]) si ya estaba adentro.
-    fn anotar_entrada(&mut self, cedula: &Cedula, via: Via, desde: DateTime<Utc>);
+    fn anotar_entrada(&mut self, identidad: &Identidad, via: Via, desde: DateTime<Utc>);
 
     /// Anota que la persona salió.
-    fn anotar_salida(&mut self, cedula: &Cedula);
+    fn anotar_salida(&mut self, identidad: &Identidad);
 }
 
 /// Catálogo de gafetes y cuáles están prestados ahora.

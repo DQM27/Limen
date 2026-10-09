@@ -7,6 +7,7 @@ use limen_dominio::movimiento::Marca;
 use limen_dominio::personal_kof::{
     CodigoEmpleado, ErrorPersonalKof, HechosPersonalKof, PersonalKof, PersonalKofId,
 };
+use limen_dominio::presencia::Via;
 use limen_dominio::prestamo_kof::{
     ErrorDevolucionKof, ErrorPrestamoKof, HechosEntregaKof, PrestamoKof, PrestamoKofId,
 };
@@ -15,8 +16,8 @@ use super::gafetes::situacion_para_prestar;
 use crate::errores::ErrorCaso;
 use crate::puertos::{
     AccionAuditada, EntradaAuditoria, FabricaUnidadDeTrabajo, GeneradorIds, RegistroAuditado,
-    RegistroAuditoria, Reloj, RepositorioGafetes, RepositorioPersonalKof, RepositorioPrestamosKof,
-    Restriccion, UnidadDeTrabajo,
+    RegistroAuditoria, Reloj, RepositorioGafetes, RepositorioPersonalKof, RepositorioPresencias,
+    RepositorioPrestamosKof, RepositorioReloj, Restriccion, UnidadDeTrabajo,
 };
 use crate::sesion::Sesion;
 
@@ -138,7 +139,10 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> EditarPersonalKof<F, 
 /// le dio otro provisional a la misma persona primero.
 fn conflicto_de_entrega(restriccion: Restriccion) -> Option<ErrorPrestamoKof> {
     match restriccion {
-        Restriccion::PersonalKofConPrestamo => Some(ErrorPrestamoKof::YaTienePrestamo),
+        // Tener el provisional y estar adentro es lo mismo para el KOF.
+        Restriccion::PersonalKofConPrestamo | Restriccion::PresenciaPersona => {
+            Some(ErrorPrestamoKof::YaTienePrestamo)
+        }
         Restriccion::GafetePrestado => {
             Some(ErrorPrestamoKof::Gafete(ErrorPrestamoGafete::Prestado))
         }
@@ -179,6 +183,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> EntregarGafeteKof<F, 
             .await?
             .ok_or(ErrorCaso::NoEncontrado)?;
         let hechos = HechosEntregaKof {
+            ultimo_movimiento: uow.reloj().ultimo_movimiento().await?,
             ya_tiene_prestamo: uow.prestamos_kof().tiene_abierto(personal).await?,
             situacion_gafete: situacion_para_prestar(
                 uow.gafetes(),
@@ -200,9 +205,13 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> EntregarGafeteKof<F, 
         )
         .map_err(ErrorCaso::Negocio)?;
 
+        // Entregar el gafete es la entrada: queda adentro, por la vía KOF.
         uow.prestamos_kof().anotar_entrega(&prestamo);
+        uow.presencias()
+            .anotar_entrada(&prestamo.identidad(), Via::Kof, marca.en);
         uow.gafetes()
             .anotar_prestamo(TipoGafete::ProvisionalKof, gafete, marca.en);
+        uow.reloj().anotar_movimiento(marca.en);
         uow.confirmar()
             .await
             .map_err(|error| ErrorCaso::al_confirmar(error, conflicto_de_entrega))?;
@@ -259,11 +268,17 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj> DevolverGafeteKof<F, R> {
             en: self.reloj.ahora(),
             operador: sesion.operador(),
         };
-        prestamo.devolver(marca).map_err(ErrorCaso::Negocio)?;
+        let ultimo_movimiento = uow.reloj().ultimo_movimiento().await?;
+        prestamo
+            .devolver(marca, ultimo_movimiento)
+            .map_err(ErrorCaso::Negocio)?;
 
+        // Devolver el gafete es la salida.
         uow.prestamos_kof().anotar_devolucion(&prestamo);
+        uow.presencias().anotar_salida(&prestamo.identidad());
         uow.gafetes()
             .anotar_devolucion(TipoGafete::ProvisionalKof, prestamo.gafete());
+        uow.reloj().anotar_movimiento(marca.en);
         uow.confirmar().await.map_err(ErrorCaso::from)
     }
 }

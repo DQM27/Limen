@@ -13,7 +13,7 @@ use limen_aplicacion::puertos::{
 };
 use limen_aplicacion::puertos::{
     RepositorioIngresos, RepositorioIngresosCorreo, RepositorioIngresosProveedor,
-    RepositorioPersonalKof, UnidadDeTrabajo,
+    RepositorioPersonalKof, RepositorioPrestamosKof, UnidadDeTrabajo,
 };
 use limen_dominio::auditoria::CambioCampo;
 use limen_dominio::busqueda::{Criterio, relevantes};
@@ -34,6 +34,7 @@ use limen_dominio::movimiento::Marca;
 use limen_dominio::nombre::NombrePersona;
 use limen_dominio::operador::OperadorId;
 use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
+use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofGuardado, PrestamoKofId};
 use limen_dominio::tipo_ingreso::TipoIngreso;
 use limen_dominio::visitante::Visitante;
 use uuid::Uuid;
@@ -53,9 +54,10 @@ fn cedula(texto: &str) -> Cedula {
 
 // --- Quién está adentro ---
 
-/// Un contratista (08:00), una visita por correo (09:00) y un proveedor
-/// (10:00), todos adentro.
-async fn sembrar_tres_vias<F: FabricaUnidadDeTrabajo>(fabrica: &F) {
+/// Un contratista (08:00), una visita por correo (09:00), un proveedor
+/// (10:00) y una persona del KOF con gafete provisional (11:00), todos
+/// adentro.
+async fn sembrar_las_cuatro_vias<F: FabricaUnidadDeTrabajo>(fabrica: &F) {
     // La empresa 1 se llama ACME; el contratista 1 es ANA.
     sembrar(fabrica, &[contratista(1, "111111111", "ANA")]).await;
     let proveedora = EmpresaProveedoraId::desde_uuid(Uuid::from_u128(3001));
@@ -107,15 +109,26 @@ async fn sembrar_tres_vias<F: FabricaUnidadDeTrabajo>(fabrica: &F) {
             entrada: marca("2026-10-09T09:00:00Z"),
             salida: None,
         }));
+    // 11:00 personal KOF con el gafete provisional 3.
+    uow.prestamos_kof()
+        .anotar_entrega(&PrestamoKof::restaurar(PrestamoKofGuardado {
+            id: PrestamoKofId::desde_uuid(Uuid::from_u128(8001)),
+            personal: PersonalKofId::desde_uuid(Uuid::from_u128(4001)),
+            codigo: CodigoEmpleado::nuevo("5040017").unwrap(),
+            nombre: NombrePersona::nuevo("MICHAEL ARAYA").unwrap(),
+            gafete: NumeroGafete::nuevo(3).unwrap(),
+            entrega: marca("2026-10-09T11:00:00Z"),
+            devolucion: None,
+        }));
     uow.confirmar().await.unwrap();
 }
 
-pub async fn quienes_estan_adentro_junta_las_tres_vias_del_mas_reciente_al_mas_antiguo<
+pub async fn quienes_estan_adentro_junta_las_cuatro_vias_del_mas_reciente_al_mas_antiguo<
     F: FabricaUnidadDeTrabajo + Consultas,
 >(
     fabrica: F,
 ) {
-    sembrar_tres_vias(&fabrica).await;
+    sembrar_las_cuatro_vias(&fabrica).await;
 
     let adentro = fabrica.quienes_estan_adentro().await.unwrap();
     let resumen: Vec<(String, String, String)> = adentro
@@ -124,13 +137,18 @@ pub async fn quienes_estan_adentro_junta_las_tres_vias_del_mas_reciente_al_mas_a
             (
                 p.nombre.to_string(),
                 p.procedencia.clone(),
-                p.cedula.to_string(),
+                p.identidad.to_string(),
             )
         })
         .collect();
     assert_eq!(
         resumen,
         [
+            (
+                "MICHAEL ARAYA".into(),
+                "Personal KOF".into(),
+                "5040017".into()
+            ),
             ("BETO SOLIS".into(), "GAS ZETA".into(), "222222222".into()),
             (
                 "LUIS MORA".into(),
@@ -141,7 +159,18 @@ pub async fn quienes_estan_adentro_junta_las_tres_vias_del_mas_reciente_al_mas_a
         ],
         "del más reciente al más antiguo, con la empresa o el motivo"
     );
-    let [proveedor, visita, contratista] = <[_; 3]>::try_from(adentro).unwrap();
+    let [kof, proveedor, visita, contratista] = <[_; 4]>::try_from(adentro).unwrap();
+    assert_eq!(
+        kof.ingreso,
+        IngresoAbierto::Kof(PrestamoKofId::desde_uuid(Uuid::from_u128(8001))),
+        "el préstamo abierto del KOF, para devolver el gafete"
+    );
+    assert_eq!(kof.medio, None, "el personal KOF no registra cómo llegó");
+    assert_eq!(
+        kof.gafete,
+        Some(NumeroGafete::nuevo(3).unwrap()),
+        "su gafete provisional"
+    );
     assert_eq!(
         proveedor.ingreso,
         IngresoAbierto::Proveedor(IngresoProveedorId::desde_uuid(Uuid::from_u128(6001))),
@@ -164,7 +193,7 @@ pub async fn quienes_estan_adentro_junta_las_tres_vias_del_mas_reciente_al_mas_a
     );
     assert_eq!(
         contratista.medio,
-        Medio::Vehiculo(Placa::nueva("ABC-123").unwrap()),
+        Some(Medio::Vehiculo(Placa::nueva("ABC-123").unwrap())),
         "llegó en carro"
     );
     assert_eq!(

@@ -8,7 +8,7 @@ use limen_dominio::ingreso_correo::{
 };
 use limen_dominio::medio::TipoMedio;
 use limen_dominio::movimiento::{ErrorSalida, Marca};
-use limen_dominio::presencia::{Via, YaEstaAdentro};
+use limen_dominio::presencia::{Identidad, Via, YaEstaAdentro};
 use limen_dominio::visitante::Visitante;
 
 use super::gafetes::situacion_para_prestar;
@@ -86,7 +86,10 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarEntradaCorre
         let cedula = visitante.cedula();
         let hechos = HechosEntradaCorreo {
             ultimo_movimiento: uow.reloj().ultimo_movimiento().await?,
-            adentro_por: uow.presencias().via_adentro(cedula).await?,
+            adentro_por: uow
+                .presencias()
+                .via_adentro(&Identidad::from(cedula))
+                .await?,
             vetada: cedula_vetada(uow.contratistas(), cedula).await?,
             situacion_gafete: situacion_para_prestar(uow.gafetes(), TipoGafete::Visita, gafete)
                 .await?,
@@ -112,7 +115,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarEntradaCorre
 
         uow.ingresos_correo().guardar(&ingreso);
         uow.presencias()
-            .anotar_entrada(ingreso.cedula(), Via::Correo, marca.en);
+            .anotar_entrada(&Identidad::from(ingreso.cedula()), Via::Correo, marca.en);
         uow.gafetes()
             .anotar_prestamo(TipoGafete::Visita, gafete, marca.en);
         uow.reloj().anotar_movimiento(marca.en);
@@ -178,7 +181,8 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj> RegistrarSalidaCorreo<F, R> {
             .map_err(ErrorCaso::Negocio)?;
 
         uow.ingresos_correo().guardar(&ingreso);
-        uow.presencias().anotar_salida(ingreso.cedula());
+        uow.presencias()
+            .anotar_salida(&Identidad::from(ingreso.cedula()));
         uow.gafetes()
             .anotar_devolucion(TipoGafete::Visita, ingreso.gafete());
         uow.reloj().anotar_movimiento(marca.en);

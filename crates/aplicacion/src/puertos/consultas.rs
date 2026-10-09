@@ -9,7 +9,6 @@ use std::future::Future;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use limen_dominio::busqueda::Criterio;
-use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::Contratista;
 use limen_dominio::empresa::Empresa;
 use limen_dominio::empresa_proveedora::EmpresaProveedora;
@@ -21,7 +20,8 @@ use limen_dominio::medio::Medio;
 use limen_dominio::nombre::NombrePersona;
 use limen_dominio::operador::OperadorId;
 use limen_dominio::personal_kof::PersonalKof;
-use limen_dominio::presencia::Via;
+use limen_dominio::presencia::{Identidad, Via};
+use limen_dominio::prestamo_kof::PrestamoKofId;
 
 use super::auditoria::{AccionAuditada, RegistroAuditado};
 use super::persistencia::ErrorPersistencia;
@@ -33,6 +33,8 @@ pub enum IngresoAbierto {
     Contratista(IngresoId),
     Proveedor(IngresoProveedorId),
     Correo(IngresoCorreoId),
+    /// El préstamo del gafete provisional del personal KOF.
+    Kof(PrestamoKofId),
 }
 
 impl IngresoAbierto {
@@ -41,20 +43,25 @@ impl IngresoAbierto {
             Self::Contratista(_) => Via::Contratista,
             Self::Proveedor(_) => Via::Proveedor,
             Self::Correo(_) => Via::Correo,
+            Self::Kof(_) => Via::Kof,
         }
     }
 }
 
-/// Una persona que está adentro ahora.
+/// Una persona que está adentro ahora, por cualquier vía. La pantalla
+/// "dentro" las junta a todas en un solo lugar (por ejemplo, para contar a
+/// todos en una emergencia).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PersonaAdentro {
     pub ingreso: IngresoAbierto,
-    pub cedula: Cedula,
+    /// La cédula o, para el personal KOF, el código de empleado.
+    pub identidad: Identidad,
     pub nombre: NombrePersona,
-    /// De dónde viene: la empresa (contratista y proveedor) o el motivo de
-    /// la visita (ingreso por correo).
+    /// De dónde viene: la empresa (contratista y proveedor), el motivo de la
+    /// visita (ingreso por correo) o "Personal KOF".
     pub procedencia: String,
-    pub medio: Medio,
+    /// Cómo llegó; el personal KOF no lo registra.
+    pub medio: Option<Medio>,
     pub gafete: Option<NumeroGafete>,
     pub desde: DateTime<Utc>,
 }
@@ -84,8 +91,8 @@ pub struct ResumenGafete {
 }
 
 pub trait Consultas: Send + Sync {
-    /// Quién está adentro, del ingreso más reciente al más antiguo (con la
-    /// cédula como desempate).
+    /// Quién está adentro por cualquiera de las cuatro vías, del ingreso más
+    /// reciente al más antiguo (con la cédula o el código como desempate).
     fn quienes_estan_adentro(
         &self,
     ) -> impl Future<Output = Result<Vec<PersonaAdentro>, ErrorPersistencia>> + Send;

@@ -41,6 +41,9 @@ fn prestamo(n: u128, persona_n: u128, gafete: u32, devolucion: Option<Marca>) ->
     PrestamoKof::restaurar(PrestamoKofGuardado {
         id: PrestamoKofId::desde_uuid(Uuid::from_u128(8000 + n)),
         personal: id_persona(persona_n),
+        // La persona 1 es el código 5040017, la 2 el 5040018…
+        codigo: CodigoEmpleado::nuevo(&(5_040_016 + persona_n).to_string()).unwrap(),
+        nombre: NombrePersona::nuevo("ANA MORA").unwrap(),
         gafete: NumeroGafete::nuevo(gafete).unwrap(),
         entrega: marca("2026-10-09T08:00:00Z"),
         devolucion,

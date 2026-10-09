@@ -8,7 +8,7 @@ use limen_dominio::ingreso_contratista::{
 };
 use limen_dominio::medio::TipoMedio;
 use limen_dominio::movimiento::{ErrorSalida, Marca};
-use limen_dominio::presencia::{Via, YaEstaAdentro};
+use limen_dominio::presencia::{Identidad, Via, YaEstaAdentro};
 
 use super::gafetes::situacion_para_prestar;
 use crate::errores::ErrorCaso;
@@ -95,7 +95,10 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarEntrada<F, R
         };
         let hechos = HechosEntrada {
             ultimo_movimiento: uow.reloj().ultimo_movimiento().await?,
-            adentro_por: uow.presencias().via_adentro(contratista.cedula()).await?,
+            adentro_por: uow
+                .presencias()
+                .via_adentro(&Identidad::from(contratista.cedula()))
+                .await?,
             situacion_gafete,
         };
         let marca = Marca {
@@ -119,8 +122,11 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarEntrada<F, R
         let ingreso = registrada.ingreso;
 
         uow.ingresos().guardar(&ingreso);
-        uow.presencias()
-            .anotar_entrada(ingreso.cedula(), Via::Contratista, marca.en);
+        uow.presencias().anotar_entrada(
+            &Identidad::from(ingreso.cedula()),
+            Via::Contratista,
+            marca.en,
+        );
         if let Some(numero) = ingreso.gafete() {
             uow.gafetes()
                 .anotar_prestamo(TipoGafete::Contratista, numero, marca.en);
@@ -187,7 +193,8 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj> RegistrarSalida<F, R> {
             .map_err(ErrorCaso::Negocio)?;
 
         uow.ingresos().guardar(&ingreso);
-        uow.presencias().anotar_salida(ingreso.cedula());
+        uow.presencias()
+            .anotar_salida(&Identidad::from(ingreso.cedula()));
         if let Some(numero) = ingreso.gafete() {
             uow.gafetes()
                 .anotar_devolucion(TipoGafete::Contratista, numero);

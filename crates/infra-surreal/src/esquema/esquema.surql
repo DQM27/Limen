@@ -48,10 +48,11 @@ DEFINE FIELD OVERWRITE deudor_cedula ON gafete TYPE option<string>;
 DEFINE TABLE OVERWRITE prestamo_gafete SCHEMAFULL;
 DEFINE FIELD OVERWRITE desde ON prestamo_gafete TYPE datetime;
 
--- Quién está adentro (reglas E1 y A7). Clave: presencia:⟨cédula⟩; se crea al
--- entrar y se borra al salir, así una persona no está adentro dos veces.
+-- Quién está adentro (reglas E1 y A7). Clave: presencia:⟨cédula⟩ o, para el
+-- personal KOF, presencia:⟨KOF-código de empleado⟩; se crea al entrar y se
+-- borra al salir, así una persona no está adentro dos veces.
 DEFINE TABLE OVERWRITE presencia SCHEMAFULL;
-DEFINE FIELD OVERWRITE via ON presencia TYPE 'CONTRATISTA' | 'PROVEEDOR' | 'CORREO';
+DEFINE FIELD OVERWRITE via ON presencia TYPE 'CONTRATISTA' | 'PROVEEDOR' | 'CORREO' | 'KOF';
 DEFINE FIELD OVERWRITE desde ON presencia TYPE datetime;
 
 -- Ingresos de contratistas (bloque E).
@@ -115,6 +116,8 @@ DEFINE INDEX OVERWRITE personal_kof_busqueda ON personal_kof FIELDS nombre_busqu
 -- Préstamos del gafete provisional KOF.
 DEFINE TABLE OVERWRITE prestamo_kof SCHEMAFULL;
 DEFINE FIELD OVERWRITE personal ON prestamo_kof TYPE record<personal_kof>;
+DEFINE FIELD OVERWRITE codigo_empleado ON prestamo_kof TYPE string;
+DEFINE FIELD OVERWRITE nombre ON prestamo_kof TYPE string;
 DEFINE FIELD OVERWRITE gafete ON prestamo_kof TYPE int;
 DEFINE FIELD OVERWRITE entrega_en ON prestamo_kof TYPE datetime;
 DEFINE FIELD OVERWRITE entrega_operador ON prestamo_kof TYPE uuid;

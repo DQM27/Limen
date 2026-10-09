@@ -40,7 +40,7 @@ use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoId};
 use limen_dominio::ingreso_correo::{IngresoCorreo, IngresoCorreoId};
 use limen_dominio::ingreso_proveedor::{IngresoProveedor, IngresoProveedorId};
 use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
-use limen_dominio::presencia::Via;
+use limen_dominio::presencia::{Identidad, Via};
 use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofId};
 use uuid::Uuid;
 
@@ -147,9 +147,10 @@ impl AlmacenMemoria {
     }
 
     /// Marca a una persona como adentro por una vía.
-    pub fn marcar_adentro(&self, cedula: &Cedula, via: Via) {
+    pub fn marcar_adentro(&self, identidad: impl Into<Identidad>, via: Via) {
+        let clave = identidad.into().clave();
         self.sembrar(|c| {
-            c.presencias.insert(cedula.as_str().to_owned(), via);
+            c.presencias.insert(clave, via);
         });
     }
 
@@ -206,8 +207,9 @@ impl AlmacenMemoria {
     }
 
     /// Por qué vía está adentro una persona, si lo está.
-    pub fn via_adentro(&self, cedula: &Cedula) -> Option<Via> {
-        self.mirar(|c| c.presencias.get(cedula.as_str()).copied())
+    pub fn via_adentro(&self, identidad: impl Into<Identidad>) -> Option<Via> {
+        let clave = identidad.into().clave();
+        self.mirar(|c| c.presencias.get(&clave).copied())
     }
 
     pub fn prestado(&self, tipo: TipoGafete, numero: NumeroGafete) -> bool {
@@ -240,14 +242,14 @@ impl Consultas for AlmacenMemoria {
                 };
                 adentro.push(PersonaAdentro {
                     ingreso: IngresoAbierto::Contratista(ingreso.id()),
-                    cedula: ingreso.cedula().clone(),
+                    identidad: Identidad::from(ingreso.cedula()),
                     nombre: contratista.nombre().clone(),
                     procedencia: c
                         .empresas
                         .get(&contratista.empresa())
                         .map(|empresa| empresa.nombre().to_string())
                         .unwrap_or_default(),
-                    medio: ingreso.medio().clone(),
+                    medio: Some(ingreso.medio().clone()),
                     gafete: ingreso.gafete(),
                     desde: ingreso.entrada().en,
                 });
@@ -255,14 +257,14 @@ impl Consultas for AlmacenMemoria {
             for ingreso in c.ingresos_proveedor.values().filter(|i| i.esta_abierto()) {
                 adentro.push(PersonaAdentro {
                     ingreso: IngresoAbierto::Proveedor(ingreso.id()),
-                    cedula: ingreso.cedula().clone(),
+                    identidad: Identidad::from(ingreso.cedula()),
                     nombre: ingreso.visitante().nombre().clone(),
                     procedencia: c
                         .empresas_proveedoras
                         .get(&ingreso.empresa())
                         .map(|empresa| empresa.nombre().to_string())
                         .unwrap_or_default(),
-                    medio: ingreso.medio().clone(),
+                    medio: Some(ingreso.medio().clone()),
                     gafete: Some(ingreso.gafete()),
                     desde: ingreso.entrada().en,
                 });
@@ -270,18 +272,29 @@ impl Consultas for AlmacenMemoria {
             for ingreso in c.ingresos_correo.values().filter(|i| i.esta_abierto()) {
                 adentro.push(PersonaAdentro {
                     ingreso: IngresoAbierto::Correo(ingreso.id()),
-                    cedula: ingreso.cedula().clone(),
+                    identidad: Identidad::from(ingreso.cedula()),
                     nombre: ingreso.visitante().nombre().clone(),
                     procedencia: ingreso.motivo().to_string(),
-                    medio: ingreso.medio().clone(),
+                    medio: Some(ingreso.medio().clone()),
                     gafete: Some(ingreso.gafete()),
                     desde: ingreso.entrada().en,
+                });
+            }
+            for prestamo in c.prestamos_kof.values().filter(|p| p.esta_abierto()) {
+                adentro.push(PersonaAdentro {
+                    ingreso: IngresoAbierto::Kof(prestamo.id()),
+                    identidad: prestamo.identidad(),
+                    nombre: prestamo.nombre().clone(),
+                    procedencia: "Personal KOF".to_owned(),
+                    medio: None,
+                    gafete: Some(prestamo.gafete()),
+                    desde: prestamo.entrega().en,
                 });
             }
             adentro.sort_by(|a, b| {
                 b.desde
                     .cmp(&a.desde)
-                    .then_with(|| a.cedula.as_str().cmp(b.cedula.as_str()))
+                    .then_with(|| a.identidad.to_string().cmp(&b.identidad.to_string()))
             });
             adentro
         }))
@@ -799,22 +812,20 @@ pub struct PresenciasMemoria {
 impl RepositorioPresencias for PresenciasMemoria {
     fn via_adentro(
         &self,
-        cedula: &Cedula,
+        identidad: &Identidad,
     ) -> impl Future<Output = Result<Option<Via>, ErrorPersistencia>> + Send {
-        std::future::ready(
-            self.almacen
-                .leer(|c| c.presencias.get(cedula.as_str()).copied()),
-        )
+        let clave = identidad.clave();
+        std::future::ready(self.almacen.leer(|c| c.presencias.get(&clave).copied()))
     }
 
-    fn anotar_entrada(&mut self, cedula: &Cedula, via: Via, _desde: DateTime<Utc>) {
+    fn anotar_entrada(&mut self, identidad: &Identidad, via: Via, _desde: DateTime<Utc>) {
         self.pendientes
-            .push(OperacionPresencia::Entrada(cedula.as_str().to_owned(), via));
+            .push(OperacionPresencia::Entrada(identidad.clave(), via));
     }
 
-    fn anotar_salida(&mut self, cedula: &Cedula) {
+    fn anotar_salida(&mut self, identidad: &Identidad) {
         self.pendientes
-            .push(OperacionPresencia::Salida(cedula.as_str().to_owned()));
+            .push(OperacionPresencia::Salida(identidad.clave()));
     }
 }
 

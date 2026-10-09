@@ -56,8 +56,9 @@ pantallas; **(3)** usuarios y sesión (bloque L) y equipos (bloque M); **(4)** l
 Cloudflare); **(5)** móvil. El almacén clave-valor (configuración del equipo) se define
 cuando la pantalla diga qué necesita.
 
-Decisiones abiertas que conviene confirmar con el usuario: si el personal KOF debe contar
-como "estar adentro" (regla A7; hoy sólo se controla su gafete provisional, como en Lattis).
+El personal KOF cuenta como "adentro" mientras tenga un gafete provisional sin devolver
+(confirmado por el usuario): entregar el gafete es su entrada y devolverlo, su salida. La
+pantalla "dentro" junta las cuatro vías en un solo lugar (útil en una emergencia).
 
 ## Cosas que ya costaron un tropiezo
 
