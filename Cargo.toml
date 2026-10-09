@@ -7,6 +7,7 @@ members = [
     "crates/infra-surreal",
     "crates/pruebas-contrato",
     "crates/infra-plataforma",
+    "crates/composicion",
 ]
 
 [workspace.package]
@@ -35,6 +36,7 @@ limen-infra-memoria = { path = "crates/infra-memoria" }
 limen-infra-surreal = { path = "crates/infra-surreal" }
 limen-pruebas-contrato = { path = "crates/pruebas-contrato" }
 limen-infra-plataforma = { path = "crates/infra-plataforma" }
+limen-composicion = { path = "crates/composicion" }
 
 # Lints: lo de Lattis (pedantic + nursery + su lista de `deny`) y más estricto
 # todavía. La CI corre clippy con `-D warnings`, así que todo `warn` también

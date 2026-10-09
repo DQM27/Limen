@@ -2007,6 +2007,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "limen-composicion"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "limen-aplicacion",
+ "limen-dominio",
+ "limen-infra-memoria",
+ "limen-infra-plataforma",
+ "limen-infra-surreal",
+ "thiserror",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "limen-dominio"
 version = "0.1.0"
 dependencies = [

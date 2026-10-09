@@ -43,19 +43,13 @@ fn cedula(texto: &str) -> Cedula {
     Cedula::normalizar(texto).unwrap()
 }
 
-fn nombres<T>(encontrados: &[T], nombre: impl Fn(&T) -> String) -> Vec<String> {
-    encontrados.iter().map(nombre).collect()
-}
-
 // --- Quién está adentro ---
 
-pub async fn quienes_estan_adentro_junta_las_tres_vias_del_mas_reciente_al_mas_antiguo<
-    F: FabricaUnidadDeTrabajo + Consultas,
->(
-    fabrica: F,
-) {
+/// Un contratista (08:00), una visita por correo (09:00) y un proveedor
+/// (10:00), todos adentro.
+async fn sembrar_tres_vias<F: FabricaUnidadDeTrabajo>(fabrica: &F) {
     // La empresa 1 se llama ACME; el contratista 1 es ANA.
-    sembrar(&fabrica, &[contratista(1, "111111111", "ANA")]).await;
+    sembrar(fabrica, &[contratista(1, "111111111", "ANA")]).await;
     let proveedora = EmpresaProveedoraId::desde_uuid(Uuid::from_u128(3001));
     let mut uow = fabrica.nueva();
     uow.empresas_proveedoras()
@@ -106,6 +100,14 @@ pub async fn quienes_estan_adentro_junta_las_tres_vias_del_mas_reciente_al_mas_a
             salida: None,
         }));
     uow.confirmar().await.unwrap();
+}
+
+pub async fn quienes_estan_adentro_junta_las_tres_vias_del_mas_reciente_al_mas_antiguo<
+    F: FabricaUnidadDeTrabajo + Consultas,
+>(
+    fabrica: F,
+) {
+    sembrar_tres_vias(&fabrica).await;
 
     let adentro = fabrica.quienes_estan_adentro().await.unwrap();
     let resumen: Vec<(String, String, String)> = adentro
@@ -131,24 +133,37 @@ pub async fn quienes_estan_adentro_junta_las_tres_vias_del_mas_reciente_al_mas_a
         ],
         "del más reciente al más antiguo, con la empresa o el motivo"
     );
+    let [proveedor, visita, contratista] = <[_; 3]>::try_from(adentro).unwrap();
     assert_eq!(
-        adentro[0].ingreso,
-        IngresoAbierto::Proveedor(IngresoProveedorId::desde_uuid(Uuid::from_u128(6001)))
+        proveedor.ingreso,
+        IngresoAbierto::Proveedor(IngresoProveedorId::desde_uuid(Uuid::from_u128(6001))),
+        "el ingreso abierto del proveedor, para registrar su salida"
     );
     assert_eq!(
-        adentro[1].ingreso,
-        IngresoAbierto::Correo(IngresoCorreoId::desde_uuid(Uuid::from_u128(7001)))
+        visita.ingreso,
+        IngresoAbierto::Correo(IngresoCorreoId::desde_uuid(Uuid::from_u128(7001))),
+        "el ingreso abierto de la visita"
     );
     assert_eq!(
-        adentro[2].ingreso,
-        IngresoAbierto::Contratista(IngresoId::desde_uuid(Uuid::from_u128(5001)))
+        contratista.ingreso,
+        IngresoAbierto::Contratista(IngresoId::desde_uuid(Uuid::from_u128(5001))),
+        "el ingreso abierto del contratista"
     );
-    assert_eq!(adentro[2].gafete, Some(NumeroGafete::nuevo(7).unwrap()));
     assert_eq!(
-        adentro[2].medio,
-        Medio::Vehiculo(Placa::nueva("ABC-123").unwrap())
+        contratista.gafete,
+        Some(NumeroGafete::nuevo(7).unwrap()),
+        "su gafete"
     );
-    assert_eq!(adentro[2].desde, marca("2026-10-09T08:00:00Z").en);
+    assert_eq!(
+        contratista.medio,
+        Medio::Vehiculo(Placa::nueva("ABC-123").unwrap()),
+        "llegó en carro"
+    );
+    assert_eq!(
+        contratista.desde,
+        marca("2026-10-09T08:00:00Z").en,
+        "desde cuándo"
+    );
 }
 
 pub async fn quienes_estan_adentro_ignora_a_quienes_ya_salieron<
@@ -290,26 +305,38 @@ pub async fn buscar_contratistas_tolera_tildes_enie_orden_y_errores_de_tecleo<
         ["333444555", "111111111", "111111112"],
         "palabras completas, por nombre y luego por cédula (ANA PENA, JOSE PEÑA, JOSE PEÑA)"
     );
-    assert_eq!(buscar("ñandu").await, ["666777888"]);
+    assert_eq!(buscar("ñandu").await, ["666777888"], "Ñ escrita con Ñ");
     // Cualquier orden, con una palabra del medio sin escribir.
-    assert_eq!(buscar("sanches carlos").await, ["444555666"]);
+    assert_eq!(
+        buscar("sanches carlos").await,
+        ["444555666"],
+        "el nombre del medio no estorba"
+    );
     // Errores de tecleo: sólo se muestran si no hay algo mejor.
     assert_eq!(
         buscar("sanchez").await,
         ["777888999", "444555666"],
         "SOFIA SANCHEZ es exacta; CARLOS ... SANCHES, aproximada"
     );
-    assert_eq!(buscar("hernandes").await, ["555666777"]);
+    assert_eq!(
+        buscar("hernandes").await,
+        ["555666777"],
+        "una letra distinta"
+    );
     assert_eq!(
         buscar("mraia").await,
         ["555666777"],
         "letras cambiadas de lugar"
     );
     // Dentro del nombre.
-    assert_eq!(buscar("ndez").await, ["555666777"]);
+    assert_eq!(buscar("ndez").await, ["555666777"], "dentro de una palabra");
     // Nada.
-    assert_eq!(buscar("zzz").await, Vec::<String>::new());
-    assert_eq!(buscar("  ").await, Vec::<String>::new());
+    assert_eq!(buscar("zzz").await, Vec::<String>::new(), "nada se parece");
+    assert_eq!(
+        buscar("  ").await,
+        Vec::<String>::new(),
+        "espacios no buscan nada"
+    );
 }
 
 pub async fn buscar_contratistas_por_cedula_ordena_exacta_primero<
@@ -404,7 +431,8 @@ pub async fn buscar_personal_kof_por_codigo_o_nombre<F: FabricaUnidadDeTrabajo +
         .buscar_personal_kof(&Criterio::desde_texto("ana"), 50)
         .await
         .unwrap();
-    assert!(!inactiva[0].activo(), "también devuelve a las inactivas");
+    let [ana] = <[_; 1]>::try_from(inactiva).unwrap();
+    assert!(!ana.activo(), "también devuelve a las inactivas");
 }
 
 pub async fn buscar_empresas_por_nombre_con_numeros_y_signos<

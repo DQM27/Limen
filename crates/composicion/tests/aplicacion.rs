@@ -1,0 +1,339 @@
+//! Pruebas de la aplicación completa, armada como en producción (`SurrealDB`,
+//! hora de Costa Rica y UUID v7) y también con los dobles en memoria.
+
+#[cfg(test)]
+mod tests {
+    use chrono::NaiveDate;
+    use limen_aplicacion::casos_de_uso::contratistas::ComandoContratista;
+    use limen_aplicacion::casos_de_uso::correo::ComandoEntradaCorreo;
+    use limen_aplicacion::casos_de_uso::ingresos::ComandoEntrada;
+    use limen_aplicacion::casos_de_uso::proveedores::ComandoEntradaProveedor;
+    use limen_aplicacion::puertos::{
+        Consultas, FabricaUnidadDeTrabajo, GeneradorIds, IngresoAbierto, Reloj,
+    };
+    use limen_aplicacion::sesion::{OperadorId, Sesion};
+    use limen_composicion::{Aplicacion, AplicacionLimen, Config};
+    use limen_dominio::acceso::ResultadoAcceso;
+    use limen_dominio::contratista::ContratistaId;
+    use limen_dominio::empresa_proveedora::EmpresaProveedoraId;
+    use limen_dominio::gafete::TipoGafete;
+    use limen_dominio::medio::TipoMedio;
+    use limen_dominio::personal_kof::PersonalKofId;
+    use limen_dominio::tipo_ingreso::TipoIngreso;
+    use limen_infra_memoria::{AlmacenMemoria, IdsSecuenciales, RelojFijo};
+    use limen_infra_plataforma::{IdsV7, RelojCostaRica};
+    use limen_infra_surreal::AlmacenSurreal;
+    use uuid::Uuid;
+
+    fn sesion() -> Sesion {
+        Sesion::nueva(OperadorId::desde_uuid(Uuid::from_u128(900)))
+    }
+
+    /// La aplicación se comparte entre pantallas y comandos: tiene que poder
+    /// viajar entre hilos.
+    fn es_send_y_sync<T: Send + Sync>() {}
+
+    #[test]
+    fn la_aplicacion_se_puede_compartir_entre_hilos() {
+        es_send_y_sync::<AplicacionLimen>();
+        es_send_y_sync::<Aplicacion<AlmacenMemoria, RelojFijo, IdsSecuenciales>>();
+    }
+
+    /// Lo que se crea al preparar el día y se necesita después.
+    struct Dia {
+        gas: EmpresaProveedoraId,
+        contratista: ContratistaId,
+        michael: PersonalKofId,
+    }
+
+    /// Catálogos: empresas, gafetes, un contratista y una persona del KOF; y
+    /// comprueba que el buscador los encuentra.
+    async fn preparar_el_dia<F, R, G>(app: &Aplicacion<F, R, G>) -> Dia
+    where
+        F: FabricaUnidadDeTrabajo + Consultas + Clone,
+        R: Reloj + Clone,
+        G: GeneradorIds + Clone,
+    {
+        let sesion = sesion();
+        let acme = app
+            .empresas
+            .registrar
+            .ejecutar(&sesion, "acme s.a.")
+            .await
+            .unwrap();
+        let gas = app
+            .proveedores
+            .registrar_empresa
+            .ejecutar(&sesion, "gas zeta")
+            .await
+            .unwrap();
+        for (tipo, desde, hasta) in [
+            (TipoGafete::Contratista, 1, 10),
+            (TipoGafete::Proveedor, 1, 5),
+            (TipoGafete::Visita, 1, 5),
+            (TipoGafete::ProvisionalKof, 1, 5),
+        ] {
+            app.gafetes
+                .registrar
+                .ejecutar(&sesion, tipo, desde, hasta)
+                .await
+                .unwrap();
+        }
+        let contratista = app
+            .contratistas
+            .registrar
+            .ejecutar(
+                &sesion,
+                &ComandoContratista {
+                    cedula: "1-1111-1111".into(),
+                    nombre: "josé peña".into(),
+                    empresa: acme,
+                    tipo_ingreso: TipoIngreso::Praind,
+                    fecha_vencimiento_praind: NaiveDate::from_ymd_opt(2099, 1, 1).unwrap(),
+                    tiene_acceso: true,
+                },
+            )
+            .await
+            .unwrap();
+        let michael = app
+            .kof
+            .registrar
+            .ejecutar(&sesion, "5040017", "michael araya")
+            .await
+            .unwrap();
+
+        let encontrados = app
+            .contratistas
+            .buscar
+            .ejecutar("jose pe", 10)
+            .await
+            .unwrap();
+        assert_eq!(encontrados.len(), 1, "un contratista");
+        assert_eq!(encontrados[0].id(), contratista, "el que se registró");
+        assert_eq!(
+            app.empresas.buscar.ejecutar("acm", 10).await.unwrap().len(),
+            1,
+            "la empresa de contratistas"
+        );
+        assert_eq!(
+            app.proveedores
+                .buscar_empresas
+                .ejecutar("gas ze", 10)
+                .await
+                .unwrap()
+                .len(),
+            1,
+            "la empresa proveedora"
+        );
+        assert_eq!(
+            app.kof.buscar.ejecutar("5040", 10).await.unwrap().len(),
+            1,
+            "la persona del KOF"
+        );
+        Dia {
+            gas,
+            contratista,
+            michael,
+        }
+    }
+
+    /// Entran por las tres vías y se le presta un provisional al KOF.
+    async fn entran_todos<F, R, G>(app: &Aplicacion<F, R, G>, dia: &Dia)
+    where
+        F: FabricaUnidadDeTrabajo + Consultas + Clone,
+        R: Reloj + Clone,
+        G: GeneradorIds + Clone,
+    {
+        let sesion = sesion();
+        let entrada = app
+            .ingresos
+            .entrada
+            .ejecutar(
+                &sesion,
+                &ComandoEntrada {
+                    contratista: dia.contratista,
+                    medio: TipoMedio::APie,
+                    placa: None,
+                    gafete: Some(3),
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(entrada.acceso, ResultadoAcceso::Permitido, "PRAIND vigente");
+        app.proveedores
+            .entrada
+            .ejecutar(
+                &sesion,
+                &ComandoEntradaProveedor {
+                    cedula: "2-2222-2222".into(),
+                    nombre: "beto solís".into(),
+                    empresa: dia.gas,
+                    medio: TipoMedio::Vehiculo,
+                    placa: Some("abc-123".into()),
+                    gafete: 2,
+                },
+            )
+            .await
+            .unwrap();
+        app.correo
+            .entrada
+            .ejecutar(
+                &sesion,
+                &ComandoEntradaCorreo {
+                    cedula: "3-3333-3333".into(),
+                    nombre: "luis mora".into(),
+                    motivo: "Entrevista con RH".into(),
+                    medio: TipoMedio::APie,
+                    placa: None,
+                    gafete: 4,
+                },
+            )
+            .await
+            .unwrap();
+        app.kof
+            .entregar_gafete
+            .ejecutar(&sesion, dia.michael, 1)
+            .await
+            .unwrap();
+
+        let adentro = app.quienes_estan_adentro.ejecutar().await.unwrap();
+        assert_eq!(adentro.len(), 3, "contratista, proveedor y visita");
+        let vias: Vec<_> = adentro
+            .iter()
+            .map(|p| p.ingreso.via().to_string())
+            .collect();
+        for via in ["contratista", "proveedor", "ingreso por correo"] {
+            assert!(
+                vias.iter().any(|v| v == via),
+                "{via} está adentro: {vias:?}"
+            );
+        }
+        assert!(
+            adentro
+                .iter()
+                .any(|p| p.nombre.as_str() == "JOSE PEÑA" && p.procedencia == "ACME S.A."),
+            "el contratista con su empresa"
+        );
+        assert!(
+            adentro
+                .iter()
+                .any(|p| matches!(p.ingreso, IngresoAbierto::Proveedor(_))
+                    && p.procedencia == "GAS ZETA"),
+            "el proveedor con su empresa"
+        );
+    }
+
+    /// Salen, cada uno por su gafete.
+    async fn salen_todos<F, R, G>(app: &Aplicacion<F, R, G>)
+    where
+        F: FabricaUnidadDeTrabajo + Consultas + Clone,
+        R: Reloj + Clone,
+        G: GeneradorIds + Clone,
+    {
+        let sesion = sesion();
+        app.ingresos.salida.por_gafete(&sesion, 3).await.unwrap();
+        app.proveedores.salida.por_gafete(&sesion, 2).await.unwrap();
+        app.correo.salida.por_gafete(&sesion, 4).await.unwrap();
+        app.kof
+            .devolver_gafete
+            .por_gafete(&sesion, 1)
+            .await
+            .unwrap();
+        assert!(
+            app.quienes_estan_adentro
+                .ejecutar()
+                .await
+                .unwrap()
+                .is_empty(),
+            "no queda nadie adentro"
+        );
+    }
+
+    /// Un día completo en la portería, con cada vía de ingreso.
+    async fn un_dia_en_la_porteria<F, R, G>(app: &Aplicacion<F, R, G>)
+    where
+        F: FabricaUnidadDeTrabajo + Consultas + Clone,
+        R: Reloj + Clone,
+        G: GeneradorIds + Clone,
+    {
+        let dia = preparar_el_dia(app).await;
+        entran_todos(app, &dia).await;
+        salen_todos(app).await;
+    }
+
+    #[tokio::test]
+    async fn un_dia_completo_con_los_adaptadores_reales() {
+        let almacen = AlmacenSurreal::en_memoria().await.unwrap();
+        let app = AplicacionLimen::nueva(&almacen, &RelojCostaRica, &IdsV7);
+        un_dia_en_la_porteria(&app).await;
+    }
+
+    #[tokio::test]
+    async fn un_dia_completo_con_los_dobles_en_memoria() {
+        let almacen = AlmacenMemoria::new();
+        let reloj = RelojFijo::new(
+            "2026-10-09T14:00:00Z".parse().unwrap(),
+            NaiveDate::from_ymd_opt(2026, 10, 9).unwrap(),
+        );
+        let app = Aplicacion::nueva(&almacen, &reloj, &almacen.ids());
+        un_dia_en_la_porteria(&app).await;
+    }
+
+    #[tokio::test]
+    async fn abrir_crea_la_base_en_disco_y_los_datos_sobreviven() {
+        let carpeta = std::env::temp_dir().join(format!("limen-composicion-{}", Uuid::now_v7()));
+        let config = Config {
+            ruta_base: carpeta.clone(),
+        };
+        {
+            let app = AplicacionLimen::abrir(&config).await.unwrap();
+            app.empresas
+                .registrar
+                .ejecutar(&sesion(), "acme")
+                .await
+                .unwrap();
+        }
+        // El motor suelta el archivo en segundo plano: se reintenta mientras
+        // siga tomado.
+        let mut app = None;
+        for _ in 0..100 {
+            match AplicacionLimen::abrir(&config).await {
+                Ok(abierta) => {
+                    app = Some(abierta);
+                    break;
+                }
+                Err(error) if error.to_string().contains("locked") => {
+                    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+                }
+                Err(error) => panic!("no se pudo reabrir: {error}"),
+            }
+        }
+        let app = app.expect("el motor liberó el archivo");
+        assert_eq!(
+            app.empresas
+                .buscar
+                .ejecutar("acme", 10)
+                .await
+                .unwrap()
+                .len(),
+            1,
+            "la empresa sigue ahí después de reabrir"
+        );
+        drop(app);
+        drop(std::fs::remove_dir_all(carpeta));
+    }
+
+    #[tokio::test]
+    async fn abrir_en_una_ruta_imposible_es_un_error_de_arranque() {
+        let config = Config {
+            ruta_base: "/proc/limen-no-se-puede-crear/base".into(),
+        };
+        let error = AplicacionLimen::abrir(&config).await.unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .starts_with("No se pudo abrir la base de datos"),
+            "{error}"
+        );
+    }
+}

@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use chrono::{DateTime, Utc};
 use limen_aplicacion::puertos::{Consultas, ErrorPersistencia, IngresoAbierto, PersonaAdentro};
 use limen_dominio::busqueda::{
-    Buscable, Criterio, MINIMO_DIGITOS_PARA_SUBCADENA, Nivel, cuantos_hasta, relevantes, tolerancia,
+    Buscable, Criterio, MINIMO_DIGITOS_PARA_SUBCADENA, Nivel, cuantos_hasta, relevantes,
 };
 use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::Contratista;
@@ -25,6 +25,14 @@ use crate::registros::{
     TABLA_INGRESO_CONTRATISTA, TABLA_INGRESO_CORREO, TABLA_INGRESO_PROVEEDOR, medio_de, numero_de,
     uuid_de,
 };
+
+/// Sólo el nombre plegado de una fila: lo que necesita la búsqueda
+/// aproximada para decidir cuáles pedir completas.
+#[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
+struct FilaNombre {
+    id: RecordId,
+    nombre_busqueda: String,
+}
 
 /// Una fila de "quién está adentro", igual para las tres vías: cada consulta
 /// pone en `nombre` y `procedencia` lo que corresponde a su tabla.
@@ -76,20 +84,32 @@ impl FilaAdentro {
 /// sólo viaja en parámetros (`$p0`, `$p1`…). Lo único que se escribe dentro
 /// de la consulta son números calculados acá (largos y tolerancias).
 struct Etapa {
-    donde: String,
-    enlaces: Vec<(String, String)>,
+    consulta: Consulta,
     /// Hasta qué nivel garantiza esta etapa traer **todos** los que
     /// coinciden. Si ya hay suficientes resultados de ese nivel o mejor, las
     /// etapas siguientes (más caras) no pueden cambiar el resultado.
     completa_hasta: Nivel,
 }
 
+/// Cómo una etapa trae sus candidatos.
+enum Consulta {
+    /// Una condición `WHERE` con sus parámetros enlazados.
+    Donde {
+        donde: String,
+        enlaces: Vec<(String, String)>,
+    },
+    /// Los errores de tecleo se buscan en Rust con la regla del dominio:
+    /// la base sólo entrega `(id, nombre)` de cada fila y después se piden
+    /// completas las que coinciden. Las funciones de distancia de la base
+    /// dentro de una consulta resultaron unas 100 veces más lentas.
+    Aproximada,
+}
+
 /// Las etapas de una búsqueda, de la más barata a la más cara.
 ///
 /// - **Nombre**: primero el índice de texto (cada palabra escrita es el
 ///   comienzo de una palabra del nombre); si faltan resultados, lo que está
-///   dentro del nombre; si todavía faltan, lo parecido (errores de tecleo,
-///   con las funciones de distancia de la propia base).
+///   dentro del nombre; si todavía faltan, lo parecido (errores de tecleo).
 /// - **Cédula o código**: primero el rango del índice (empieza igual); si
 ///   faltan resultados, lo que la contiene.
 fn etapas(criterio: &Criterio, campo_identificacion: &str) -> Vec<Etapa> {
@@ -97,17 +117,23 @@ fn etapas(criterio: &Criterio, campo_identificacion: &str) -> Vec<Etapa> {
         Criterio::Vacio => Vec::new(),
         Criterio::Identificacion(digitos) => {
             let mut etapas = vec![Etapa {
-                donde: format!("{campo_identificacion} >= $p0 AND {campo_identificacion} < $p1"),
-                enlaces: vec![
-                    ("p0".to_owned(), digitos.clone()),
-                    ("p1".to_owned(), siguiente(digitos)),
-                ],
+                consulta: Consulta::Donde {
+                    donde: format!(
+                        "{campo_identificacion} >= $p0 AND {campo_identificacion} < $p1"
+                    ),
+                    enlaces: vec![
+                        ("p0".to_owned(), digitos.clone()),
+                        ("p1".to_owned(), siguiente(digitos)),
+                    ],
+                },
                 completa_hasta: Nivel::PrefijoDeIdentificacion,
             }];
             if digitos.len() >= MINIMO_DIGITOS_PARA_SUBCADENA {
                 etapas.push(Etapa {
-                    donde: format!("{campo_identificacion} CONTAINS $p0"),
-                    enlaces: vec![("p0".to_owned(), digitos.clone())],
+                    consulta: Consulta::Donde {
+                        donde: format!("{campo_identificacion} CONTAINS $p0"),
+                        enlaces: vec![("p0".to_owned(), digitos.clone())],
+                    },
                     completa_hasta: Nivel::SubcadenaDeIdentificacion,
                 });
             }
@@ -115,56 +141,39 @@ fn etapas(criterio: &Criterio, campo_identificacion: &str) -> Vec<Etapa> {
         }
         Criterio::Nombre(palabras) if palabras.is_empty() => Vec::new(),
         Criterio::Nombre(palabras) => {
-            let enlaces: Vec<(String, String)> = palabras
+            let contienen = palabras
+                .iter()
+                .enumerate()
+                .map(|(i, _)| format!("nombre_busqueda CONTAINS $p{i}"))
+                .collect::<Vec<_>>()
+                .join(" AND ");
+            let enlaces = palabras
                 .iter()
                 .enumerate()
                 .map(|(i, palabra)| (format!("p{i}"), palabra.clone()))
                 .collect();
-            let contiene = |i: usize| format!("nombre_busqueda CONTAINS $p{i}");
-            let todas = |clausula: &dyn Fn(usize, &str) -> String| {
-                palabras
-                    .iter()
-                    .enumerate()
-                    .map(|(i, palabra)| clausula(i, palabra))
-                    .collect::<Vec<_>>()
-                    .join(" AND ")
-            };
             vec![
                 Etapa {
-                    donde: "nombre_busqueda @AND@ $texto".to_owned(),
-                    enlaces: vec![("texto".to_owned(), palabras.join(" "))],
+                    consulta: Consulta::Donde {
+                        donde: "nombre_busqueda @AND@ $texto".to_owned(),
+                        enlaces: vec![("texto".to_owned(), palabras.join(" "))],
+                    },
                     completa_hasta: Nivel::PrefijoDePalabra,
                 },
                 Etapa {
-                    donde: todas(&|i, _| contiene(i)),
-                    enlaces: enlaces.clone(),
+                    consulta: Consulta::Donde {
+                        donde: contienen,
+                        enlaces,
+                    },
                     completa_hasta: Nivel::Subcadena,
                 },
                 Etapa {
-                    donde: todas(&|i, palabra| parecida(i, palabra)),
-                    enlaces,
+                    consulta: Consulta::Aproximada,
                     completa_hasta: Nivel::Aproximada,
                 },
             ]
         }
     }
-}
-
-/// La condición de que una palabra escrita esté dentro del nombre o se
-/// parezca a alguna de sus palabras (o a su comienzo). Es la misma regla que
-/// `limen_dominio::busqueda::casi_igual`, escrita con las funciones de la
-/// base.
-fn parecida(i: usize, palabra: &str) -> String {
-    let largo = palabra.chars().count();
-    let permitidos = tolerancia(largo);
-    if permitidos == 0 {
-        return format!("nombre_busqueda CONTAINS $p{i}");
-    }
-    format!(
-        "(nombre_busqueda CONTAINS $p{i} OR array::any(string::split(nombre_busqueda, ' '), \
-         |$q| string::distance::osa($q, $p{i}) <= {permitidos} \
-         OR string::distance::osa(string::slice($q, 0, {largo}), $p{i}) <= {permitidos}))"
-    )
 }
 
 /// El primer texto que ya no empieza con `digitos` (para un rango por
@@ -180,6 +189,36 @@ fn siguiente(digitos: &str) -> String {
 impl AlmacenSurreal {
     async fn filas_adentro(&self, consulta: &str) -> Result<Vec<FilaAdentro>, ErrorPersistencia> {
         let mut respuesta = self.db().query(consulta).await.map_err(tecnica)?;
+        respuesta.take(0).map_err(tecnica)
+    }
+
+    /// Las filas cuyo nombre se parece a lo escrito (errores de tecleo). La
+    /// regla es la del dominio; la base sólo entrega los nombres.
+    async fn filas_parecidas<L: SurrealValue>(
+        &self,
+        tabla: &str,
+        criterio: &Criterio,
+    ) -> Result<Vec<L>, ErrorPersistencia> {
+        let mut respuesta = self
+            .db()
+            .query(format!("SELECT id, nombre_busqueda FROM {tabla}"))
+            .await
+            .map_err(tecnica)?;
+        let nombres: Vec<FilaNombre> = respuesta.take(0).map_err(tecnica)?;
+        let parecidas: Vec<RecordId> = nombres
+            .into_iter()
+            .filter(|fila| criterio.nivel("", &fila.nombre_busqueda) == Some(Nivel::Aproximada))
+            .map(|fila| fila.id)
+            .collect();
+        if parecidas.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut respuesta = self
+            .db()
+            .query(format!("SELECT * FROM {tabla} WHERE id IN $ids"))
+            .bind(("ids", parecidas))
+            .await
+            .map_err(tecnica)?;
         respuesta.take(0).map_err(tecnica)
     }
 
@@ -201,14 +240,19 @@ impl AlmacenSurreal {
         let mut candidatos: Vec<T> = Vec::new();
         let mut vistos: HashSet<String> = HashSet::new();
         for etapa in etapas(criterio, campo_identificacion) {
-            let mut consulta = self
-                .db()
-                .query(format!("SELECT * FROM {tabla} WHERE {}", etapa.donde));
-            for enlace in etapa.enlaces {
-                consulta = consulta.bind(enlace);
-            }
-            let mut respuesta = consulta.await.map_err(tecnica)?;
-            let filas: Vec<L> = respuesta.take(0).map_err(tecnica)?;
+            let filas: Vec<L> = match etapa.consulta {
+                Consulta::Donde { donde, enlaces } => {
+                    let mut consulta = self
+                        .db()
+                        .query(format!("SELECT * FROM {tabla} WHERE {donde}"));
+                    for enlace in enlaces {
+                        consulta = consulta.bind(enlace);
+                    }
+                    let mut respuesta = consulta.await.map_err(tecnica)?;
+                    respuesta.take(0).map_err(tecnica)?
+                }
+                Consulta::Aproximada => self.filas_parecidas(tabla, criterio).await?,
+            };
             for fila in filas {
                 let candidato = convertir(fila)?;
                 if vistos.insert(candidato.identificacion()) {

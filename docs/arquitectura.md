@@ -102,7 +102,7 @@ crates/
   infra-nube/               sincronización con SurrealDB Cloud, avisos en vivo
   infra-plataforma/         DPAPI (Windows), Android Keystore, reloj del sistema
   infra-memoria/            ✅ dobles en memoria para pruebas
-  composicion/              construir `Aplicacion`
+  composicion/              ✅ construir `Aplicacion`
   pruebas-contrato/         ✅ batería que corre contra todos los adaptadores (sólo pruebas)
 apps/
   escritorio/               Tauri + React (comandos delgados)
@@ -577,7 +577,9 @@ Se avanza por capas, completando cada una para un módulo antes de pasar al sigu
 3. ✅ **`infra-memoria`:** dobles y pruebas de casos de uso.
 4. ✅ **`infra-surreal`:** esquema, repositorios, Unit of Work real, pruebas de
    integración y la batería de contrato compartida (`pruebas-contrato`).
-5. **`composicion`** y una app mínima de escritorio para contratistas.
+5. ✅ **`composicion`** (raíz de composición con prueba de un día completo) y ✅ el
+   buscador y las consultas de lectura. Sigue una app mínima de escritorio para
+   contratistas.
 6. Resto del dominio, en orden: ✅ ingreso y salida (E), ✅ gafetes (F), ✅ proveedores
    (H), ✅ ingreso por correo (I), ✅ personal KOF (K), usuarios (L) y equipos (M).
    Lo que debe ser único entre equipos (una persona adentro, un gafete prestado, un
@@ -587,6 +589,36 @@ Se avanza por capas, completando cada una para un módulo antes de pasar al sigu
 7. **Nube:** instancia de SurrealDB Cloud, sincronización, Worker de Cloudflare.
 8. **Móvil.**
 9. Migración de datos desde Lattis y corte.
+
+### 13.1 El buscador
+
+Toda la regla vive en `dominio/busqueda.rs`, para que cada adaptador y cada pantalla
+busquen igual:
+
+- Sólo números → cédula o código de empleado (por el inicio; dentro de ella con 4
+  dígitos o más). Lo demás → nombre.
+- Se compara sin mayúsculas ni tildes, y la **Ñ cuenta como N** (como en Lattis).
+- Varias palabras, en cualquier orden, todas obligatorias.
+- Siete **niveles** de relevancia: cédula exacta, empieza igual, palabra completa,
+  comienzo de palabra, dentro del nombre, dentro de la cédula y, al final, **parecido**
+  (errores de tecleo: 1 error en palabras de 4 a 6 letras, 2 en las de 7 o más).
+- Un solo `relevantes()` decide qué coincide y en qué orden; los adaptadores sólo traen
+  candidatos.
+
+En `SurrealDB` se trae por etapas y se corta en cuanto el resultado ya no puede cambiar:
+(1) índice de texto `FULLTEXT` con analizador de comienzos de palabra sobre
+`nombre_busqueda` (el nombre ya plegado por el dominio); (2) `CONTAINS` para lo que está
+dentro del nombre; (3) los parecidos, pidiendo sólo `(id, nombre)` y aplicando la regla
+del dominio en Rust, porque las funciones de distancia dentro de la consulta resultaron
+unas 100 veces más lentas (medido con 5 000 contratistas: 490 ms contra unos 10 ms).
+Con 5 000 contratistas, las etapas con índice responden en 2 a 12 ms.
+
+La batería de contrato compara cada búsqueda contra "recorrer todo y aplicar el
+dominio", con distintos textos y límites, en los dos adaptadores.
+
+Al arrancar se reaplica el esquema (`OVERWRITE`), lo que reconstruye los índices: con
+5 000 contratistas toma unos 0,2 s. Si algún día crece mucho, se aplica sólo cuando
+cambie la versión del esquema.
 
 ---
 

@@ -1,0 +1,23 @@
+[package]
+name = "limen-composicion"
+description = "Raíz de composición de Limen: conecta casos de uso y adaptadores, sin lógica"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+limen-aplicacion.workspace = true
+limen-infra-surreal.workspace = true
+limen-infra-plataforma.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+limen-dominio.workspace = true
+limen-infra-memoria.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+tokio = { workspace = true, features = ["time"] }
+
+[lints]
+workspace = true
