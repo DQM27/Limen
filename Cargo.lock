@@ -2032,6 +2032,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "limen-escritorio-comandos"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "limen-aplicacion",
+ "limen-composicion",
+ "limen-dominio",
+ "limen-infra-memoria",
+ "log",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "limen-infra-memoria"
 version = "0.1.0"
 dependencies = [
