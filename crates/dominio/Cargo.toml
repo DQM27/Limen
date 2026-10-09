@@ -1,0 +1,22 @@
+[package]
+name = "limen-dominio"
+description = "Reglas de negocio puras de Limen: entidades, objetos de valor y validaciones"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# El dominio es puro: sin base de datos, sin red, sin reloj del sistema ni
+# generación aleatoria. Quien llama le pasa la fecha de hoy y los IDs. Así
+# compila igual para escritorio, Android y WebAssembly, y se prueba sin nada
+# alrededor. La prueba `tests/arquitectura.rs` vigila esta lista.
+[dependencies]
+chrono.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true
