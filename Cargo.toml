@@ -14,9 +14,20 @@ thiserror = "2"
 uuid = { version = "1", features = ["v7"] }
 proptest = "1"
 
+# Lints: lo de Lattis (pedantic + nursery + su lista de `deny`) y más estricto
+# todavía. La CI corre clippy con `-D warnings`, así que todo `warn` también
+# frena. Excepciones sólo con `#[expect(lint, reason = "...")]`, nunca `allow`.
 [workspace.lints.rust]
 unsafe_code = "forbid"
-missing_debug_implementations = "warn"
+missing_debug_implementations = "deny"
+rust_2018_idioms = { level = "deny", priority = -1 }
+unused_qualifications = "deny"
+unused_lifetimes = "deny"
+unused_import_braces = "deny"
+trivial_casts = "deny"
+trivial_numeric_casts = "deny"
+let_underscore_drop = "deny"
+non_ascii_idents = "deny"
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
@@ -67,3 +78,38 @@ unreadable_literal = "deny"
 unused_self = "deny"
 useless_let_if_seq = "deny"
 struct_field_names = "deny"
+
+# Más estricto que Lattis (grupo `restriction`, elegido a mano):
+# - nada que pueda tumbar la app en producción (las pruebas sí pueden; ver
+#   clippy.toml);
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+indexing_slicing = "deny"
+string_slice = "deny"
+exit = "deny"
+mem_forget = "deny"
+# - nada de salida de depuración olvidada (se usa `log`);
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+# - excepciones explícitas y justificadas;
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
+# - claridad;
+clone_on_ref_ptr = "deny"
+rc_buffer = "deny"
+empty_drop = "deny"
+fn_to_numeric_cast_any = "deny"
+lossy_float_literal = "deny"
+implicit_clone = "deny"
+str_to_string = "deny"
+verbose_file_reads = "deny"
+rest_pat_in_fully_bound_structs = "deny"
+unneeded_field_pattern = "deny"
+if_then_some_else_none = "deny"
+missing_assert_message = "deny"
+tests_outside_test_module = "deny"

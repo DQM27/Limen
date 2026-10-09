@@ -87,7 +87,7 @@ mod tests {
     use super::*;
 
     fn nombre(texto: &str) -> String {
-        NombrePersona::nuevo(texto).unwrap().as_str().to_string()
+        NombrePersona::nuevo(texto).unwrap().as_str().to_owned()
     }
 
     #[test]

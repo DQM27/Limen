@@ -370,6 +370,12 @@ las escrituras anotadas antes**. Los casos de uso leen primero y escriben al fin
 | Pruebas | Embebido en memoria (`kv-mem`): base nueva por prueba, en milisegundos |
 | Nube | SurrealDB Cloud (sección 10) |
 
+**Sólo motores escritos en Rust:** `kv-surrealkv` y `kv-mem`. **RocksDB (`kv-rocksdb`)
+está prohibido**: compila C++, alarga muchísimo la compilación y complica la compilación
+cruzada para Android. El crate `surrealdb` se declara con `default-features = false` y
+activando a mano sólo las features necesarias, para que ninguna dependencia traiga
+RocksDB por accidente.
+
 SurrealDB embebido **no cifra la base en disco** como lo hacía SQLite3MC en Lattis. Se
 compensa con el cifrado del sistema operativo (BitLocker, cifrado de Android) y cifrando
 en el adaptador los campos sensibles si hace falta.
@@ -497,6 +503,9 @@ resuelve con una tabla `conexion` actualizada cada 2 minutos con la app en prime
 
 Convenciones:
 
+- **Todo código nuevo llega con su batería de pruebas unitarias** en el mismo commit:
+  cada regla, cada camino de error y sus casos límite. Las pruebas de integración con la
+  base de datos se agregan cuando existe `infra-surreal`.
 - Las pruebas se nombran en español y describen la regla
   (`no_cambia_la_cedula_de_quien_esta_adentro`).
 - Las fechas se fijan en la prueba; nunca se usa el reloj real.
@@ -510,8 +519,18 @@ Convenciones:
 ### Código
 
 - Nombres de dominio **en español**: `Contratista`, `registrar`, `fecha_vencimiento_praind`.
-- Rust edición 2024, lints estrictos de clippy (`pedantic` + `nursery` y una lista de
-  `deny`) definidos en el `Cargo.toml` del workspace. `unsafe` está prohibido.
+- Rust edición 2024. Lints **más estrictos que los de Lattis**, definidos una sola vez en
+  el `Cargo.toml` del workspace y heredados por cada crate con `[lints] workspace = true`:
+  - los de Lattis: `pedantic` + `nursery` de clippy y su lista de `deny`;
+  - lints de Rust: `unsafe_code` prohibido, `rust_2018_idioms`, `unused_qualifications`,
+    `missing_debug_implementations`, entre otros;
+  - del grupo `restriction`: **prohibido `unwrap`, `expect`, `panic!`, `todo!`,
+    `unreachable!`, indexar con `[]` y cortar texto por posición** en código de
+    producción; prohibidos `dbg!` y `println!` (se usa `log`).
+  - Las pruebas sí pueden usar `unwrap`, `expect`, `panic!` e índices (`clippy.toml`).
+  - Las excepciones se escriben con `#[expect(lint, reason = "...")]`; `#[allow]` está
+    prohibido.
+  - La CI corre clippy con `-D warnings`: cualquier aviso frena el merge.
 - Errores con `thiserror`: mensaje para el operador vía `Display` y `codigo()` estable.
 - Comentarios: explican el **porqué** y citan el código de regla (`B9`) cuando aplica.
 - IDs: UUID v7 tipados por entidad.

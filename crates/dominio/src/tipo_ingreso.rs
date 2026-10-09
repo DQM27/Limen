@@ -32,7 +32,7 @@ impl TipoIngreso {
         Self::TODOS
             .into_iter()
             .find(|tipo| tipo.codigo() == codigo)
-            .ok_or_else(|| TipoIngresoDesconocido(codigo.to_string()))
+            .ok_or_else(|| TipoIngresoDesconocido(codigo.to_owned()))
     }
 
     /// Sólo PRAIND lleva gafete; IN HOUSE no.

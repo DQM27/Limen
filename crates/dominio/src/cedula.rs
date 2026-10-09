@@ -64,13 +64,10 @@ impl Cedula {
         if limpia.len() > LARGO_MAXIMO {
             return Err(CedulaInvalida::DemasiadoLarga);
         }
-        let sin_cero_del_tse = if limpia.len() == 10
-            && limpia.starts_with('0')
-            && limpia.chars().all(|c| c.is_ascii_digit())
-        {
-            limpia[1..].to_string()
-        } else {
-            limpia
+        let es_formato_tse = limpia.len() == 10 && limpia.chars().all(|c| c.is_ascii_digit());
+        let sin_cero_del_tse = match limpia.strip_prefix('0') {
+            Some(resto) if es_formato_tse => resto.to_owned(),
+            _ => limpia,
         };
         Ok(Self(sin_cero_del_tse))
     }
