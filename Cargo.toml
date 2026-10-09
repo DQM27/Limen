@@ -10,6 +10,7 @@ members = [
     "crates/composicion",
     "apps/escritorio/comandos",
     "apps/escritorio/src-tauri",
+    "herramientas/importador-lattis",
 ]
 
 [workspace.package]
@@ -47,6 +48,7 @@ limen-infra-plataforma = { path = "crates/infra-plataforma" }
 limen-composicion = { path = "crates/composicion" }
 limen-escritorio-comandos = { path = "apps/escritorio/comandos" }
 limen-escritorio = { path = "apps/escritorio/src-tauri" }
+limen-importador-lattis = { path = "herramientas/importador-lattis" }
 
 # Lints: lo de Lattis (pedantic + nursery + su lista de `deny`) y más estricto
 # todavía. La CI corre clippy con `-D warnings`, así que todo `warn` también

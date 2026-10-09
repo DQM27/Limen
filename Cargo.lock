@@ -3170,6 +3170,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "limen-importador-lattis"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "limen-aplicacion",
+ "limen-composicion",
+ "limen-dominio",
+ "limen-infra-memoria",
+ "limen-infra-plataforma",
+ "limen-infra-surreal",
+ "thiserror 2.0.21",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "limen-infra-memoria"
 version = "0.1.0"
 dependencies = [
