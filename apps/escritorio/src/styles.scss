@@ -1,0 +1,35 @@
+@use '@angular/material' as mat;
+
+// Tema de Angular Material 3, claro u oscuro según el sistema. Sin fuentes
+// externas (la CSP sólo permite las del propio paquete): se usa la del sistema.
+html {
+  color-scheme: light dark;
+  @include mat.theme(
+    (
+      color: (
+        primary: mat.$azure-palette,
+        theme-type: color-scheme,
+      ),
+      typography: system-ui,
+      density: 0,
+    )
+  );
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-large);
+}
+
+// Títulos de página: una sola escala para todas las pantallas.
+h1 {
+  margin: 0 0 8px;
+  font: var(--mat-sys-headline-small);
+}

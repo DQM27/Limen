@@ -9,7 +9,9 @@ mod tests {
     use limen_aplicacion::errores::MENSAJE_ERROR_TECNICO;
     use limen_aplicacion::puertos::GeneradorIds;
     use limen_aplicacion::sesion::OperadorId;
-    use limen_escritorio_comandos::{ErrorJson, ErrorOperador, OperadorDelEquipo, TipoErrorJson};
+    use limen_escritorio_comandos::{
+        ErrorJson, ErrorOperador, NOMBRE_PROVISIONAL, OperadorDelEquipo, TipoErrorJson,
+    };
     use uuid::Uuid;
 
     /// Siempre el mismo identificador, para poder comprobarlo.
@@ -48,6 +50,22 @@ mod tests {
 
         let reabierto = OperadorDelEquipo::abrir(ruta).unwrap();
         assert_eq!(reabierto.actual(), Some(creado), "sobrevive al reinicio");
+    }
+
+    #[test]
+    fn el_primer_arranque_crea_el_operador_provisional_y_despues_no_lo_toca() {
+        let ruta = ruta_nueva();
+        let equipo = OperadorDelEquipo::abrir(ruta.clone()).unwrap();
+        let primero = equipo.asegurar_provisional(&siete()).unwrap();
+        assert_eq!(primero.nombre, NOMBRE_PROVISIONAL);
+        assert!(equipo.sesion().is_ok(), "ya se puede registrar");
+
+        // Otro arranque, con otro generador: conserva el mismo operador.
+        let reabierto = OperadorDelEquipo::abrir(ruta).unwrap();
+        let otra_vez = reabierto
+            .asegurar_provisional(&IdFijo(Uuid::from_u128(99)))
+            .unwrap();
+        assert_eq!(otra_vez, primero, "no se crea otro");
     }
 
     #[test]

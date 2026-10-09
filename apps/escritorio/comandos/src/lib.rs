@@ -29,7 +29,7 @@ pub use dto::{
     EntradaRegistradaDto, PersonaAdentroDto,
 };
 pub use error::{ErrorEntrada, ErrorJson, TipoErrorJson};
-pub use operador::{ErrorOperador, Operador, OperadorDelEquipo};
+pub use operador::{ErrorOperador, NOMBRE_PROVISIONAL, Operador, OperadorDelEquipo};
 
 use dto::{leer_uuid, leer_via};
 

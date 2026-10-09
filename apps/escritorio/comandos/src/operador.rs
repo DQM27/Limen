@@ -20,6 +20,9 @@ use uuid::Uuid;
 
 use crate::error::{ErrorJson, TipoErrorJson};
 
+/// Nombre del operador que se crea solo en el primer arranque.
+pub const NOMBRE_PROVISIONAL: &str = "Operador provisional";
+
 /// El operador de este equipo, tal como se guarda y se muestra.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Operador {
@@ -97,6 +100,14 @@ impl OperadorDelEquipo {
         self.actual()
             .map(|operador| operador.sesion())
             .ok_or_else(ErrorJson::sin_operador)
+    }
+
+    /// Mientras no exista el inicio de sesión, la app arranca sin pedir nada:
+    /// si el equipo todavía no tiene operador, crea uno llamado
+    /// [`NOMBRE_PROVISIONAL`]. Si ya hay uno, no toca nada.
+    pub fn asegurar_provisional(&self, ids: &impl GeneradorIds) -> Result<Operador, ErrorOperador> {
+        self.actual()
+            .map_or_else(|| self.crear(ids, NOMBRE_PROVISIONAL), Ok)
     }
 
     /// Crea y guarda el operador de este equipo. El identificador lo genera

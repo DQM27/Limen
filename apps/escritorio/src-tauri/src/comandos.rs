@@ -19,7 +19,6 @@ use limen_escritorio_comandos::{
     ContratistaDto, ContratistaEntrada, EmpresaDto, EntradaContratistaEntrada,
     EntradaRegistradaDto, ErrorJson, Operador, PersonaAdentroDto,
 };
-use limen_infra_plataforma::IdsV7;
 use tauri::State;
 
 use crate::estado::Estado;
@@ -28,18 +27,10 @@ type Resultado<T> = Result<T, ErrorJson>;
 
 // --- Operador provisional (TEMPORAL, hasta el bloque L) ---
 
-/// El operador de este equipo, o `None` si es la primera vez.
+/// El operador de este equipo (el arranque lo crea si no existía).
 #[tauri::command]
 pub fn operador_actual(estado: State<'_, Estado>) -> Option<Operador> {
     estado.operador().actual()
-}
-
-#[tauri::command]
-pub fn crear_operador_provisional(
-    estado: State<'_, Estado>,
-    nombre: String,
-) -> Resultado<Operador> {
-    Ok(estado.operador().crear(&IdsV7, &nombre)?)
 }
 
 // --- Lecturas ---

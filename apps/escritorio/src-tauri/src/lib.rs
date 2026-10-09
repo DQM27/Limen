@@ -10,6 +10,7 @@ mod estado;
 
 use limen_composicion::{AplicacionLimen, Config};
 use limen_escritorio_comandos::OperadorDelEquipo;
+use limen_infra_plataforma::IdsV7;
 use tauri::Manager;
 
 use estado::Estado;
@@ -25,6 +26,8 @@ fn preparar_estado(app: &tauri::App) -> Result<Estado, Box<dyn std::error::Error
     let datos = app.path().app_data_dir()?;
     std::fs::create_dir_all(&datos)?;
     let operador = OperadorDelEquipo::abrir(datos.join(ARCHIVO_OPERADOR))?;
+    // TEMPORAL: sin inicio de sesión, el primer arranque crea el operador.
+    operador.asegurar_provisional(&IdsV7)?;
     let aplicacion = tauri::async_runtime::block_on(AplicacionLimen::abrir(&Config {
         ruta_base: datos.join(CARPETA_BASE),
     }))?;
@@ -42,7 +45,12 @@ fn preparar_estado(app: &tauri::App) -> Result<Estado, Box<dyn std::error::Error
 )]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_log::Builder::new().build())
+        // `info`: sin esto el motor de la base llena el registro de líneas TRACE.
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(tauri_plugin_log::log::LevelFilter::Info)
+                .build(),
+        )
         .setup(|app| {
             let estado = preparar_estado(app)?;
             app.manage(estado);
@@ -50,7 +58,6 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             comandos::operador_actual,
-            comandos::crear_operador_provisional,
             comandos::dentro,
             comandos::buscar_contratistas,
             comandos::buscar_empresas,
