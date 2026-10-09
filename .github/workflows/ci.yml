@@ -3,8 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+  # Cualquier PR, también los apilados sobre otra rama.
   pull_request:
-    branches: [main]
 
 # Permisos mínimos para todo el workflow; un trabajo que necesite más los
 # pide él mismo.
