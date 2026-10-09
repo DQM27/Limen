@@ -1,0 +1,33 @@
+name: cargo-geiger
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+  schedule:
+    # Semanal y no en cada PR: compilar cargo-geiger tarda varios minutos y
+    # esto es informativo (superficie de `unsafe` en todo el árbol de
+    # dependencias; el código propio ya lo cubre `unsafe_code = "forbid"`).
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-geiger:
+    name: Superficie de unsafe en dependencias
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Rust del proyecto
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - run: cargo install cargo-geiger --locked
+      # Sólo informe: cargo-geiger no tiene un modo "falla si hay unsafe".
+      - name: Reporte de unsafe
+        run: cargo geiger || true
