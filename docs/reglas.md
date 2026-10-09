@@ -15,7 +15,7 @@ Estado: ✅ implementada en `crates/dominio` · ⏳ acordada, pendiente de imple
 | A5 | Nombre de persona: sólo letras de la A a la Z, la Ñ y espacios. Las tildes y la diéresis se quitan solas ("José" → "JOSE"); números y símbolos (incluidos apóstrofo y guion) se rechazan. | ✅ |
 | A6 | Todo nombre de persona o empresa se guarda en MAYÚSCULAS y sin espacios de más. | ✅ |
 | A7 | Una persona sólo puede estar adentro por una vía a la vez (contratista, proveedor, correo o KOF). El personal KOF se identifica por código de empleado, no por cédula. | ✅ dominio; ⏳ proveedor, correo y KOF |
-| A8 | Veto por persona: una cédula con acceso denegado se rechaza por cualquier vía. | ⏳ |
+| A8 | Veto por persona: una cédula con acceso denegado se rechaza por cualquier vía. | ✅ dominio (proveedor); ⏳ correo |
 
 ## B. Contratistas
 
@@ -82,9 +82,9 @@ reconstruir cómo estaba el contratista el día que entró.
 
 | Código | Regla | Estado |
 |---|---|---|
-| H1 | La empresa proveedora existe; su nombre es obligatorio y no se repite. | ⏳ |
-| H2 | Cédula según A3, nombre obligatorio; aplican A7 y A8. | ⏳ |
-| H3 | No puede tener dos ingresos abiertos; gafete, salida y reloj como E3–E5. | ⏳ |
+| H1 | La empresa proveedora existe; su nombre es obligatorio y no se repite. Es un catálogo aparte de las empresas de contratistas. | ✅ dominio |
+| H2 | Cédula según A3, nombre obligatorio (sin catálogo de personas: se toman en cada ingreso); aplican A7 y A8. | ✅ dominio |
+| H3 | No puede tener dos ingresos abiertos. El gafete de proveedor es obligatorio y debe poder prestarse (E3); salida y reloj como E4–E5. | ✅ dominio |
 
 ## I. Ingreso por correo
 
