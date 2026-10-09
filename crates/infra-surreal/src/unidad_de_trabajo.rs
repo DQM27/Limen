@@ -10,7 +10,8 @@ use crate::almacen::AlmacenSurreal;
 use crate::error::{al_confirmar, tecnica};
 use crate::repositorios::{
     AuditoriaSurreal, ContratistasSurreal, EmpresasProveedorasSurreal, EmpresasSurreal, Escritura,
-    GafetesSurreal, IngresosProveedorSurreal, IngresosSurreal, PresenciasSurreal, RelojSurreal,
+    GafetesSurreal, IngresosCorreoSurreal, IngresosProveedorSurreal, IngresosSurreal,
+    PresenciasSurreal, RelojSurreal,
 };
 
 impl FabricaUnidadDeTrabajo for AlmacenSurreal {
@@ -27,6 +28,7 @@ impl FabricaUnidadDeTrabajo for AlmacenSurreal {
             ingresos: IngresosSurreal::new(db.clone()),
             empresas_proveedoras: EmpresasProveedorasSurreal::new(db.clone()),
             ingresos_proveedor: IngresosProveedorSurreal::new(db.clone()),
+            ingresos_correo: IngresosCorreoSurreal::new(db.clone()),
             reloj: RelojSurreal::new(db.clone()),
             auditoria: AuditoriaSurreal::default(),
         }
@@ -43,6 +45,7 @@ pub struct UowSurreal {
     ingresos: IngresosSurreal,
     empresas_proveedoras: EmpresasProveedorasSurreal,
     ingresos_proveedor: IngresosProveedorSurreal,
+    ingresos_correo: IngresosCorreoSurreal,
     reloj: RelojSurreal,
     auditoria: AuditoriaSurreal,
 }
@@ -55,6 +58,7 @@ impl UnidadDeTrabajo for UowSurreal {
     type Ingresos = IngresosSurreal;
     type EmpresasProveedoras = EmpresasProveedorasSurreal;
     type IngresosProveedor = IngresosProveedorSurreal;
+    type IngresosCorreo = IngresosCorreoSurreal;
     type Reloj = RelojSurreal;
     type Auditoria = AuditoriaSurreal;
 
@@ -86,6 +90,10 @@ impl UnidadDeTrabajo for UowSurreal {
         &mut self.ingresos_proveedor
     }
 
+    fn ingresos_correo(&mut self) -> &mut IngresosCorreoSurreal {
+        &mut self.ingresos_correo
+    }
+
     fn reloj(&mut self) -> &mut RelojSurreal {
         &mut self.reloj
     }
@@ -106,6 +114,7 @@ impl UnidadDeTrabajo for UowSurreal {
             self.presencias.pendientes,
             self.ingresos.pendientes,
             self.ingresos_proveedor.pendientes,
+            self.ingresos_correo.pendientes,
             self.reloj.pendientes,
             self.auditoria.pendientes,
         ]

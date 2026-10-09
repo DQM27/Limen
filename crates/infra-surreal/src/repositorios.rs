@@ -5,7 +5,8 @@ use chrono::{DateTime, Utc};
 use limen_aplicacion::puertos::{
     EntradaAuditoria, ErrorPersistencia, RegistroAuditoria, RepositorioContratistas,
     RepositorioEmpresas, RepositorioEmpresasProveedoras, RepositorioGafetes, RepositorioIngresos,
-    RepositorioIngresosProveedor, RepositorioPresencias, RepositorioReloj,
+    RepositorioIngresosCorreo, RepositorioIngresosProveedor, RepositorioPresencias,
+    RepositorioReloj,
 };
 use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::{Contratista, ContratistaId};
@@ -13,6 +14,7 @@ use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
 use limen_dominio::gafete::{Gafete, NumeroGafete, TipoGafete};
 use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoId};
+use limen_dominio::ingreso_correo::{IngresoCorreo, IngresoCorreoId};
 use limen_dominio::ingreso_proveedor::{IngresoProveedor, IngresoProveedorId};
 use limen_dominio::presencia::Via;
 use surrealdb::Surreal;
@@ -22,10 +24,11 @@ use surrealdb::types::{RecordId, SurrealValue, Value};
 use crate::error::{dato_corrupto, tecnica};
 use crate::registros::{
     AuditoriaRegistro, ContratistaDatos, ContratistaLeido, EmpresaDatos, EmpresaLeida,
-    EmpresaProveedoraLeida, GafeteDatos, IngresoDatos, IngresoLeido, IngresoProveedorDatos,
-    IngresoProveedorLeido, PresenciaDatos, PrestamoDatos, RelojDatos, TABLA_AUDITORIA,
-    TABLA_GAFETE, TABLA_PRESENCIA, id_contratista, id_empresa, id_empresa_proveedora, id_gafete,
-    id_ingreso, id_ingreso_proveedor, id_presencia, id_prestamo, id_registro, id_reloj,
+    EmpresaProveedoraLeida, GafeteDatos, IngresoCorreoDatos, IngresoCorreoLeido, IngresoDatos,
+    IngresoLeido, IngresoProveedorDatos, IngresoProveedorLeido, PresenciaDatos, PrestamoDatos,
+    RelojDatos, TABLA_AUDITORIA, TABLA_GAFETE, TABLA_PRESENCIA, id_contratista, id_empresa,
+    id_empresa_proveedora, id_gafete, id_ingreso, id_ingreso_correo, id_ingreso_proveedor,
+    id_presencia, id_prestamo, id_registro, id_reloj,
 };
 
 /// Una escritura anotada, pendiente de confirmar.
@@ -515,6 +518,67 @@ impl RepositorioIngresosProveedor for IngresosProveedorSurreal {
         self.pendientes.push(Escritura::guardar(
             id_ingreso_proveedor(ingreso.id()),
             IngresoProveedorDatos::from(ingreso),
+        ));
+    }
+}
+
+// --- Ingresos por correo ---
+
+#[derive(Debug)]
+pub struct IngresosCorreoSurreal {
+    db: Surreal<Db>,
+    pub(crate) pendientes: Vec<Escritura>,
+}
+
+impl IngresosCorreoSurreal {
+    pub(crate) const fn new(db: Surreal<Db>) -> Self {
+        Self {
+            db,
+            pendientes: Vec::new(),
+        }
+    }
+}
+
+impl RepositorioIngresosCorreo for IngresosCorreoSurreal {
+    async fn obtener(
+        &self,
+        id: IngresoCorreoId,
+    ) -> Result<Option<IngresoCorreo>, ErrorPersistencia> {
+        let mut respuesta = self
+            .db
+            .query("SELECT * FROM ONLY $id")
+            .bind(("id", id_ingreso_correo(id)))
+            .await
+            .map_err(tecnica)?;
+        let leido: Option<IngresoCorreoLeido> = respuesta.take(0).map_err(tecnica)?;
+        leido.map(IngresoCorreo::try_from).transpose()
+    }
+
+    async fn abierto_con_gafete(
+        &self,
+        numero: NumeroGafete,
+    ) -> Result<Option<IngresoCorreo>, ErrorPersistencia> {
+        let mut respuesta = self
+            .db
+            .query(
+                "SELECT * FROM ingreso_correo \
+                 WHERE gafete = $gafete AND salida_en = NONE LIMIT 1",
+            )
+            .bind(("gafete", i64::from(numero.valor())))
+            .await
+            .map_err(tecnica)?;
+        let leidos: Vec<IngresoCorreoLeido> = respuesta.take(0).map_err(tecnica)?;
+        leidos
+            .into_iter()
+            .next()
+            .map(IngresoCorreo::try_from)
+            .transpose()
+    }
+
+    fn guardar(&mut self, ingreso: &IngresoCorreo) {
+        self.pendientes.push(Escritura::guardar(
+            id_ingreso_correo(ingreso.id()),
+            IngresoCorreoDatos::from(ingreso),
         ));
     }
 }

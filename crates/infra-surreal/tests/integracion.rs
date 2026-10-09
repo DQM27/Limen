@@ -316,4 +316,52 @@ mod tests {
         assert_eq!(historial.len(), 1, "el alta de la empresa proveedora");
         assert_eq!(historial[0].entidad, "empresa_proveedora");
     }
+
+    #[tokio::test]
+    async fn una_visita_por_correo_entra_y_sale_contra_surrealdb() {
+        use limen_aplicacion::casos_de_uso::correo::{
+            ComandoEntradaCorreo, RegistrarEntradaCorreo, RegistrarSalidaCorreo,
+        };
+        use limen_dominio::ingreso_correo::{ErrorIngresoCorreo, ErrorMotivo};
+        use limen_dominio::presencia::{Via, YaEstaAdentro};
+
+        let almacen = AlmacenSurreal::en_memoria().await.unwrap();
+        let ids = IdsSecuenciales::new();
+        RegistrarGafetes::new(almacen.clone(), reloj(), ids.clone())
+            .ejecutar(&sesion(), TipoGafete::Visita, 1, 3)
+            .await
+            .unwrap();
+        let entrar = RegistrarEntradaCorreo::new(almacen.clone(), reloj(), ids.clone());
+        let visita = ComandoEntradaCorreo {
+            cedula: "3-3333-3333".into(),
+            nombre: "luis mora".into(),
+            motivo: "Entrevista con RH".into(),
+            medio: TipoMedio::APie,
+            placa: None,
+            gafete: 2,
+        };
+
+        let mut sin_motivo = visita.clone();
+        sin_motivo.motivo = " ".into();
+        assert_eq!(
+            entrar.ejecutar(&sesion(), &sin_motivo).await,
+            Err(ErrorCaso::Negocio(ErrorIngresoCorreo::Motivo(
+                ErrorMotivo::Vacio
+            )))
+        );
+
+        entrar.ejecutar(&sesion(), &visita).await.unwrap();
+        assert_eq!(
+            entrar.ejecutar(&sesion(), &visita).await,
+            Err(ErrorCaso::Negocio(ErrorIngresoCorreo::YaEstaAdentro(
+                YaEstaAdentro(Via::Correo)
+            ))),
+            "ya está adentro"
+        );
+        RegistrarSalidaCorreo::new(almacen.clone(), reloj())
+            .por_gafete(&sesion(), 2)
+            .await
+            .unwrap();
+        entrar.ejecutar(&sesion(), &visita).await.unwrap();
+    }
 }

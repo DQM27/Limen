@@ -10,6 +10,7 @@
 //! Si aparece un `if` que decide algo de negocio, va al dominio.
 
 pub mod contratistas;
+pub mod correo;
 pub mod empresas;
 pub mod gafetes;
 pub mod ingresos;

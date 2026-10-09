@@ -18,6 +18,7 @@ use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
 use limen_dominio::gafete::{Gafete, NumeroGafete, TipoGafete};
 use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoId};
+use limen_dominio::ingreso_correo::{IngresoCorreo, IngresoCorreoId};
 use limen_dominio::ingreso_proveedor::{IngresoProveedor, IngresoProveedorId};
 use limen_dominio::presencia::Via;
 
@@ -65,6 +66,7 @@ pub trait UnidadDeTrabajo: Send {
     type Ingresos: RepositorioIngresos;
     type EmpresasProveedoras: RepositorioEmpresasProveedoras;
     type IngresosProveedor: RepositorioIngresosProveedor;
+    type IngresosCorreo: RepositorioIngresosCorreo;
     type Reloj: RepositorioReloj;
     type Auditoria: RegistroAuditoria;
 
@@ -75,6 +77,7 @@ pub trait UnidadDeTrabajo: Send {
     fn ingresos(&mut self) -> &mut Self::Ingresos;
     fn empresas_proveedoras(&mut self) -> &mut Self::EmpresasProveedoras;
     fn ingresos_proveedor(&mut self) -> &mut Self::IngresosProveedor;
+    fn ingresos_correo(&mut self) -> &mut Self::IngresosCorreo;
     fn reloj(&mut self) -> &mut Self::Reloj;
     fn auditoria(&mut self) -> &mut Self::Auditoria;
 
@@ -244,4 +247,21 @@ pub trait RepositorioIngresosProveedor: Send + Sync {
 
     /// Anota el ingreso nuevo o su salida.
     fn guardar(&mut self, ingreso: &IngresoProveedor);
+}
+
+pub trait RepositorioIngresosCorreo: Send + Sync {
+    fn obtener(
+        &self,
+        id: IngresoCorreoId,
+    ) -> impl Future<Output = Result<Option<IngresoCorreo>, ErrorPersistencia>> + Send;
+
+    /// El ingreso por correo abierto que tiene prestado ese gafete de
+    /// visita, si lo hay.
+    fn abierto_con_gafete(
+        &self,
+        numero: NumeroGafete,
+    ) -> impl Future<Output = Result<Option<IngresoCorreo>, ErrorPersistencia>> + Send;
+
+    /// Anota el ingreso nuevo o su salida.
+    fn guardar(&mut self, ingreso: &IngresoCorreo);
 }

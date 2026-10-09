@@ -240,3 +240,105 @@ pub async fn abierto_con_gafete_de_proveedor_ignora_los_cerrados<F: FabricaUnida
         "nadie tiene el 5"
     );
 }
+
+// --- Ingresos por correo ---
+
+/// Ingreso por correo de ANA PEÑA (111111111) con el gafete de visita
+/// `gafete`.
+fn ingreso_correo(
+    n: u128,
+    gafete: u32,
+    medio: Medio,
+    salida: Option<Marca>,
+) -> limen_dominio::ingreso_correo::IngresoCorreo {
+    use limen_dominio::ingreso_correo::{
+        IngresoCorreo, IngresoCorreoGuardado, IngresoCorreoId, Motivo,
+    };
+    IngresoCorreo::restaurar(IngresoCorreoGuardado {
+        id: IngresoCorreoId::desde_uuid(Uuid::from_u128(7000 + n)),
+        visitante: Visitante::restaurar(
+            Cedula::normalizar("111111111").unwrap(),
+            NombrePersona::nuevo("ANA PEÑA").unwrap(),
+        ),
+        motivo: Motivo::nuevo("Entrevista con Recursos Humanos").unwrap(),
+        medio,
+        gafete: NumeroGafete::nuevo(gafete).unwrap(),
+        entrada: marca("2026-10-09T09:00:00Z"),
+        salida,
+    })
+}
+
+pub async fn guarda_y_lee_un_ingreso_por_correo<F: FabricaUnidadDeTrabajo>(fabrica: F) {
+    use limen_aplicacion::puertos::RepositorioIngresosCorreo;
+    let abierto = ingreso_correo(1, 2, Medio::APie, None);
+    let cerrado = ingreso_correo(
+        2,
+        3,
+        Medio::Vehiculo(Placa::nueva("ABC-123").unwrap()),
+        Some(marca("2026-10-09T10:00:00Z")),
+    );
+    let mut uow = fabrica.nueva();
+    uow.ingresos_correo().guardar(&abierto);
+    uow.ingresos_correo().guardar(&cerrado);
+    uow.confirmar().await.unwrap();
+
+    let mut lectura = fabrica.nueva();
+    for esperado in [abierto, cerrado] {
+        assert_eq!(
+            lectura
+                .ingresos_correo()
+                .obtener(esperado.id())
+                .await
+                .unwrap(),
+            Some(esperado.clone()),
+            "vuelve tal cual: {esperado:?}"
+        );
+    }
+    assert_eq!(
+        lectura
+            .ingresos_correo()
+            .obtener(limen_dominio::ingreso_correo::IngresoCorreoId::desde_uuid(
+                Uuid::from_u128(1)
+            ))
+            .await
+            .unwrap(),
+        None,
+        "lo inexistente no se encuentra"
+    );
+}
+
+pub async fn abierto_con_gafete_de_visita_ignora_los_cerrados<F: FabricaUnidadDeTrabajo>(
+    fabrica: F,
+) {
+    use limen_aplicacion::puertos::RepositorioIngresosCorreo;
+    let mut uow = fabrica.nueva();
+    uow.ingresos_correo().guardar(&ingreso_correo(
+        1,
+        2,
+        Medio::APie,
+        Some(marca("2026-10-09T10:00:00Z")),
+    ));
+    uow.ingresos_correo()
+        .guardar(&ingreso_correo(2, 2, Medio::APie, None));
+    uow.confirmar().await.unwrap();
+
+    let mut lectura = fabrica.nueva();
+    assert_eq!(
+        lectura
+            .ingresos_correo()
+            .abierto_con_gafete(NumeroGafete::nuevo(2).unwrap())
+            .await
+            .unwrap(),
+        Some(ingreso_correo(2, 2, Medio::APie, None)),
+        "encuentra el que sigue abierto"
+    );
+    assert_eq!(
+        lectura
+            .ingresos_correo()
+            .abierto_con_gafete(NumeroGafete::nuevo(3).unwrap())
+            .await
+            .unwrap(),
+        None,
+        "nadie tiene el 3"
+    );
+}

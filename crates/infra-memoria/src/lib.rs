@@ -24,8 +24,9 @@ use chrono::{DateTime, NaiveDate, Utc};
 use limen_aplicacion::puertos::{
     EntradaAuditoria, ErrorPersistencia, FabricaUnidadDeTrabajo, GeneradorIds, RegistroAuditoria,
     Reloj, RepositorioContratistas, RepositorioEmpresas, RepositorioEmpresasProveedoras,
-    RepositorioGafetes, RepositorioIngresos, RepositorioIngresosProveedor, RepositorioPresencias,
-    RepositorioReloj, Restriccion, UnidadDeTrabajo,
+    RepositorioGafetes, RepositorioIngresos, RepositorioIngresosCorreo,
+    RepositorioIngresosProveedor, RepositorioPresencias, RepositorioReloj, Restriccion,
+    UnidadDeTrabajo,
 };
 use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::{Contratista, ContratistaId};
@@ -33,6 +34,7 @@ use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
 use limen_dominio::gafete::{Gafete, NumeroGafete, TipoGafete};
 use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoId};
+use limen_dominio::ingreso_correo::{IngresoCorreo, IngresoCorreoId};
 use limen_dominio::ingreso_proveedor::{IngresoProveedor, IngresoProveedorId};
 use limen_dominio::presencia::Via;
 use uuid::Uuid;
@@ -50,6 +52,7 @@ struct Contenido {
     ingresos: BTreeMap<IngresoId, IngresoContratista>,
     empresas_proveedoras: BTreeMap<EmpresaProveedoraId, EmpresaProveedora>,
     ingresos_proveedor: BTreeMap<IngresoProveedorId, IngresoProveedor>,
+    ingresos_correo: BTreeMap<IngresoCorreoId, IngresoCorreo>,
     ultimo_movimiento: Option<DateTime<Utc>>,
     auditoria: Vec<EntradaAuditoria>,
 }
@@ -175,6 +178,10 @@ impl AlmacenMemoria {
         self.mirar(|c| c.ingresos_proveedor.values().cloned().collect())
     }
 
+    pub fn ingresos_correo(&self) -> Vec<IngresoCorreo> {
+        self.mirar(|c| c.ingresos_correo.values().cloned().collect())
+    }
+
     /// Por qué vía está adentro una persona, si lo está.
     pub fn via_adentro(&self, cedula: &Cedula) -> Option<Via> {
         self.mirar(|c| c.presencias.get(cedula.as_str()).copied())
@@ -232,6 +239,10 @@ impl FabricaUnidadDeTrabajo for AlmacenMemoria {
                 almacen: self.clone(),
                 pendientes: Vec::new(),
             },
+            ingresos_correo: IngresosCorreoMemoria {
+                almacen: self.clone(),
+                pendientes: Vec::new(),
+            },
             reloj: RelojMemoria {
                 almacen: self.clone(),
                 pendiente: None,
@@ -253,6 +264,7 @@ pub struct UowMemoria {
     ingresos: IngresosMemoria,
     empresas_proveedoras: EmpresasProveedorasMemoria,
     ingresos_proveedor: IngresosProveedorMemoria,
+    ingresos_correo: IngresosCorreoMemoria,
     reloj: RelojMemoria,
     auditoria: AuditoriaMemoria,
 }
@@ -308,6 +320,9 @@ impl UowMemoria {
         }
         for ingreso in self.ingresos_proveedor.pendientes {
             nuevo.ingresos_proveedor.insert(ingreso.id(), ingreso);
+        }
+        for ingreso in self.ingresos_correo.pendientes {
+            nuevo.ingresos_correo.insert(ingreso.id(), ingreso);
         }
         if let Some(en) = self.reloj.pendiente {
             nuevo.ultimo_movimiento = Some(en);
@@ -390,6 +405,7 @@ impl UnidadDeTrabajo for UowMemoria {
     type Ingresos = IngresosMemoria;
     type EmpresasProveedoras = EmpresasProveedorasMemoria;
     type IngresosProveedor = IngresosProveedorMemoria;
+    type IngresosCorreo = IngresosCorreoMemoria;
     type Reloj = RelojMemoria;
     type Auditoria = AuditoriaMemoria;
 
@@ -419,6 +435,10 @@ impl UnidadDeTrabajo for UowMemoria {
 
     fn ingresos_proveedor(&mut self) -> &mut IngresosProveedorMemoria {
         &mut self.ingresos_proveedor
+    }
+
+    fn ingresos_correo(&mut self) -> &mut IngresosCorreoMemoria {
+        &mut self.ingresos_correo
     }
 
     fn reloj(&mut self) -> &mut RelojMemoria {
@@ -713,6 +733,37 @@ impl RepositorioIngresosProveedor for IngresosProveedorMemoria {
     }
 
     fn guardar(&mut self, ingreso: &IngresoProveedor) {
+        self.pendientes.push(ingreso.clone());
+    }
+}
+
+#[derive(Debug)]
+pub struct IngresosCorreoMemoria {
+    almacen: AlmacenMemoria,
+    pendientes: Vec<IngresoCorreo>,
+}
+
+impl RepositorioIngresosCorreo for IngresosCorreoMemoria {
+    fn obtener(
+        &self,
+        id: IngresoCorreoId,
+    ) -> impl Future<Output = Result<Option<IngresoCorreo>, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|c| c.ingresos_correo.get(&id).cloned()))
+    }
+
+    fn abierto_con_gafete(
+        &self,
+        numero: NumeroGafete,
+    ) -> impl Future<Output = Result<Option<IngresoCorreo>, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|c| {
+            c.ingresos_correo
+                .values()
+                .find(|ingreso| ingreso.esta_abierto() && ingreso.gafete() == numero)
+                .cloned()
+        }))
+    }
+
+    fn guardar(&mut self, ingreso: &IngresoCorreo) {
         self.pendientes.push(ingreso.clone());
     }
 }

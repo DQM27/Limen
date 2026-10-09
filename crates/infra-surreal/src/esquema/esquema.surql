@@ -71,6 +71,20 @@ DEFINE FIELD OVERWRITE salida_en ON ingreso_proveedor TYPE option<datetime>;
 DEFINE FIELD OVERWRITE salida_operador ON ingreso_proveedor TYPE option<uuid>;
 DEFINE INDEX OVERWRITE ingreso_proveedor_por_gafete ON ingreso_proveedor FIELDS gafete, salida_en;
 
+-- Ingresos por correo (bloque I): visita autorizada por correo. Como el
+-- proveedor, pero con motivo en lugar de empresa y gafete de visita.
+DEFINE TABLE OVERWRITE ingreso_correo SCHEMAFULL;
+DEFINE FIELD OVERWRITE cedula ON ingreso_correo TYPE string;
+DEFINE FIELD OVERWRITE nombre ON ingreso_correo TYPE string;
+DEFINE FIELD OVERWRITE motivo ON ingreso_correo TYPE string;
+DEFINE FIELD OVERWRITE placa ON ingreso_correo TYPE option<string>;
+DEFINE FIELD OVERWRITE gafete ON ingreso_correo TYPE int;
+DEFINE FIELD OVERWRITE entrada_en ON ingreso_correo TYPE datetime;
+DEFINE FIELD OVERWRITE entrada_operador ON ingreso_correo TYPE uuid;
+DEFINE FIELD OVERWRITE salida_en ON ingreso_correo TYPE option<datetime>;
+DEFINE FIELD OVERWRITE salida_operador ON ingreso_correo TYPE option<uuid>;
+DEFINE INDEX OVERWRITE ingreso_correo_por_gafete ON ingreso_correo FIELDS gafete, salida_en;
+
 -- Hora del último movimiento del equipo (regla E5): un solo registro,
 -- reloj:ultimo.
 DEFINE TABLE OVERWRITE reloj SCHEMAFULL;

@@ -78,6 +78,8 @@ macro_rules! bateria_de_contrato {
             nombre_de_empresa_proveedora_en_uso_excluye_a_la_propia,
             guarda_y_lee_un_ingreso_de_proveedor,
             abierto_con_gafete_de_proveedor_ignora_los_cerrados,
+            guarda_y_lee_un_ingreso_por_correo,
+            abierto_con_gafete_de_visita_ignora_los_cerrados,
         );
     };
     (@pruebas $fabrica:expr; $($prueba:ident),+ $(,)?) => {

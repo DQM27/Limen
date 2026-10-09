@@ -12,6 +12,9 @@ use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
 use limen_dominio::gafete::{Deudor, EstadoGafete, Gafete, NumeroGafete, TipoGafete};
 use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoGuardado, IngresoId};
+use limen_dominio::ingreso_correo::{
+    IngresoCorreo, IngresoCorreoGuardado, IngresoCorreoId, Motivo,
+};
 use limen_dominio::ingreso_proveedor::{
     IngresoProveedor, IngresoProveedorGuardado, IngresoProveedorId,
 };
@@ -34,6 +37,7 @@ pub const TABLA_PRESENCIA: &str = "presencia";
 pub const TABLA_INGRESO_CONTRATISTA: &str = "ingreso_contratista";
 pub const TABLA_EMPRESA_PROVEEDORA: &str = "empresa_proveedora";
 pub const TABLA_INGRESO_PROVEEDOR: &str = "ingreso_proveedor";
+pub const TABLA_INGRESO_CORREO: &str = "ingreso_correo";
 pub const TABLA_RELOJ: &str = "reloj";
 pub const TABLA_AUDITORIA: &str = "auditoria";
 
@@ -65,6 +69,10 @@ pub fn id_ingreso(id: IngresoId) -> RecordId {
 
 pub fn id_empresa_proveedora(id: EmpresaProveedoraId) -> RecordId {
     id_registro(TABLA_EMPRESA_PROVEEDORA, id.uuid())
+}
+
+pub fn id_ingreso_correo(id: IngresoCorreoId) -> RecordId {
+    id_registro(TABLA_INGRESO_CORREO, id.uuid())
 }
 
 pub fn id_ingreso_proveedor(id: IngresoProveedorId) -> RecordId {
@@ -467,6 +475,80 @@ impl TryFrom<IngresoProveedorLeido> for IngresoProveedor {
                 &leido.empresa,
                 TABLA_EMPRESA_PROVEEDORA,
             )?),
+            medio: medio_de(leido.placa, tabla)?,
+            gafete: numero_de(leido.gafete, tabla)?,
+            entrada: Marca {
+                en: leido.entrada_en,
+                operador: OperadorId::desde_uuid(leido.entrada_operador),
+            },
+            salida: salida_de(leido.salida_en, leido.salida_operador, tabla)?,
+        }))
+    }
+}
+
+// --- Ingreso por correo ---
+
+#[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
+pub struct IngresoCorreoDatos {
+    pub cedula: String,
+    pub nombre: String,
+    pub motivo: String,
+    pub placa: Option<String>,
+    pub gafete: i64,
+    pub entrada_en: DateTime<Utc>,
+    pub entrada_operador: Uuid,
+    pub salida_en: Option<DateTime<Utc>>,
+    pub salida_operador: Option<Uuid>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
+pub struct IngresoCorreoLeido {
+    pub id: RecordId,
+    pub cedula: String,
+    pub nombre: String,
+    pub motivo: String,
+    pub placa: Option<String>,
+    pub gafete: i64,
+    pub entrada_en: DateTime<Utc>,
+    pub entrada_operador: Uuid,
+    pub salida_en: Option<DateTime<Utc>>,
+    pub salida_operador: Option<Uuid>,
+}
+
+impl From<&IngresoCorreo> for IngresoCorreoDatos {
+    fn from(ingreso: &IngresoCorreo) -> Self {
+        let salida = ingreso.salida();
+        Self {
+            cedula: ingreso.cedula().as_str().to_owned(),
+            nombre: ingreso.visitante().nombre().as_str().to_owned(),
+            motivo: ingreso.motivo().as_str().to_owned(),
+            placa: ingreso
+                .medio()
+                .placa()
+                .map(|placa| placa.as_str().to_owned()),
+            gafete: i64::from(ingreso.gafete().valor()),
+            entrada_en: ingreso.entrada().en,
+            entrada_operador: ingreso.entrada().operador.uuid(),
+            salida_en: salida.map(|marca| marca.en),
+            salida_operador: salida.map(|marca| marca.operador.uuid()),
+        }
+    }
+}
+
+impl TryFrom<IngresoCorreoLeido> for IngresoCorreo {
+    type Error = ErrorPersistencia;
+
+    fn try_from(leido: IngresoCorreoLeido) -> Result<Self, ErrorPersistencia> {
+        let tabla = TABLA_INGRESO_CORREO;
+        let corrupto = |detalle: String| dato_corrupto(tabla, detalle);
+        let visitante = Visitante::restaurar(
+            Cedula::normalizar(&leido.cedula).map_err(|e| corrupto(e.to_string()))?,
+            NombrePersona::nuevo(&leido.nombre).map_err(|e| corrupto(e.to_string()))?,
+        );
+        Ok(Self::restaurar(IngresoCorreoGuardado {
+            id: IngresoCorreoId::desde_uuid(uuid_de(&leido.id, tabla)?),
+            visitante,
+            motivo: Motivo::nuevo(&leido.motivo).map_err(|e| corrupto(e.to_string()))?,
             medio: medio_de(leido.placa, tabla)?,
             gafete: numero_de(leido.gafete, tabla)?,
             entrada: Marca {

@@ -21,6 +21,7 @@ pub use almacen::AlmacenSurreal;
 pub use registros::{AuditoriaRegistro, CambioRegistro};
 pub use repositorios::{
     AuditoriaSurreal, ContratistasSurreal, EmpresasProveedorasSurreal, EmpresasSurreal,
-    GafetesSurreal, IngresosProveedorSurreal, IngresosSurreal, PresenciasSurreal, RelojSurreal,
+    GafetesSurreal, IngresosCorreoSurreal, IngresosProveedorSurreal, IngresosSurreal,
+    PresenciasSurreal, RelojSurreal,
 };
 pub use unidad_de_trabajo::UowSurreal;

@@ -14,8 +14,8 @@ Estado: ✅ implementada en `crates/dominio` · ⏳ acordada, pendiente de imple
 | A3 | Contratistas, proveedores y correo: sólo cédula nacional o de extranjero, números de 9 a 13 dígitos. | ✅ |
 | A5 | Nombre de persona: sólo letras de la A a la Z, la Ñ y espacios. Las tildes y la diéresis se quitan solas ("José" → "JOSE"); números y símbolos (incluidos apóstrofo y guion) se rechazan. | ✅ |
 | A6 | Todo nombre de persona o empresa se guarda en MAYÚSCULAS y sin espacios de más. | ✅ |
-| A7 | Una persona sólo puede estar adentro por una vía a la vez (contratista, proveedor, correo o KOF). El personal KOF se identifica por código de empleado, no por cédula. | ✅ contratista y proveedor; ⏳ correo y KOF |
-| A8 | Veto por persona: una cédula con acceso denegado se rechaza por cualquier vía. | ✅ proveedor; ⏳ correo |
+| A7 | Una persona sólo puede estar adentro por una vía a la vez (contratista, proveedor, correo o KOF). El personal KOF se identifica por código de empleado, no por cédula. | ✅ contratista, proveedor y correo; ⏳ KOF |
+| A8 | Veto por persona: una cédula con acceso denegado se rechaza por cualquier vía. | ✅ |
 
 ## B. Contratistas
 
@@ -90,8 +90,8 @@ reconstruir cómo estaba el contratista el día que entró.
 
 | Código | Regla | Estado |
 |---|---|---|
-| I1 | Cédula según A3, nombre y motivo obligatorios; aplican A7 y A8. | ⏳ |
-| I2 | No puede tener dos ingresos abiertos; gafete, salida y reloj como E3–E5. | ⏳ |
+| I1 | Cédula según A3, nombre y motivo obligatorios (motivo: texto libre, hasta 200 caracteres); aplican A7 y A8. | ✅ |
+| I2 | No puede tener dos ingresos abiertos. El gafete de visita es obligatorio y debe poder prestarse (E3); salida y reloj como E4–E5. | ✅ |
 
 ## K. Personal KOF (personal interno de FEMSA)
 

@@ -16,6 +16,7 @@ use limen_dominio::contratista::ErrorContratista;
 use limen_dominio::empresa::ErrorEmpresa;
 use limen_dominio::gafete::ErrorGafete;
 use limen_dominio::ingreso_contratista::ErrorIngreso;
+use limen_dominio::ingreso_correo::ErrorIngresoCorreo;
 use limen_dominio::ingreso_proveedor::ErrorIngresoProveedor;
 use limen_dominio::movimiento::ErrorSalida;
 
@@ -55,6 +56,12 @@ impl ErrorDeNegocio for ErrorSalida {
 }
 
 impl ErrorDeNegocio for ErrorGafete {
+    fn codigo(&self) -> &'static str {
+        Self::codigo(*self)
+    }
+}
+
+impl ErrorDeNegocio for ErrorIngresoCorreo {
     fn codigo(&self) -> &'static str {
         Self::codigo(*self)
     }
