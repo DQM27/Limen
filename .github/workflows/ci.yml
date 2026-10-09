@@ -4,20 +4,108 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
+
+# Permisos mínimos para todo el workflow; un trabajo que necesite más los
+# pide él mismo.
+permissions:
+  contents: read
+
+# Una subida nueva al mismo PR cancela la corrida anterior. En `main` no se
+# cancela nada: cada commit tiene que quedar verificado.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
-  verificar:
+  formato:
+    name: Formato (rustfmt)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       # Instala la versión fijada en rust-toolchain.toml (la misma que en
       # cada máquina), no "la última estable".
       - name: Rust del proyecto
         run: rustup toolchain install
-      - uses: Swatinem/rust-cache@v2
-      - name: Formato
-        run: cargo fmt --all -- --check
-      - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
-      - name: Pruebas
-        run: cargo test --all
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Rust del proyecto
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - run: cargo clippy --locked --all-targets --all -- -D warnings
+
+  # En Linux y en Windows: los equipos de la portería son Windows, y varias
+  # pruebas (bloqueo de archivos, rutas) se comportan distinto en cada uno.
+  pruebas:
+    name: Pruebas (${{ matrix.so }})
+    runs-on: ${{ matrix.so }}
+    strategy:
+      fail-fast: false
+      matrix:
+        so: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Rust del proyecto
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - run: cargo test --locked --all
+
+  documentacion:
+    name: Documentación (rustdoc sin avisos)
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Rust del proyecto
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - run: cargo doc --locked --no-deps --all
+
+  # Vulnerabilidades conocidas en las dependencias. Los avisos que no se
+  # pueden arreglar desde aquí están justificados en `.cargo/audit.toml`.
+  auditoria:
+    name: Vulnerabilidades en dependencias (cargo audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Instalar cargo-audit
+        uses: taiki-e/install-action@861a07ce7084f55488e375df125cdc99bba60eb7 # v2
+        with:
+          tool: cargo-audit
+      - run: cargo audit
+
+  # Un solo resultado para exigir en la protección de `main`: si mañana se
+  # agrega o renombra un trabajo, la protección no hay que tocarla.
+  verificado:
+    name: CI verde
+    if: always()
+    needs: [formato, clippy, pruebas, documentacion, auditoria]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Todos los trabajos pasaron
+        env:
+          RESULTADOS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Resultados: $RESULTADOS"
+          case " $RESULTADOS " in
+            *" failure "*|*" cancelled "*|*" skipped "*) exit 1 ;;
+          esac
