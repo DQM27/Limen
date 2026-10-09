@@ -44,6 +44,7 @@ struct Datos {
 #[derive(Debug, Clone, Default)]
 pub struct AlmacenMemoria {
     datos: Arc<Mutex<Datos>>,
+    ids: IdsSecuenciales,
 }
 
 impl AlmacenMemoria {
@@ -65,6 +66,12 @@ impl AlmacenMemoria {
     }
 
     // --- Para preparar y revisar las pruebas ---
+
+    /// Generador de IDs compartido por todo lo que usa este almacén: dos
+    /// casos de uso de la misma prueba nunca reciben el mismo ID.
+    pub fn ids(&self) -> IdsSecuenciales {
+        self.ids.clone()
+    }
 
     /// Guarda una empresa directo, como si ya existiera.
     pub fn sembrar_empresa(&self, empresa: Empresa) {

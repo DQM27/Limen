@@ -191,4 +191,12 @@ mod tests {
             "los clones comparten la cuenta"
         );
     }
+
+    #[test]
+    fn el_almacen_reparte_ids_sin_repetir_entre_casos_de_uso() {
+        let almacen = AlmacenMemoria::new();
+        let uno = almacen.ids();
+        let otro = almacen.ids();
+        assert_ne!(uno.nuevo(), otro.nuevo(), "comparten el mismo contador");
+    }
 }

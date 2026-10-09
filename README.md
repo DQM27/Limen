@@ -9,11 +9,13 @@ personal KOF. Sucesor de Lattis, rediseñado desde cero con arquitectura hexagon
 
 ```text
 crates/
-  dominio/      reglas de negocio puras (compila también a WebAssembly)
+  dominio/        reglas de negocio puras (compila también a WebAssembly)
+  aplicacion/     casos de uso, puertos (traits) y modelo de errores
+  infra-memoria/  implementación en memoria de los puertos, para pruebas
 ```
 
-Próximas capas, en orden: `aplicacion` (casos de uso y puertos), `infra-surreal`
-(SurrealDB embebido), `infra-memoria` (dobles para pruebas), `composicion` y las apps.
+Próximas capas, en orden: `infra-surreal` (SurrealDB embebido), `composicion` y las
+apps.
 
 ## Desarrollo
 

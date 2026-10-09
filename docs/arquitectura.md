@@ -97,11 +97,11 @@ arquitectura.
 Cargo.toml                  workspace + lints estrictos compartidos
 crates/
   dominio/                  ✅ reglas puras
-  aplicacion/               casos_de_uso/, puertos/, errores.rs
+  aplicacion/               ✅ casos_de_uso/, puertos/, errores.rs
   infra-surreal/            repositorios, consultas .surql, Unit of Work, esquema
   infra-nube/               sincronización con SurrealDB Cloud, avisos en vivo
   infra-plataforma/         DPAPI (Windows), Android Keystore, reloj del sistema
-  infra-memoria/            dobles en memoria para pruebas
+  infra-memoria/            ✅ dobles en memoria para pruebas
   composicion/              construir `Aplicacion`
 apps/
   escritorio/               Tauri + React (comandos delgados)
@@ -553,8 +553,9 @@ Convenciones:
 Se avanza por capas, completando cada una para un módulo antes de pasar al siguiente:
 
 1. ✅ **Dominio de contratistas** (bloques A, B, C y D de `reglas.md`).
-2. **`aplicacion`:** puertos, Unit of Work y casos de uso de contratistas y empresas.
-3. **`infra-memoria`:** dobles y pruebas de casos de uso.
+2. ✅ **`aplicacion`:** puertos, Unit of Work, modelo de errores y casos de uso de
+   contratistas y empresas.
+3. ✅ **`infra-memoria`:** dobles y pruebas de casos de uso.
 4. **`infra-surreal`:** esquema, repositorios, Unit of Work real y pruebas de contrato.
 5. **`composicion`** y una app mínima de escritorio para contratistas.
 6. Resto del dominio, en orden: ingreso y salida (E), gafetes (F), proveedores (H),
