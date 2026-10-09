@@ -179,8 +179,62 @@ mod tests {
                 "tiene_acceso": true,
                 "requiere_gafete": true,
                 "empresa_nombre": "ACME S.A.",
+                "acceso": { "resultado": "PERMITIDO", "dias_para_vencer": null, "motivo": null },
             }]),
-            "el contratista y el nombre de su empresa, en un solo objeto plano"
+            "el contratista, su empresa y su acceso de hoy, en un solo objeto plano"
+        );
+    }
+
+    #[tokio::test]
+    async fn la_grilla_trae_decidido_el_estado_de_acceso_de_cada_uno() {
+        let comandos = Comandos::new(aplicacion().await);
+        let empresa = comandos.registrar_empresa(&sesion(), "acme").await.unwrap();
+        // La fecha de hoy es el 9 de octubre de 2026.
+        for (cedula, nombre, praind, acceso) in [
+            ("1-1111-1111", "ANA VIGENTE", "2099-01-01", true),
+            ("2-2222-2222", "BETO POR VENCER", "2026-10-20", true),
+            ("3-3333-3333", "CARLA SIN ACCESO", "2099-01-01", false),
+        ] {
+            comandos
+                .registrar_contratista(
+                    &sesion(),
+                    &ContratistaEntrada {
+                        cedula: cedula.into(),
+                        nombre: nombre.into(),
+                        fecha_vencimiento_praind: praind.into(),
+                        tiene_acceso: acceso,
+                        ..formulario(&empresa)
+                    },
+                )
+                .await
+                .unwrap();
+        }
+
+        let filas = comandos.listar_contratistas().await.unwrap();
+        let estados: Vec<_> = filas
+            .iter()
+            .map(|fila| {
+                (
+                    fila.contratista.nombre.as_str(),
+                    fila.acceso.resultado,
+                    fila.acceso.dias_para_vencer,
+                    fila.acceso.motivo,
+                )
+            })
+            .collect();
+        assert_eq!(
+            estados,
+            [
+                ("ANA VIGENTE", "PERMITIDO", None, None),
+                (
+                    "BETO POR VENCER",
+                    "PERMITIDO_CON_ADVERTENCIA",
+                    Some(11),
+                    None
+                ),
+                ("CARLA SIN ACCESO", "DENEGADO", None, Some("sin_acceso")),
+            ],
+            "el núcleo decide; la pantalla sólo muestra"
         );
     }
 

@@ -10,9 +10,10 @@
 //! - los nombres de los campos, en `snake_case`.
 
 use chrono::{NaiveDate, SecondsFormat};
+use limen_aplicacion::casos_de_uso::consultas::ContratistaEnLista;
 use limen_aplicacion::casos_de_uso::contratistas::ComandoContratista;
 use limen_aplicacion::casos_de_uso::ingresos::{ComandoEntrada, EntradaContratista};
-use limen_aplicacion::puertos::{FilaContratista, IngresoAbierto, PersonaAdentro};
+use limen_aplicacion::puertos::{IngresoAbierto, PersonaAdentro};
 use limen_dominio::acceso::ResultadoAcceso;
 use limen_dominio::contratista::Contratista;
 use limen_dominio::empresa::{Empresa, EmpresaId};
@@ -137,20 +138,23 @@ impl From<&Contratista> for ContratistaDto {
     }
 }
 
-/// Una fila de la grilla de contratistas: el contratista y el nombre de su
-/// empresa, para no tener que pedirla aparte.
+/// Una fila de la grilla de contratistas: el contratista, el nombre de su
+/// empresa y lo que el dominio decide hoy sobre su acceso (la pantalla sólo
+/// lo muestra).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct FilaContratistaDto {
     #[serde(flatten)]
     pub contratista: ContratistaDto,
     pub empresa_nombre: String,
+    pub acceso: AccesoDto,
 }
 
-impl From<&FilaContratista> for FilaContratistaDto {
-    fn from(fila: &FilaContratista) -> Self {
+impl From<&ContratistaEnLista> for FilaContratistaDto {
+    fn from(en_lista: &ContratistaEnLista) -> Self {
         Self {
-            contratista: ContratistaDto::from(&fila.contratista),
-            empresa_nombre: fila.empresa.as_str().to_owned(),
+            contratista: ContratistaDto::from(&en_lista.fila.contratista),
+            empresa_nombre: en_lista.fila.empresa.as_str().to_owned(),
+            acceso: en_lista.acceso.into(),
         }
     }
 }

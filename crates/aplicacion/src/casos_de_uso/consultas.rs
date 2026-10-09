@@ -1,6 +1,7 @@
 //! Casos de uso de sólo lectura: lo que muestran las pantallas.
 
 use chrono::Days;
+use limen_dominio::acceso::{ResultadoAcceso, verificar_acceso};
 use limen_dominio::busqueda::Criterio;
 use limen_dominio::contratista::Contratista;
 use limen_dominio::empresa::Empresa;
@@ -42,19 +43,37 @@ impl<C: Consultas> QuienesEstanAdentro<C> {
     }
 }
 
-/// Todos los contratistas con el nombre de su empresa, para la grilla.
-#[derive(Debug)]
-pub struct ListarContratistas<C> {
-    consultas: C,
+/// Una fila de la grilla de contratistas y lo que el dominio decide hoy
+/// sobre su acceso (regla D): la pantalla sólo lo muestra, no lo calcula.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ContratistaEnLista {
+    pub fila: FilaContratista,
+    pub acceso: ResultadoAcceso,
 }
 
-impl<C: Consultas> ListarContratistas<C> {
-    pub const fn new(consultas: C) -> Self {
-        Self { consultas }
+/// Todos los contratistas con el nombre de su empresa y su estado de acceso
+/// de hoy, para la grilla.
+#[derive(Debug)]
+pub struct ListarContratistas<C, R> {
+    consultas: C,
+    reloj: R,
+}
+
+impl<C: Consultas, R: Reloj> ListarContratistas<C, R> {
+    pub const fn new(consultas: C, reloj: R) -> Self {
+        Self { consultas, reloj }
     }
 
-    pub async fn ejecutar(&self) -> Result<Vec<FilaContratista>, ErrorConsulta> {
-        Ok(self.consultas.listar_contratistas().await?)
+    pub async fn ejecutar(&self) -> Result<Vec<ContratistaEnLista>, ErrorConsulta> {
+        let hoy = self.reloj.hoy();
+        let filas = self.consultas.listar_contratistas().await?;
+        Ok(filas
+            .into_iter()
+            .map(|fila| ContratistaEnLista {
+                acceso: verificar_acceso(&fila.contratista, hoy),
+                fila,
+            })
+            .collect())
     }
 }
 

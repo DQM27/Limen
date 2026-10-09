@@ -85,7 +85,7 @@ grupo! {
         consultar: ConsultarContratista<F, R>,
         buscar: BuscarContratistas<F>,
         praind_por_vencer: PraindPorVencer<F, R>,
-        listar: ListarContratistas<F>,
+        listar: ListarContratistas<F, R>,
     }
 }
 
@@ -182,7 +182,7 @@ where
                 consultar: ConsultarContratista::new(a(), r()),
                 buscar: BuscarContratistas::new(a()),
                 praind_por_vencer: PraindPorVencer::new(a(), r()),
-                listar: ListarContratistas::new(a()),
+                listar: ListarContratistas::new(a(), r()),
             },
             gafetes: Gafetes {
                 registrar: RegistrarGafetes::new(a(), r(), i()),
