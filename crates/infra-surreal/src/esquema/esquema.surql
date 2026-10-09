@@ -85,6 +85,29 @@ DEFINE FIELD OVERWRITE salida_en ON ingreso_correo TYPE option<datetime>;
 DEFINE FIELD OVERWRITE salida_operador ON ingreso_correo TYPE option<uuid>;
 DEFINE INDEX OVERWRITE ingreso_correo_por_gafete ON ingreso_correo FIELDS gafete, salida_en;
 
+-- Personal KOF (bloque K): se identifica por código de empleado.
+DEFINE TABLE OVERWRITE personal_kof SCHEMAFULL;
+DEFINE FIELD OVERWRITE codigo_empleado ON personal_kof TYPE string ASSERT string::len($value) > 0;
+DEFINE FIELD OVERWRITE nombre ON personal_kof TYPE string ASSERT string::len($value) > 0;
+DEFINE FIELD OVERWRITE activo ON personal_kof TYPE bool;
+DEFINE INDEX OVERWRITE personal_kof_codigo_unico ON personal_kof FIELDS codigo_empleado UNIQUE;
+
+-- Préstamos del gafete provisional KOF.
+DEFINE TABLE OVERWRITE prestamo_kof SCHEMAFULL;
+DEFINE FIELD OVERWRITE personal ON prestamo_kof TYPE record<personal_kof>;
+DEFINE FIELD OVERWRITE gafete ON prestamo_kof TYPE int;
+DEFINE FIELD OVERWRITE entrega_en ON prestamo_kof TYPE datetime;
+DEFINE FIELD OVERWRITE entrega_operador ON prestamo_kof TYPE uuid;
+DEFINE FIELD OVERWRITE devolucion_en ON prestamo_kof TYPE option<datetime>;
+DEFINE FIELD OVERWRITE devolucion_operador ON prestamo_kof TYPE option<uuid>;
+DEFINE INDEX OVERWRITE prestamo_kof_por_gafete ON prestamo_kof FIELDS gafete, devolucion_en;
+
+-- Personas con un provisional sin devolver. Clave:
+-- personal_kof_con_prestamo:⟨uuid de la persona⟩; se crea al entregar y se
+-- borra al devolver, así nadie tiene dos provisionales a la vez.
+DEFINE TABLE OVERWRITE personal_kof_con_prestamo SCHEMAFULL;
+DEFINE FIELD OVERWRITE desde ON personal_kof_con_prestamo TYPE datetime;
+
 -- Hora del último movimiento del equipo (regla E5): un solo registro,
 -- reloj:ultimo.
 DEFINE TABLE OVERWRITE reloj SCHEMAFULL;
@@ -92,7 +115,7 @@ DEFINE FIELD OVERWRITE en ON reloj TYPE datetime;
 
 -- Auditoría (regla B11): sólo se agrega, nunca se edita ni se borra.
 DEFINE TABLE OVERWRITE auditoria SCHEMAFULL;
-DEFINE FIELD OVERWRITE entidad ON auditoria TYPE 'contratista' | 'empresa' | 'empresa_proveedora' | 'gafete';
+DEFINE FIELD OVERWRITE entidad ON auditoria TYPE 'contratista' | 'empresa' | 'empresa_proveedora' | 'gafete' | 'personal_kof';
 DEFINE FIELD OVERWRITE registro ON auditoria TYPE string;
 DEFINE FIELD OVERWRITE accion ON auditoria TYPE 'alta' | 'edicion';
 DEFINE FIELD OVERWRITE cambios ON auditoria TYPE array<object>;

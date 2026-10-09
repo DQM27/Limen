@@ -364,4 +364,48 @@ mod tests {
             .unwrap();
         entrar.ejecutar(&sesion(), &visita).await.unwrap();
     }
+
+    #[tokio::test]
+    async fn el_gafete_provisional_kof_se_entrega_y_se_devuelve_contra_surrealdb() {
+        use limen_aplicacion::casos_de_uso::kof::{
+            DevolverGafeteKof, EntregarGafeteKof, RegistrarPersonalKof,
+        };
+        use limen_dominio::personal_kof::ErrorPersonalKof;
+        use limen_dominio::prestamo_kof::ErrorPrestamoKof;
+
+        let almacen = AlmacenSurreal::en_memoria().await.unwrap();
+        let ids = IdsSecuenciales::new();
+        RegistrarGafetes::new(almacen.clone(), reloj(), ids.clone())
+            .ejecutar(&sesion(), TipoGafete::ProvisionalKof, 1, 3)
+            .await
+            .unwrap();
+        let registrar = RegistrarPersonalKof::new(almacen.clone(), reloj(), ids.clone());
+        let ana = registrar
+            .ejecutar(&sesion(), "5040017", "ana mora")
+            .await
+            .unwrap();
+        assert_eq!(
+            registrar.ejecutar(&sesion(), "5040017", "otra").await,
+            Err(ErrorCaso::Negocio(ErrorPersonalKof::CodigoRepetido))
+        );
+
+        let entregar = EntregarGafeteKof::new(almacen.clone(), reloj(), ids.clone());
+        entregar.ejecutar(&sesion(), ana, 2).await.unwrap();
+        assert_eq!(
+            entregar.ejecutar(&sesion(), ana, 3).await,
+            Err(ErrorCaso::Negocio(ErrorPrestamoKof::YaTienePrestamo))
+        );
+        DevolverGafeteKof::new(almacen.clone(), reloj())
+            .por_gafete(&sesion(), 2)
+            .await
+            .unwrap();
+        entregar.ejecutar(&sesion(), ana, 3).await.unwrap();
+
+        let historial = almacen
+            .auditoria_de(RegistroAuditado::PersonalKof(ana))
+            .await
+            .unwrap();
+        assert_eq!(historial.len(), 1, "el alta");
+        assert_eq!(historial[0].entidad, "personal_kof");
+    }
 }

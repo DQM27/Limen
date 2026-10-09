@@ -11,7 +11,7 @@ use crate::error::{al_confirmar, tecnica};
 use crate::repositorios::{
     AuditoriaSurreal, ContratistasSurreal, EmpresasProveedorasSurreal, EmpresasSurreal, Escritura,
     GafetesSurreal, IngresosCorreoSurreal, IngresosProveedorSurreal, IngresosSurreal,
-    PresenciasSurreal, RelojSurreal,
+    PersonalKofSurreal, PresenciasSurreal, PrestamosKofSurreal, RelojSurreal,
 };
 
 impl FabricaUnidadDeTrabajo for AlmacenSurreal {
@@ -29,6 +29,8 @@ impl FabricaUnidadDeTrabajo for AlmacenSurreal {
             empresas_proveedoras: EmpresasProveedorasSurreal::new(db.clone()),
             ingresos_proveedor: IngresosProveedorSurreal::new(db.clone()),
             ingresos_correo: IngresosCorreoSurreal::new(db.clone()),
+            personal_kof: PersonalKofSurreal::new(db.clone()),
+            prestamos_kof: PrestamosKofSurreal::new(db.clone()),
             reloj: RelojSurreal::new(db.clone()),
             auditoria: AuditoriaSurreal::default(),
         }
@@ -46,6 +48,8 @@ pub struct UowSurreal {
     empresas_proveedoras: EmpresasProveedorasSurreal,
     ingresos_proveedor: IngresosProveedorSurreal,
     ingresos_correo: IngresosCorreoSurreal,
+    personal_kof: PersonalKofSurreal,
+    prestamos_kof: PrestamosKofSurreal,
     reloj: RelojSurreal,
     auditoria: AuditoriaSurreal,
 }
@@ -59,6 +63,8 @@ impl UnidadDeTrabajo for UowSurreal {
     type EmpresasProveedoras = EmpresasProveedorasSurreal;
     type IngresosProveedor = IngresosProveedorSurreal;
     type IngresosCorreo = IngresosCorreoSurreal;
+    type PersonalKof = PersonalKofSurreal;
+    type PrestamosKof = PrestamosKofSurreal;
     type Reloj = RelojSurreal;
     type Auditoria = AuditoriaSurreal;
 
@@ -94,6 +100,14 @@ impl UnidadDeTrabajo for UowSurreal {
         &mut self.ingresos_correo
     }
 
+    fn personal_kof(&mut self) -> &mut PersonalKofSurreal {
+        &mut self.personal_kof
+    }
+
+    fn prestamos_kof(&mut self) -> &mut PrestamosKofSurreal {
+        &mut self.prestamos_kof
+    }
+
     fn reloj(&mut self) -> &mut RelojSurreal {
         &mut self.reloj
     }
@@ -115,6 +129,8 @@ impl UnidadDeTrabajo for UowSurreal {
             self.ingresos.pendientes,
             self.ingresos_proveedor.pendientes,
             self.ingresos_correo.pendientes,
+            self.personal_kof.pendientes,
+            self.prestamos_kof.pendientes,
             self.reloj.pendientes,
             self.auditoria.pendientes,
         ]

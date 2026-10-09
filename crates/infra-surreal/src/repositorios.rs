@@ -5,8 +5,8 @@ use chrono::{DateTime, Utc};
 use limen_aplicacion::puertos::{
     EntradaAuditoria, ErrorPersistencia, RegistroAuditoria, RepositorioContratistas,
     RepositorioEmpresas, RepositorioEmpresasProveedoras, RepositorioGafetes, RepositorioIngresos,
-    RepositorioIngresosCorreo, RepositorioIngresosProveedor, RepositorioPresencias,
-    RepositorioReloj,
+    RepositorioIngresosCorreo, RepositorioIngresosProveedor, RepositorioPersonalKof,
+    RepositorioPresencias, RepositorioPrestamosKof, RepositorioReloj,
 };
 use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::{Contratista, ContratistaId};
@@ -16,7 +16,9 @@ use limen_dominio::gafete::{Gafete, NumeroGafete, TipoGafete};
 use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoId};
 use limen_dominio::ingreso_correo::{IngresoCorreo, IngresoCorreoId};
 use limen_dominio::ingreso_proveedor::{IngresoProveedor, IngresoProveedorId};
+use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
 use limen_dominio::presencia::Via;
+use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofId};
 use surrealdb::Surreal;
 use surrealdb::engine::local::Db;
 use surrealdb::types::{RecordId, SurrealValue, Value};
@@ -25,10 +27,11 @@ use crate::error::{dato_corrupto, tecnica};
 use crate::registros::{
     AuditoriaRegistro, ContratistaDatos, ContratistaLeido, EmpresaDatos, EmpresaLeida,
     EmpresaProveedoraLeida, GafeteDatos, IngresoCorreoDatos, IngresoCorreoLeido, IngresoDatos,
-    IngresoLeido, IngresoProveedorDatos, IngresoProveedorLeido, PresenciaDatos, PrestamoDatos,
-    RelojDatos, TABLA_AUDITORIA, TABLA_GAFETE, TABLA_PRESENCIA, id_contratista, id_empresa,
-    id_empresa_proveedora, id_gafete, id_ingreso, id_ingreso_correo, id_ingreso_proveedor,
-    id_presencia, id_prestamo, id_registro, id_reloj,
+    IngresoLeido, IngresoProveedorDatos, IngresoProveedorLeido, PersonalKofDatos, PersonalKofLeido,
+    PresenciaDatos, PrestamoDatos, PrestamoKofDatos, PrestamoKofLeido, RelojDatos, TABLA_AUDITORIA,
+    TABLA_GAFETE, TABLA_PRESENCIA, id_contratista, id_empresa, id_empresa_proveedora, id_gafete,
+    id_ingreso, id_ingreso_correo, id_ingreso_proveedor, id_kof_con_prestamo, id_personal_kof,
+    id_presencia, id_prestamo, id_prestamo_kof, id_registro, id_reloj,
 };
 
 /// Una escritura anotada, pendiente de confirmar.
@@ -580,6 +583,141 @@ impl RepositorioIngresosCorreo for IngresosCorreoSurreal {
             id_ingreso_correo(ingreso.id()),
             IngresoCorreoDatos::from(ingreso),
         ));
+    }
+}
+
+// --- Personal KOF ---
+
+#[derive(Debug)]
+pub struct PersonalKofSurreal {
+    db: Surreal<Db>,
+    pub(crate) pendientes: Vec<Escritura>,
+}
+
+impl PersonalKofSurreal {
+    pub(crate) const fn new(db: Surreal<Db>) -> Self {
+        Self {
+            db,
+            pendientes: Vec::new(),
+        }
+    }
+}
+
+impl RepositorioPersonalKof for PersonalKofSurreal {
+    async fn obtener(&self, id: PersonalKofId) -> Result<Option<PersonalKof>, ErrorPersistencia> {
+        let mut respuesta = self
+            .db
+            .query("SELECT * FROM ONLY $id")
+            .bind(("id", id_personal_kof(id)))
+            .await
+            .map_err(tecnica)?;
+        let leido: Option<PersonalKofLeido> = respuesta.take(0).map_err(tecnica)?;
+        leido.map(PersonalKof::try_from).transpose()
+    }
+
+    async fn codigo_en_uso(
+        &self,
+        codigo: &CodigoEmpleado,
+        excepto: Option<PersonalKofId>,
+    ) -> Result<bool, ErrorPersistencia> {
+        let mut respuesta = self
+            .db
+            .query(
+                "SELECT VALUE id FROM personal_kof \
+                 WHERE codigo_empleado = $codigo AND id != $excepto LIMIT 1",
+            )
+            .bind(("codigo", codigo.as_str().to_owned()))
+            .bind(("excepto", excepto.map(id_personal_kof)))
+            .await
+            .map_err(tecnica)?;
+        let encontrados: Vec<RecordId> = respuesta.take(0).map_err(tecnica)?;
+        Ok(!encontrados.is_empty())
+    }
+
+    fn guardar(&mut self, persona: &PersonalKof) {
+        self.pendientes.push(Escritura::guardar(
+            id_personal_kof(persona.id()),
+            PersonalKofDatos::from(persona),
+        ));
+    }
+}
+
+// --- Préstamos de gafete provisional KOF ---
+
+#[derive(Debug)]
+pub struct PrestamosKofSurreal {
+    db: Surreal<Db>,
+    pub(crate) pendientes: Vec<Escritura>,
+}
+
+impl PrestamosKofSurreal {
+    pub(crate) const fn new(db: Surreal<Db>) -> Self {
+        Self {
+            db,
+            pendientes: Vec::new(),
+        }
+    }
+}
+
+impl RepositorioPrestamosKof for PrestamosKofSurreal {
+    async fn obtener(&self, id: PrestamoKofId) -> Result<Option<PrestamoKof>, ErrorPersistencia> {
+        let mut respuesta = self
+            .db
+            .query("SELECT * FROM ONLY $id")
+            .bind(("id", id_prestamo_kof(id)))
+            .await
+            .map_err(tecnica)?;
+        let leido: Option<PrestamoKofLeido> = respuesta.take(0).map_err(tecnica)?;
+        leido.map(PrestamoKof::try_from).transpose()
+    }
+
+    async fn tiene_abierto(&self, personal: PersonalKofId) -> Result<bool, ErrorPersistencia> {
+        existe_registro(&self.db, id_kof_con_prestamo(personal)).await
+    }
+
+    async fn abierto_con_gafete(
+        &self,
+        numero: NumeroGafete,
+    ) -> Result<Option<PrestamoKof>, ErrorPersistencia> {
+        let mut respuesta = self
+            .db
+            .query(
+                "SELECT * FROM prestamo_kof \
+                 WHERE gafete = $gafete AND devolucion_en = NONE LIMIT 1",
+            )
+            .bind(("gafete", i64::from(numero.valor())))
+            .await
+            .map_err(tecnica)?;
+        let leidos: Vec<PrestamoKofLeido> = respuesta.take(0).map_err(tecnica)?;
+        leidos
+            .into_iter()
+            .next()
+            .map(PrestamoKof::try_from)
+            .transpose()
+    }
+
+    /// Crea el préstamo y la marca `personal_kof_con_prestamo:⟨persona⟩`: si
+    /// la persona ya tiene otro sin devolver, la transacción falla.
+    fn anotar_entrega(&mut self, prestamo: &PrestamoKof) {
+        self.pendientes.push(Escritura::guardar(
+            id_prestamo_kof(prestamo.id()),
+            PrestamoKofDatos::from(prestamo),
+        ));
+        self.pendientes.push(Escritura::crear(
+            id_kof_con_prestamo(prestamo.personal()),
+            PrestamoDatos {
+                desde: prestamo.entrega().en,
+            },
+        ));
+    }
+
+    fn anotar_devolucion(&mut self, prestamo: &PrestamoKof) {
+        self.pendientes.push(Escritura::guardar(
+            id_prestamo_kof(prestamo.id()),
+            PrestamoKofDatos::from(prestamo),
+        ));
+        self.pendientes
+            .push(Escritura::Borrar(id_kof_con_prestamo(prestamo.personal())));
     }
 }
 

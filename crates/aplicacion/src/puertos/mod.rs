@@ -13,7 +13,7 @@ pub use auditoria::{AccionAuditada, EntradaAuditoria, RegistroAuditado, Registro
 pub use persistencia::{
     ErrorPersistencia, FabricaUnidadDeTrabajo, RepositorioContratistas, RepositorioEmpresas,
     RepositorioEmpresasProveedoras, RepositorioGafetes, RepositorioIngresos,
-    RepositorioIngresosCorreo, RepositorioIngresosProveedor, RepositorioPresencias,
-    RepositorioReloj, Restriccion, UnidadDeTrabajo,
+    RepositorioIngresosCorreo, RepositorioIngresosProveedor, RepositorioPersonalKof,
+    RepositorioPresencias, RepositorioPrestamosKof, RepositorioReloj, Restriccion, UnidadDeTrabajo,
 };
 pub use reloj::{GeneradorIds, Reloj};

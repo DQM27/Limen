@@ -20,7 +20,9 @@ use limen_dominio::gafete::{Gafete, NumeroGafete, TipoGafete};
 use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoId};
 use limen_dominio::ingreso_correo::{IngresoCorreo, IngresoCorreoId};
 use limen_dominio::ingreso_proveedor::{IngresoProveedor, IngresoProveedorId};
+use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
 use limen_dominio::presencia::Via;
+use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofId};
 
 use super::auditoria::RegistroAuditoria;
 
@@ -33,6 +35,10 @@ pub enum Restriccion {
     CedulaContratista,
     NombreEmpresa,
     NombreEmpresaProveedora,
+    /// Ya hay una persona del personal KOF con ese código de empleado.
+    CodigoEmpleado,
+    /// Esa persona del personal KOF ya tiene un provisional sin devolver.
+    PersonalKofConPrestamo,
     /// Ya hay un gafete con ese tipo y número en el catálogo.
     NumeroGafete,
     /// La persona ya está adentro (por cualquier vía).
@@ -67,6 +73,8 @@ pub trait UnidadDeTrabajo: Send {
     type EmpresasProveedoras: RepositorioEmpresasProveedoras;
     type IngresosProveedor: RepositorioIngresosProveedor;
     type IngresosCorreo: RepositorioIngresosCorreo;
+    type PersonalKof: RepositorioPersonalKof;
+    type PrestamosKof: RepositorioPrestamosKof;
     type Reloj: RepositorioReloj;
     type Auditoria: RegistroAuditoria;
 
@@ -78,6 +86,8 @@ pub trait UnidadDeTrabajo: Send {
     fn empresas_proveedoras(&mut self) -> &mut Self::EmpresasProveedoras;
     fn ingresos_proveedor(&mut self) -> &mut Self::IngresosProveedor;
     fn ingresos_correo(&mut self) -> &mut Self::IngresosCorreo;
+    fn personal_kof(&mut self) -> &mut Self::PersonalKof;
+    fn prestamos_kof(&mut self) -> &mut Self::PrestamosKof;
     fn reloj(&mut self) -> &mut Self::Reloj;
     fn auditoria(&mut self) -> &mut Self::Auditoria;
 
@@ -264,4 +274,51 @@ pub trait RepositorioIngresosCorreo: Send + Sync {
 
     /// Anota el ingreso nuevo o su salida.
     fn guardar(&mut self, ingreso: &IngresoCorreo);
+}
+
+/// Catálogo del personal KOF.
+pub trait RepositorioPersonalKof: Send + Sync {
+    fn obtener(
+        &self,
+        id: PersonalKofId,
+    ) -> impl Future<Output = Result<Option<PersonalKof>, ErrorPersistencia>> + Send;
+
+    /// Si otra persona (distinta de `excepto`) usa el código de empleado.
+    fn codigo_en_uso(
+        &self,
+        codigo: &CodigoEmpleado,
+        excepto: Option<PersonalKofId>,
+    ) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send;
+
+    /// Anota el alta o el cambio. Al confirmar falla con
+    /// ([`Restriccion::CodigoEmpleado`]) si el código ya está en uso.
+    fn guardar(&mut self, persona: &PersonalKof);
+}
+
+/// Préstamos de gafete provisional al personal KOF.
+pub trait RepositorioPrestamosKof: Send + Sync {
+    fn obtener(
+        &self,
+        id: PrestamoKofId,
+    ) -> impl Future<Output = Result<Option<PrestamoKof>, ErrorPersistencia>> + Send;
+
+    /// Si la persona tiene un provisional sin devolver.
+    fn tiene_abierto(
+        &self,
+        personal: PersonalKofId,
+    ) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send;
+
+    /// El préstamo sin devolver de ese gafete provisional, si lo hay.
+    fn abierto_con_gafete(
+        &self,
+        numero: NumeroGafete,
+    ) -> impl Future<Output = Result<Option<PrestamoKof>, ErrorPersistencia>> + Send;
+
+    /// Anota un préstamo nuevo. Al confirmar falla con
+    /// ([`Restriccion::PersonalKofConPrestamo`]) si la persona ya tenía otro
+    /// sin devolver.
+    fn anotar_entrega(&mut self, prestamo: &PrestamoKof);
+
+    /// Anota la devolución de un préstamo.
+    fn anotar_devolucion(&mut self, prestamo: &PrestamoKof);
 }

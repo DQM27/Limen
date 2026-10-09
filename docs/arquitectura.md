@@ -579,7 +579,7 @@ Se avanza por capas, completando cada una para un módulo antes de pasar al sigu
    integración y la batería de contrato compartida (`pruebas-contrato`).
 5. **`composicion`** y una app mínima de escritorio para contratistas.
 6. Resto del dominio, en orden: ✅ ingreso y salida (E), ✅ gafetes (F), ✅ proveedores
-   (H), ✅ ingreso por correo (I), personal KOF (K), usuarios (L) y equipos (M).
+   (H), ✅ ingreso por correo (I), ✅ personal KOF (K), usuarios (L) y equipos (M).
    Lo que debe ser único entre equipos (una persona adentro, un gafete prestado, un
    número de gafete) usa una clave natural en la base (`presencia:⟨cédula⟩`,
    `prestamo_gafete:⟨TIPO-NÚMERO⟩`, `gafete:⟨TIPO-NÚMERO⟩`): si dos equipos lo

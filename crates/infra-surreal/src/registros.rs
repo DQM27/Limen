@@ -22,6 +22,8 @@ use limen_dominio::medio::{Medio, Placa};
 use limen_dominio::movimiento::Marca;
 use limen_dominio::nombre::NombrePersona;
 use limen_dominio::operador::OperadorId;
+use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
+use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofGuardado, PrestamoKofId};
 use limen_dominio::tipo_ingreso::TipoIngreso;
 use limen_dominio::visitante::Visitante;
 use surrealdb::types::{RecordId, RecordIdKey, SurrealValue};
@@ -38,6 +40,9 @@ pub const TABLA_INGRESO_CONTRATISTA: &str = "ingreso_contratista";
 pub const TABLA_EMPRESA_PROVEEDORA: &str = "empresa_proveedora";
 pub const TABLA_INGRESO_PROVEEDOR: &str = "ingreso_proveedor";
 pub const TABLA_INGRESO_CORREO: &str = "ingreso_correo";
+pub const TABLA_PERSONAL_KOF: &str = "personal_kof";
+pub const TABLA_PRESTAMO_KOF: &str = "prestamo_kof";
+pub const TABLA_PERSONAL_KOF_CON_PRESTAMO: &str = "personal_kof_con_prestamo";
 pub const TABLA_RELOJ: &str = "reloj";
 pub const TABLA_AUDITORIA: &str = "auditoria";
 
@@ -69,6 +74,19 @@ pub fn id_ingreso(id: IngresoId) -> RecordId {
 
 pub fn id_empresa_proveedora(id: EmpresaProveedoraId) -> RecordId {
     id_registro(TABLA_EMPRESA_PROVEEDORA, id.uuid())
+}
+
+pub fn id_personal_kof(id: PersonalKofId) -> RecordId {
+    id_registro(TABLA_PERSONAL_KOF, id.uuid())
+}
+
+pub fn id_prestamo_kof(id: PrestamoKofId) -> RecordId {
+    id_registro(TABLA_PRESTAMO_KOF, id.uuid())
+}
+
+/// Marca de que la persona tiene un provisional sin devolver.
+pub fn id_kof_con_prestamo(id: PersonalKofId) -> RecordId {
+    id_registro(TABLA_PERSONAL_KOF_CON_PRESTAMO, id.uuid())
 }
 
 pub fn id_ingreso_correo(id: IngresoCorreoId) -> RecordId {
@@ -556,6 +574,103 @@ impl TryFrom<IngresoCorreoLeido> for IngresoCorreo {
                 operador: OperadorId::desde_uuid(leido.entrada_operador),
             },
             salida: salida_de(leido.salida_en, leido.salida_operador, tabla)?,
+        }))
+    }
+}
+
+// --- Personal KOF ---
+
+#[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
+pub struct PersonalKofDatos {
+    pub codigo_empleado: String,
+    pub nombre: String,
+    pub activo: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
+pub struct PersonalKofLeido {
+    pub id: RecordId,
+    pub codigo_empleado: String,
+    pub nombre: String,
+    pub activo: bool,
+}
+
+impl From<&PersonalKof> for PersonalKofDatos {
+    fn from(persona: &PersonalKof) -> Self {
+        Self {
+            codigo_empleado: persona.codigo().as_str().to_owned(),
+            nombre: persona.nombre().as_str().to_owned(),
+            activo: persona.activo(),
+        }
+    }
+}
+
+impl TryFrom<PersonalKofLeido> for PersonalKof {
+    type Error = ErrorPersistencia;
+
+    fn try_from(leido: PersonalKofLeido) -> Result<Self, ErrorPersistencia> {
+        let tabla = TABLA_PERSONAL_KOF;
+        let corrupto = |detalle: String| dato_corrupto(tabla, detalle);
+        Ok(Self::restaurar(
+            PersonalKofId::desde_uuid(uuid_de(&leido.id, tabla)?),
+            CodigoEmpleado::nuevo(&leido.codigo_empleado).map_err(|e| corrupto(e.to_string()))?,
+            NombrePersona::nuevo(&leido.nombre).map_err(|e| corrupto(e.to_string()))?,
+            leido.activo,
+        ))
+    }
+}
+
+// --- Préstamo de gafete provisional KOF ---
+
+#[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
+pub struct PrestamoKofDatos {
+    pub personal: RecordId,
+    pub gafete: i64,
+    pub entrega_en: DateTime<Utc>,
+    pub entrega_operador: Uuid,
+    pub devolucion_en: Option<DateTime<Utc>>,
+    pub devolucion_operador: Option<Uuid>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
+pub struct PrestamoKofLeido {
+    pub id: RecordId,
+    pub personal: RecordId,
+    pub gafete: i64,
+    pub entrega_en: DateTime<Utc>,
+    pub entrega_operador: Uuid,
+    pub devolucion_en: Option<DateTime<Utc>>,
+    pub devolucion_operador: Option<Uuid>,
+}
+
+impl From<&PrestamoKof> for PrestamoKofDatos {
+    fn from(prestamo: &PrestamoKof) -> Self {
+        let devolucion = prestamo.devolucion();
+        Self {
+            personal: id_personal_kof(prestamo.personal()),
+            gafete: i64::from(prestamo.gafete().valor()),
+            entrega_en: prestamo.entrega().en,
+            entrega_operador: prestamo.entrega().operador.uuid(),
+            devolucion_en: devolucion.map(|marca| marca.en),
+            devolucion_operador: devolucion.map(|marca| marca.operador.uuid()),
+        }
+    }
+}
+
+impl TryFrom<PrestamoKofLeido> for PrestamoKof {
+    type Error = ErrorPersistencia;
+
+    fn try_from(leido: PrestamoKofLeido) -> Result<Self, ErrorPersistencia> {
+        let tabla = TABLA_PRESTAMO_KOF;
+        Ok(Self::restaurar(PrestamoKofGuardado {
+            id: PrestamoKofId::desde_uuid(uuid_de(&leido.id, tabla)?),
+            personal: PersonalKofId::desde_uuid(uuid_de(&leido.personal, TABLA_PERSONAL_KOF)?),
+            gafete: numero_de(leido.gafete, tabla)?,
+            entrega: Marca {
+                en: leido.entrega_en,
+                operador: OperadorId::desde_uuid(leido.entrega_operador),
+            },
+            devolucion: salida_de(leido.devolucion_en, leido.devolucion_operador, tabla)?,
         }))
     }
 }

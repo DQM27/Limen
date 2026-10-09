@@ -19,6 +19,8 @@ use limen_dominio::ingreso_contratista::ErrorIngreso;
 use limen_dominio::ingreso_correo::ErrorIngresoCorreo;
 use limen_dominio::ingreso_proveedor::ErrorIngresoProveedor;
 use limen_dominio::movimiento::ErrorSalida;
+use limen_dominio::personal_kof::ErrorPersonalKof;
+use limen_dominio::prestamo_kof::{ErrorDevolucionKof, ErrorPrestamoKof};
 
 use crate::puertos::{ErrorPersistencia, Restriccion};
 
@@ -56,6 +58,24 @@ impl ErrorDeNegocio for ErrorSalida {
 }
 
 impl ErrorDeNegocio for ErrorGafete {
+    fn codigo(&self) -> &'static str {
+        Self::codigo(*self)
+    }
+}
+
+impl ErrorDeNegocio for ErrorPersonalKof {
+    fn codigo(&self) -> &'static str {
+        Self::codigo(*self)
+    }
+}
+
+impl ErrorDeNegocio for ErrorPrestamoKof {
+    fn codigo(&self) -> &'static str {
+        Self::codigo(*self)
+    }
+}
+
+impl ErrorDeNegocio for ErrorDevolucionKof {
     fn codigo(&self) -> &'static str {
         Self::codigo(*self)
     }

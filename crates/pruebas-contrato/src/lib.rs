@@ -34,9 +34,11 @@ use limen_dominio::nombre::NombrePersona;
 use limen_dominio::tipo_ingreso::TipoIngreso;
 use uuid::Uuid;
 
+mod kof;
 mod movimientos;
 mod proveedores;
 
+pub use kof::*;
 pub use movimientos::*;
 pub use proveedores::*;
 
@@ -80,6 +82,13 @@ macro_rules! bateria_de_contrato {
             abierto_con_gafete_de_proveedor_ignora_los_cerrados,
             guarda_y_lee_un_ingreso_por_correo,
             abierto_con_gafete_de_visita_ignora_los_cerrados,
+            // Personal KOF y gafete provisional (`kof`).
+            guarda_y_lee_al_personal_kof,
+            el_codigo_de_empleado_repetido_choca,
+            codigo_en_uso_excluye_a_la_propia_persona,
+            guarda_y_lee_un_prestamo_kof,
+            la_devolucion_libera_a_la_persona_y_al_gafete,
+            una_persona_no_recibe_dos_provisionales_a_la_vez,
         );
     };
     (@pruebas $fabrica:expr; $($prueba:ident),+ $(,)?) => {

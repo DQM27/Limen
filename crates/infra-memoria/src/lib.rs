@@ -25,8 +25,8 @@ use limen_aplicacion::puertos::{
     EntradaAuditoria, ErrorPersistencia, FabricaUnidadDeTrabajo, GeneradorIds, RegistroAuditoria,
     Reloj, RepositorioContratistas, RepositorioEmpresas, RepositorioEmpresasProveedoras,
     RepositorioGafetes, RepositorioIngresos, RepositorioIngresosCorreo,
-    RepositorioIngresosProveedor, RepositorioPresencias, RepositorioReloj, Restriccion,
-    UnidadDeTrabajo,
+    RepositorioIngresosProveedor, RepositorioPersonalKof, RepositorioPresencias,
+    RepositorioPrestamosKof, RepositorioReloj, Restriccion, UnidadDeTrabajo,
 };
 use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::{Contratista, ContratistaId};
@@ -36,7 +36,9 @@ use limen_dominio::gafete::{Gafete, NumeroGafete, TipoGafete};
 use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoId};
 use limen_dominio::ingreso_correo::{IngresoCorreo, IngresoCorreoId};
 use limen_dominio::ingreso_proveedor::{IngresoProveedor, IngresoProveedorId};
+use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
 use limen_dominio::presencia::Via;
+use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofId};
 use uuid::Uuid;
 
 type ClaveGafete = (TipoGafete, NumeroGafete);
@@ -53,6 +55,10 @@ struct Contenido {
     empresas_proveedoras: BTreeMap<EmpresaProveedoraId, EmpresaProveedora>,
     ingresos_proveedor: BTreeMap<IngresoProveedorId, IngresoProveedor>,
     ingresos_correo: BTreeMap<IngresoCorreoId, IngresoCorreo>,
+    personal_kof: BTreeMap<PersonalKofId, PersonalKof>,
+    prestamos_kof: BTreeMap<PrestamoKofId, PrestamoKof>,
+    /// Personas con un provisional sin devolver (clave natural).
+    kof_con_prestamo: BTreeSet<PersonalKofId>,
     ultimo_movimiento: Option<DateTime<Utc>>,
     auditoria: Vec<EntradaAuditoria>,
 }
@@ -119,6 +125,12 @@ impl AlmacenMemoria {
         });
     }
 
+    pub fn sembrar_personal_kof(&self, persona: PersonalKof) {
+        self.sembrar(|c| {
+            c.personal_kof.insert(persona.id(), persona);
+        });
+    }
+
     pub fn sembrar_contratista(&self, contratista: Contratista) {
         self.sembrar(|c| {
             c.contratistas.insert(contratista.id(), contratista);
@@ -182,6 +194,14 @@ impl AlmacenMemoria {
         self.mirar(|c| c.ingresos_correo.values().cloned().collect())
     }
 
+    pub fn personal_kof(&self) -> Vec<PersonalKof> {
+        self.mirar(|c| c.personal_kof.values().cloned().collect())
+    }
+
+    pub fn prestamos_kof(&self) -> Vec<PrestamoKof> {
+        self.mirar(|c| c.prestamos_kof.values().cloned().collect())
+    }
+
     /// Por qué vía está adentro una persona, si lo está.
     pub fn via_adentro(&self, cedula: &Cedula) -> Option<Via> {
         self.mirar(|c| c.presencias.get(cedula.as_str()).copied())
@@ -243,6 +263,14 @@ impl FabricaUnidadDeTrabajo for AlmacenMemoria {
                 almacen: self.clone(),
                 pendientes: Vec::new(),
             },
+            personal_kof: PersonalKofMemoria {
+                almacen: self.clone(),
+                pendientes: Vec::new(),
+            },
+            prestamos_kof: PrestamosKofMemoria {
+                almacen: self.clone(),
+                pendientes: Vec::new(),
+            },
             reloj: RelojMemoria {
                 almacen: self.clone(),
                 pendiente: None,
@@ -265,6 +293,8 @@ pub struct UowMemoria {
     empresas_proveedoras: EmpresasProveedorasMemoria,
     ingresos_proveedor: IngresosProveedorMemoria,
     ingresos_correo: IngresosCorreoMemoria,
+    personal_kof: PersonalKofMemoria,
+    prestamos_kof: PrestamosKofMemoria,
     reloj: RelojMemoria,
     auditoria: AuditoriaMemoria,
 }
@@ -324,6 +354,19 @@ impl UowMemoria {
         for ingreso in self.ingresos_correo.pendientes {
             nuevo.ingresos_correo.insert(ingreso.id(), ingreso);
         }
+        for persona in self.personal_kof.pendientes {
+            let ocupado = nuevo
+                .personal_kof
+                .values()
+                .any(|otra| otra.id() != persona.id() && otra.codigo() == persona.codigo());
+            if ocupado {
+                return Err(ErrorPersistencia::Conflicto(Restriccion::CodigoEmpleado));
+            }
+            nuevo.personal_kof.insert(persona.id(), persona);
+        }
+        for operacion in self.prestamos_kof.pendientes {
+            aplicar_prestamo_kof(&mut nuevo, operacion)?;
+        }
         if let Some(en) = self.reloj.pendiente {
             nuevo.ultimo_movimiento = Some(en);
         }
@@ -374,6 +417,33 @@ fn aplicar_gafete(
 }
 
 #[derive(Debug, Clone)]
+enum OperacionPrestamoKof {
+    Entrega(PrestamoKof),
+    Devolucion(PrestamoKof),
+}
+
+fn aplicar_prestamo_kof(
+    contenido: &mut Contenido,
+    operacion: OperacionPrestamoKof,
+) -> Result<(), ErrorPersistencia> {
+    match operacion {
+        OperacionPrestamoKof::Entrega(prestamo) => {
+            if !contenido.kof_con_prestamo.insert(prestamo.personal()) {
+                return Err(ErrorPersistencia::Conflicto(
+                    Restriccion::PersonalKofConPrestamo,
+                ));
+            }
+            contenido.prestamos_kof.insert(prestamo.id(), prestamo);
+        }
+        OperacionPrestamoKof::Devolucion(prestamo) => {
+            contenido.kof_con_prestamo.remove(&prestamo.personal());
+            contenido.prestamos_kof.insert(prestamo.id(), prestamo);
+        }
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
 enum OperacionPresencia {
     Entrada(String, Via),
     Salida(String),
@@ -406,6 +476,8 @@ impl UnidadDeTrabajo for UowMemoria {
     type EmpresasProveedoras = EmpresasProveedorasMemoria;
     type IngresosProveedor = IngresosProveedorMemoria;
     type IngresosCorreo = IngresosCorreoMemoria;
+    type PersonalKof = PersonalKofMemoria;
+    type PrestamosKof = PrestamosKofMemoria;
     type Reloj = RelojMemoria;
     type Auditoria = AuditoriaMemoria;
 
@@ -439,6 +511,14 @@ impl UnidadDeTrabajo for UowMemoria {
 
     fn ingresos_correo(&mut self) -> &mut IngresosCorreoMemoria {
         &mut self.ingresos_correo
+    }
+
+    fn personal_kof(&mut self) -> &mut PersonalKofMemoria {
+        &mut self.personal_kof
+    }
+
+    fn prestamos_kof(&mut self) -> &mut PrestamosKofMemoria {
+        &mut self.prestamos_kof
     }
 
     fn reloj(&mut self) -> &mut RelojMemoria {
@@ -765,6 +845,84 @@ impl RepositorioIngresosCorreo for IngresosCorreoMemoria {
 
     fn guardar(&mut self, ingreso: &IngresoCorreo) {
         self.pendientes.push(ingreso.clone());
+    }
+}
+
+#[derive(Debug)]
+pub struct PersonalKofMemoria {
+    almacen: AlmacenMemoria,
+    pendientes: Vec<PersonalKof>,
+}
+
+impl RepositorioPersonalKof for PersonalKofMemoria {
+    fn obtener(
+        &self,
+        id: PersonalKofId,
+    ) -> impl Future<Output = Result<Option<PersonalKof>, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|c| c.personal_kof.get(&id).cloned()))
+    }
+
+    fn codigo_en_uso(
+        &self,
+        codigo: &CodigoEmpleado,
+        excepto: Option<PersonalKofId>,
+    ) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|c| {
+            c.personal_kof
+                .values()
+                .any(|persona| persona.codigo() == codigo && Some(persona.id()) != excepto)
+        }))
+    }
+
+    fn guardar(&mut self, persona: &PersonalKof) {
+        self.pendientes.push(persona.clone());
+    }
+}
+
+#[derive(Debug)]
+pub struct PrestamosKofMemoria {
+    almacen: AlmacenMemoria,
+    pendientes: Vec<OperacionPrestamoKof>,
+}
+
+impl RepositorioPrestamosKof for PrestamosKofMemoria {
+    fn obtener(
+        &self,
+        id: PrestamoKofId,
+    ) -> impl Future<Output = Result<Option<PrestamoKof>, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|c| c.prestamos_kof.get(&id).cloned()))
+    }
+
+    fn tiene_abierto(
+        &self,
+        personal: PersonalKofId,
+    ) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send {
+        std::future::ready(
+            self.almacen
+                .leer(|c| c.kof_con_prestamo.contains(&personal)),
+        )
+    }
+
+    fn abierto_con_gafete(
+        &self,
+        numero: NumeroGafete,
+    ) -> impl Future<Output = Result<Option<PrestamoKof>, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|c| {
+            c.prestamos_kof
+                .values()
+                .find(|prestamo| prestamo.esta_abierto() && prestamo.gafete() == numero)
+                .cloned()
+        }))
+    }
+
+    fn anotar_entrega(&mut self, prestamo: &PrestamoKof) {
+        self.pendientes
+            .push(OperacionPrestamoKof::Entrega(prestamo.clone()));
+    }
+
+    fn anotar_devolucion(&mut self, prestamo: &PrestamoKof) {
+        self.pendientes
+            .push(OperacionPrestamoKof::Devolucion(prestamo.clone()));
     }
 }
 

@@ -7,6 +7,7 @@ use limen_dominio::empresa::EmpresaId;
 use limen_dominio::empresa_proveedora::EmpresaProveedoraId;
 use limen_dominio::gafete::{NumeroGafete, TipoGafete};
 use limen_dominio::operador::OperadorId;
+use limen_dominio::personal_kof::PersonalKofId;
 use uuid::Uuid;
 
 use crate::sesion::Sesion;
@@ -19,6 +20,7 @@ pub enum RegistroAuditado {
     Empresa(EmpresaId),
     EmpresaProveedora(EmpresaProveedoraId),
     Gafete(TipoGafete, NumeroGafete),
+    PersonalKof(PersonalKofId),
 }
 
 impl RegistroAuditado {
@@ -29,6 +31,7 @@ impl RegistroAuditado {
             Self::Empresa(_) => "empresa",
             Self::EmpresaProveedora(_) => "empresa_proveedora",
             Self::Gafete(..) => "gafete",
+            Self::PersonalKof(_) => "personal_kof",
         }
     }
 
@@ -39,6 +42,7 @@ impl RegistroAuditado {
             Self::Empresa(id) => id.to_string(),
             Self::EmpresaProveedora(id) => id.to_string(),
             Self::Gafete(tipo, numero) => format!("{tipo}-{numero}"),
+            Self::PersonalKof(id) => id.to_string(),
         }
     }
 }
