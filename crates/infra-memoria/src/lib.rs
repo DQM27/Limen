@@ -22,12 +22,13 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use limen_aplicacion::puertos::{
-    EntradaAuditoria, ErrorPersistencia, FabricaUnidadDeTrabajo, GeneradorIds, RegistroAuditoria,
-    Reloj, RepositorioContratistas, RepositorioEmpresas, RepositorioEmpresasProveedoras,
-    RepositorioGafetes, RepositorioIngresos, RepositorioIngresosCorreo,
-    RepositorioIngresosProveedor, RepositorioPersonalKof, RepositorioPresencias,
-    RepositorioPrestamosKof, RepositorioReloj, Restriccion, UnidadDeTrabajo,
+    Consultas, EntradaAuditoria, ErrorPersistencia, FabricaUnidadDeTrabajo, GeneradorIds,
+    IngresoAbierto, PersonaAdentro, RegistroAuditoria, Reloj, RepositorioContratistas,
+    RepositorioEmpresas, RepositorioEmpresasProveedoras, RepositorioGafetes, RepositorioIngresos,
+    RepositorioIngresosCorreo, RepositorioIngresosProveedor, RepositorioPersonalKof,
+    RepositorioPresencias, RepositorioPrestamosKof, RepositorioReloj, Restriccion, UnidadDeTrabajo,
 };
+use limen_dominio::busqueda::{Criterio, relevantes};
 use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::{Contratista, ContratistaId};
 use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
@@ -222,6 +223,106 @@ impl AlmacenMemoria {
     /// Cuántas veces se confirmó con éxito una Unit of Work.
     pub fn confirmaciones(&self) -> usize {
         self.bloquear().confirmaciones
+    }
+}
+
+impl Consultas for AlmacenMemoria {
+    fn quienes_estan_adentro(
+        &self,
+    ) -> impl Future<Output = Result<Vec<PersonaAdentro>, ErrorPersistencia>> + Send {
+        std::future::ready(self.leer(|c| {
+            let mut adentro = Vec::new();
+            for ingreso in c.ingresos.values().filter(|i| i.esta_abierto()) {
+                let Some(contratista) = c.contratistas.get(&ingreso.contratista()) else {
+                    continue;
+                };
+                adentro.push(PersonaAdentro {
+                    ingreso: IngresoAbierto::Contratista(ingreso.id()),
+                    cedula: ingreso.cedula().clone(),
+                    nombre: contratista.nombre().clone(),
+                    procedencia: c
+                        .empresas
+                        .get(&contratista.empresa())
+                        .map(|empresa| empresa.nombre().to_string())
+                        .unwrap_or_default(),
+                    medio: ingreso.medio().clone(),
+                    gafete: ingreso.gafete(),
+                    desde: ingreso.entrada().en,
+                });
+            }
+            for ingreso in c.ingresos_proveedor.values().filter(|i| i.esta_abierto()) {
+                adentro.push(PersonaAdentro {
+                    ingreso: IngresoAbierto::Proveedor(ingreso.id()),
+                    cedula: ingreso.cedula().clone(),
+                    nombre: ingreso.visitante().nombre().clone(),
+                    procedencia: c
+                        .empresas_proveedoras
+                        .get(&ingreso.empresa())
+                        .map(|empresa| empresa.nombre().to_string())
+                        .unwrap_or_default(),
+                    medio: ingreso.medio().clone(),
+                    gafete: Some(ingreso.gafete()),
+                    desde: ingreso.entrada().en,
+                });
+            }
+            for ingreso in c.ingresos_correo.values().filter(|i| i.esta_abierto()) {
+                adentro.push(PersonaAdentro {
+                    ingreso: IngresoAbierto::Correo(ingreso.id()),
+                    cedula: ingreso.cedula().clone(),
+                    nombre: ingreso.visitante().nombre().clone(),
+                    procedencia: ingreso.motivo().to_string(),
+                    medio: ingreso.medio().clone(),
+                    gafete: Some(ingreso.gafete()),
+                    desde: ingreso.entrada().en,
+                });
+            }
+            adentro.sort_by(|a, b| {
+                b.desde
+                    .cmp(&a.desde)
+                    .then_with(|| a.cedula.as_str().cmp(b.cedula.as_str()))
+            });
+            adentro
+        }))
+    }
+
+    fn buscar_contratistas(
+        &self,
+        criterio: &Criterio,
+        limite: usize,
+    ) -> impl Future<Output = Result<Vec<Contratista>, ErrorPersistencia>> + Send {
+        std::future::ready(
+            self.leer(|c| relevantes(criterio, c.contratistas.values().cloned(), limite)),
+        )
+    }
+
+    fn buscar_personal_kof(
+        &self,
+        criterio: &Criterio,
+        limite: usize,
+    ) -> impl Future<Output = Result<Vec<PersonalKof>, ErrorPersistencia>> + Send {
+        std::future::ready(
+            self.leer(|c| relevantes(criterio, c.personal_kof.values().cloned(), limite)),
+        )
+    }
+
+    fn buscar_empresas(
+        &self,
+        criterio: &Criterio,
+        limite: usize,
+    ) -> impl Future<Output = Result<Vec<Empresa>, ErrorPersistencia>> + Send {
+        std::future::ready(
+            self.leer(|c| relevantes(criterio, c.empresas.values().cloned(), limite)),
+        )
+    }
+
+    fn buscar_empresas_proveedoras(
+        &self,
+        criterio: &Criterio,
+        limite: usize,
+    ) -> impl Future<Output = Result<Vec<EmpresaProveedora>, ErrorPersistencia>> + Send {
+        std::future::ready(
+            self.leer(|c| relevantes(criterio, c.empresas_proveedoras.values().cloned(), limite)),
+        )
     }
 }
 

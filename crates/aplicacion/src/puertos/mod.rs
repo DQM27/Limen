@@ -6,10 +6,12 @@
 //! puede escribir `async fn` igual.
 
 mod auditoria;
+mod consultas;
 mod persistencia;
 mod reloj;
 
 pub use auditoria::{AccionAuditada, EntradaAuditoria, RegistroAuditado, RegistroAuditoria};
+pub use consultas::{Consultas, IngresoAbierto, PersonaAdentro};
 pub use persistencia::{
     ErrorPersistencia, FabricaUnidadDeTrabajo, RepositorioContratistas, RepositorioEmpresas,
     RepositorioEmpresasProveedoras, RepositorioGafetes, RepositorioIngresos,

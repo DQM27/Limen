@@ -6,6 +6,7 @@
 
 use chrono::{DateTime, NaiveDate, Utc};
 use limen_aplicacion::puertos::{EntradaAuditoria, ErrorPersistencia};
+use limen_dominio::busqueda::plegar;
 use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::{Contratista, ContratistaGuardado, ContratistaId};
 use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
@@ -120,7 +121,7 @@ pub fn id_reloj() -> RecordId {
 }
 
 /// El UUID de un ID de registro, comprobando que sea de la tabla esperada.
-fn uuid_de(id: &RecordId, tabla: &str) -> Result<Uuid, ErrorPersistencia> {
+pub fn uuid_de(id: &RecordId, tabla: &str) -> Result<Uuid, ErrorPersistencia> {
     match &id.key {
         RecordIdKey::Uuid(uuid) if id.table.as_str() == tabla => Ok((*uuid).into()),
         _ => Err(dato_corrupto(
@@ -130,7 +131,7 @@ fn uuid_de(id: &RecordId, tabla: &str) -> Result<Uuid, ErrorPersistencia> {
     }
 }
 
-fn numero_de(valor: i64, tabla: &str) -> Result<NumeroGafete, ErrorPersistencia> {
+pub fn numero_de(valor: i64, tabla: &str) -> Result<NumeroGafete, ErrorPersistencia> {
     u32::try_from(valor)
         .ok()
         .and_then(|numero| NumeroGafete::nuevo(numero).ok())
@@ -138,7 +139,7 @@ fn numero_de(valor: i64, tabla: &str) -> Result<NumeroGafete, ErrorPersistencia>
 }
 
 /// El medio guardado: sin placa es a pie.
-fn medio_de(placa: Option<String>, tabla: &str) -> Result<Medio, ErrorPersistencia> {
+pub fn medio_de(placa: Option<String>, tabla: &str) -> Result<Medio, ErrorPersistencia> {
     placa.map_or(Ok(Medio::APie), |placa| {
         Placa::nueva(&placa)
             .map(Medio::Vehiculo)
@@ -172,6 +173,8 @@ fn salida_de(
 pub struct ContratistaDatos {
     pub cedula: String,
     pub nombre: String,
+    /// El nombre plegado (sin tildes, Ñ como N) para el buscador.
+    pub nombre_busqueda: String,
     pub empresa: RecordId,
     pub tipo_ingreso: String,
     pub fecha_vencimiento_praind: NaiveDate,
@@ -195,6 +198,7 @@ impl From<&Contratista> for ContratistaDatos {
         Self {
             cedula: contratista.cedula().as_str().to_owned(),
             nombre: contratista.nombre().as_str().to_owned(),
+            nombre_busqueda: plegar(contratista.nombre().as_str()),
             empresa: id_empresa(contratista.empresa()),
             tipo_ingreso: contratista.tipo_ingreso().codigo().to_owned(),
             fecha_vencimiento_praind: contratista.fecha_vencimiento_praind(),
@@ -228,6 +232,8 @@ impl TryFrom<ContratistaLeido> for Contratista {
 #[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
 pub struct EmpresaDatos {
     pub nombre: String,
+    /// El nombre plegado para el buscador.
+    pub nombre_busqueda: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
@@ -240,6 +246,7 @@ impl From<&Empresa> for EmpresaDatos {
     fn from(empresa: &Empresa) -> Self {
         Self {
             nombre: empresa.nombre().as_str().to_owned(),
+            nombre_busqueda: plegar(empresa.nombre().as_str()),
         }
     }
 }
@@ -410,6 +417,7 @@ impl From<&EmpresaProveedora> for EmpresaDatos {
     fn from(empresa: &EmpresaProveedora) -> Self {
         Self {
             nombre: empresa.nombre().as_str().to_owned(),
+            nombre_busqueda: plegar(empresa.nombre().as_str()),
         }
     }
 }
@@ -584,6 +592,8 @@ impl TryFrom<IngresoCorreoLeido> for IngresoCorreo {
 pub struct PersonalKofDatos {
     pub codigo_empleado: String,
     pub nombre: String,
+    /// El nombre plegado para el buscador.
+    pub nombre_busqueda: String,
     pub activo: bool,
 }
 
@@ -600,6 +610,7 @@ impl From<&PersonalKof> for PersonalKofDatos {
         Self {
             codigo_empleado: persona.codigo().as_str().to_owned(),
             nombre: persona.nombre().as_str().to_owned(),
+            nombre_busqueda: plegar(persona.nombre().as_str()),
             activo: persona.activo(),
         }
     }

@@ -12,6 +12,7 @@
 //! Ver `docs/arquitectura.md`, secciones 7 y 8.
 
 mod almacen;
+mod consultas;
 mod error;
 mod registros;
 mod repositorios;

@@ -11,6 +11,7 @@
 
 pub mod acceso;
 pub mod auditoria;
+pub mod busqueda;
 pub mod cedula;
 pub mod contratista;
 pub mod empresa;

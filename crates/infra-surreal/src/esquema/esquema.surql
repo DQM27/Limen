@@ -5,10 +5,21 @@
 -- importan: el adaptador los usa para reconocer un choque y traducirlo al
 -- error de negocio (ver `error.rs`).
 
+-- Buscador: cada palabra del nombre se indexa con todos sus comienzos
+-- ("jose" -> j, jo, jos, jose). Buscar "jos pe" exige todos esos comienzos y
+-- así encuentra "JOSE PEÑA" con un índice, sin recorrer la tabla. El texto
+-- ya está plegado por el dominio (sin tildes, Ñ como N) en `nombre_busqueda`.
+DEFINE ANALYZER OVERWRITE buscador_prefijos
+    TOKENIZERS blank, punct
+    FILTERS lowercase, edgengram(1, 20);
+
 -- Empresas (regla C1: nombre sin repetir).
 DEFINE TABLE OVERWRITE empresa SCHEMAFULL;
 DEFINE FIELD OVERWRITE nombre ON empresa TYPE string ASSERT string::len($value) > 0;
+DEFINE FIELD OVERWRITE nombre_busqueda ON empresa TYPE string;
 DEFINE INDEX OVERWRITE empresa_nombre_unico ON empresa FIELDS nombre UNIQUE;
+DEFINE INDEX OVERWRITE empresa_busqueda ON empresa FIELDS nombre_busqueda
+    FULLTEXT ANALYZER buscador_prefijos BM25;
 
 -- Contratistas (reglas B1-B5: cédula sin repetir, empresa existente).
 DEFINE TABLE OVERWRITE contratista SCHEMAFULL;
@@ -18,7 +29,10 @@ DEFINE FIELD OVERWRITE empresa ON contratista TYPE record<empresa>;
 DEFINE FIELD OVERWRITE tipo_ingreso ON contratista TYPE 'PRAIND' | 'IN_HOUSE';
 DEFINE FIELD OVERWRITE fecha_vencimiento_praind ON contratista TYPE datetime;
 DEFINE FIELD OVERWRITE tiene_acceso ON contratista TYPE bool;
+DEFINE FIELD OVERWRITE nombre_busqueda ON contratista TYPE string;
 DEFINE INDEX OVERWRITE contratista_cedula_unica ON contratista FIELDS cedula UNIQUE;
+DEFINE INDEX OVERWRITE contratista_busqueda ON contratista FIELDS nombre_busqueda
+    FULLTEXT ANALYZER buscador_prefijos BM25;
 
 -- Catálogo de gafetes (bloque F). Clave natural: gafete:⟨TIPO-NÚMERO⟩, así
 -- el mismo número no puede existir dos veces en un tipo.
@@ -55,7 +69,10 @@ DEFINE INDEX OVERWRITE ingreso_contratista_por_gafete ON ingreso_contratista FIE
 -- Empresas proveedoras (regla H1): catálogo aparte del de contratistas.
 DEFINE TABLE OVERWRITE empresa_proveedora SCHEMAFULL;
 DEFINE FIELD OVERWRITE nombre ON empresa_proveedora TYPE string ASSERT string::len($value) > 0;
+DEFINE FIELD OVERWRITE nombre_busqueda ON empresa_proveedora TYPE string;
 DEFINE INDEX OVERWRITE empresa_proveedora_nombre_unico ON empresa_proveedora FIELDS nombre UNIQUE;
+DEFINE INDEX OVERWRITE empresa_proveedora_busqueda ON empresa_proveedora FIELDS nombre_busqueda
+    FULLTEXT ANALYZER buscador_prefijos BM25;
 
 -- Ingresos de proveedores (bloque H). Cédula y nombre llegan con cada
 -- ingreso: no hay catálogo de personas.
@@ -90,7 +107,10 @@ DEFINE TABLE OVERWRITE personal_kof SCHEMAFULL;
 DEFINE FIELD OVERWRITE codigo_empleado ON personal_kof TYPE string ASSERT string::len($value) > 0;
 DEFINE FIELD OVERWRITE nombre ON personal_kof TYPE string ASSERT string::len($value) > 0;
 DEFINE FIELD OVERWRITE activo ON personal_kof TYPE bool;
+DEFINE FIELD OVERWRITE nombre_busqueda ON personal_kof TYPE string;
 DEFINE INDEX OVERWRITE personal_kof_codigo_unico ON personal_kof FIELDS codigo_empleado UNIQUE;
+DEFINE INDEX OVERWRITE personal_kof_busqueda ON personal_kof FIELDS nombre_busqueda
+    FULLTEXT ANALYZER buscador_prefijos BM25;
 
 -- Préstamos del gafete provisional KOF.
 DEFINE TABLE OVERWRITE prestamo_kof SCHEMAFULL;

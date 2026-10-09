@@ -63,6 +63,15 @@ impl ErrorDeNegocio for ErrorGafete {
     }
 }
 
+/// Las consultas no tienen error de negocio: este tipo no tiene valores, así
+/// que el código nunca llega a usarse. Existe para que `ErrorCaso` se pueda
+/// traducir a la interfaz igual que el de cualquier otro caso de uso.
+impl ErrorDeNegocio for std::convert::Infallible {
+    fn codigo(&self) -> &'static str {
+        "sin_regla"
+    }
+}
+
 impl ErrorDeNegocio for ErrorPersonalKof {
     fn codigo(&self) -> &'static str {
         Self::codigo(*self)
