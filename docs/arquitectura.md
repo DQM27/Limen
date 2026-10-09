@@ -534,6 +534,10 @@ Convenciones:
 ### Código
 
 - Nombres de dominio **en español**: `Contratista`, `registrar`, `fecha_vencimiento_praind`.
+- **Versión de Rust fija** en `rust-toolchain.toml` (hoy 1.99.0): la misma en cada
+  máquina, en la CI y en cada sesión. Sin esto, la CI usaba una versión más nueva cuyo
+  clippy rechazaba código que localmente pasaba. Subir de versión es un commit propio
+  que corrige lo que pidan los lints nuevos.
 - Rust edición 2024. Lints **más estrictos que los de Lattis**, definidos una sola vez en
   el `Cargo.toml` del workspace y heredados por cada crate con `[lints] workspace = true`:
   - los de Lattis: `pedantic` + `nursery` de clippy y su lista de `deny`;

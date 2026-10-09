@@ -31,6 +31,9 @@ empezar a trabajar. Resumen:
 
 ## Verificación antes de cada commit
 
+La versión de Rust está fija en `rust-toolchain.toml`; `cargo` la usa sola. Después de
+subir, revisar que la CI de GitHub quede en verde.
+
 ```text
 cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings

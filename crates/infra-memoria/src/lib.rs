@@ -17,6 +17,7 @@
 //! Además permite sembrar datos y simular fallas para las pruebas.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
@@ -154,29 +155,8 @@ pub struct UowMemoria {
     auditoria: AuditoriaMemoria,
 }
 
-impl UnidadDeTrabajo for UowMemoria {
-    type Contratistas = ContratistasMemoria;
-    type Empresas = EmpresasMemoria;
-    type Presencias = PresenciasMemoria;
-    type Auditoria = AuditoriaMemoria;
-
-    fn contratistas(&mut self) -> &mut ContratistasMemoria {
-        &mut self.contratistas
-    }
-
-    fn empresas(&mut self) -> &mut EmpresasMemoria {
-        &mut self.empresas
-    }
-
-    fn presencias(&self) -> &PresenciasMemoria {
-        &self.presencias
-    }
-
-    fn auditoria(&mut self) -> &mut AuditoriaMemoria {
-        &mut self.auditoria
-    }
-
-    async fn confirmar(self) -> Result<(), ErrorPersistencia> {
+impl UowMemoria {
+    fn confirmar_ahora(self) -> Result<(), ErrorPersistencia> {
         let mut datos = self.almacen.bloquear();
         if let Some(error) = datos.falla_proxima_confirmacion.take() {
             return Err(error);
@@ -207,6 +187,34 @@ impl UnidadDeTrabajo for UowMemoria {
         datos.confirmaciones += 1;
         drop(datos);
         Ok(())
+    }
+}
+
+impl UnidadDeTrabajo for UowMemoria {
+    type Contratistas = ContratistasMemoria;
+    type Empresas = EmpresasMemoria;
+    type Presencias = PresenciasMemoria;
+    type Auditoria = AuditoriaMemoria;
+
+    fn contratistas(&mut self) -> &mut ContratistasMemoria {
+        &mut self.contratistas
+    }
+
+    fn empresas(&mut self) -> &mut EmpresasMemoria {
+        &mut self.empresas
+    }
+
+    fn presencias(&self) -> &PresenciasMemoria {
+        &self.presencias
+    }
+
+    fn auditoria(&mut self) -> &mut AuditoriaMemoria {
+        &mut self.auditoria
+    }
+
+    fn confirmar(self) -> impl Future<Output = Result<(), ErrorPersistencia>> + Send {
+        // Todo ocurre en memoria: el futuro ya nace resuelto.
+        std::future::ready(self.confirmar_ahora())
     }
 }
 
@@ -245,34 +253,39 @@ pub struct ContratistasMemoria {
 }
 
 impl RepositorioContratistas for ContratistasMemoria {
-    async fn obtener(&self, id: ContratistaId) -> Result<Option<Contratista>, ErrorPersistencia> {
-        self.almacen
-            .leer(|datos| datos.contratistas.get(&id).cloned())
+    fn obtener(
+        &self,
+        id: ContratistaId,
+    ) -> impl Future<Output = Result<Option<Contratista>, ErrorPersistencia>> + Send {
+        std::future::ready(
+            self.almacen
+                .leer(|datos| datos.contratistas.get(&id).cloned()),
+        )
     }
 
-    async fn obtener_por_cedula(
+    fn obtener_por_cedula(
         &self,
         cedula: &Cedula,
-    ) -> Result<Option<Contratista>, ErrorPersistencia> {
-        self.almacen.leer(|datos| {
+    ) -> impl Future<Output = Result<Option<Contratista>, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|datos| {
             datos
                 .contratistas
                 .values()
                 .find(|contratista| contratista.cedula() == cedula)
                 .cloned()
-        })
+        }))
     }
 
-    async fn cedula_en_uso(
+    fn cedula_en_uso(
         &self,
         cedula: &Cedula,
         excepto: Option<ContratistaId>,
-    ) -> Result<bool, ErrorPersistencia> {
-        self.almacen.leer(|datos| {
+    ) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|datos| {
             datos.contratistas.values().any(|contratista| {
                 contratista.cedula() == cedula && Some(contratista.id()) != excepto
             })
-        })
+        }))
     }
 
     fn guardar(&mut self, contratista: &Contratista) {
@@ -287,25 +300,31 @@ pub struct EmpresasMemoria {
 }
 
 impl RepositorioEmpresas for EmpresasMemoria {
-    async fn obtener(&self, id: EmpresaId) -> Result<Option<Empresa>, ErrorPersistencia> {
-        self.almacen.leer(|datos| datos.empresas.get(&id).cloned())
+    fn obtener(
+        &self,
+        id: EmpresaId,
+    ) -> impl Future<Output = Result<Option<Empresa>, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|datos| datos.empresas.get(&id).cloned()))
     }
 
-    async fn existe(&self, id: EmpresaId) -> Result<bool, ErrorPersistencia> {
-        self.almacen.leer(|datos| datos.empresas.contains_key(&id))
+    fn existe(
+        &self,
+        id: EmpresaId,
+    ) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|datos| datos.empresas.contains_key(&id)))
     }
 
-    async fn nombre_en_uso(
+    fn nombre_en_uso(
         &self,
         nombre: &NombreEmpresa,
         excepto: Option<EmpresaId>,
-    ) -> Result<bool, ErrorPersistencia> {
-        self.almacen.leer(|datos| {
+    ) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|datos| {
             datos
                 .empresas
                 .values()
                 .any(|empresa| empresa.nombre() == nombre && Some(empresa.id()) != excepto)
-        })
+        }))
     }
 
     fn guardar(&mut self, empresa: &Empresa) {
@@ -319,9 +338,14 @@ pub struct PresenciasMemoria {
 }
 
 impl ConsultaPresencias for PresenciasMemoria {
-    async fn esta_adentro(&self, contratista: ContratistaId) -> Result<bool, ErrorPersistencia> {
-        self.almacen
-            .leer(|datos| datos.adentro.contains(&contratista))
+    fn esta_adentro(
+        &self,
+        contratista: ContratistaId,
+    ) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send {
+        std::future::ready(
+            self.almacen
+                .leer(|datos| datos.adentro.contains(&contratista)),
+        )
     }
 }
 

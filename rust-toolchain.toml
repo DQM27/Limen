@@ -1,0 +1,8 @@
+# Versión de Rust fija para todo el proyecto: la misma en cada máquina, en
+# la CI y en cada sesión. Sin esto, la CI usaba una versión más nueva con
+# lints de clippy que localmente no aparecían. Se sube a propósito, en un
+# commit propio, corrigiendo lo que pidan los lints nuevos.
+[toolchain]
+channel = "1.99.0"
+components = ["clippy", "rustfmt"]
+profile = "minimal"

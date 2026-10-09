@@ -10,9 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      # Instala la versión fijada en rust-toolchain.toml (la misma que en
+      # cada máquina), no "la última estable".
+      - name: Rust del proyecto
+        run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
       - name: Formato
         run: cargo fmt --all -- --check
