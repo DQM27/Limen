@@ -4,7 +4,7 @@ Decisión de diseño sobre qué pasa cuando un equipo registra un movimiento y n
 hablar con la nube ni con los demás equipos. Se anota aquí para que cualquier sesión
 futura la respete al construir la sincronización y las pantallas.
 
-**Estado:** acordada con el dueño; quedan dos puntos por confirmar (sección 7).
+**Estado:** acordada y confirmada con el dueño.
 
 ---
 
@@ -204,8 +204,8 @@ Las reglas **E7**, **E8**, **E9** y **E10** de `reglas.md` describen este compor
    salida.
 3. Si entra alguien vetado sin conexión, se alerta en el punto de acceso y en el panel.
 
-**Por confirmar:**
+**Confirmado después:**
 
-1. ¿Se acepta el umbral de 24 horas para el aviso de datos viejos (4.6)?
-2. ¿Alguna regla de Lattis que hoy bloquea sin conexión y que sí se deba mantener
-   bloqueando?
+4. El aviso de datos viejos se activa a las **24 horas** (4.6).
+5. No hay, por ahora, ninguna otra regla de Lattis que deba seguir bloqueando sin
+   conexión. Si aparece una, se anota aquí con su motivo.
