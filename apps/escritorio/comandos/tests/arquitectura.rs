@@ -5,13 +5,14 @@
 
 #[cfg(test)]
 mod tests {
-    const PERMITIDAS: [&str; 9] = [
+    const PERMITIDAS: [&str; 10] = [
         "limen-aplicacion",
         "limen-composicion",
         "limen-dominio",
         "chrono",
         "log",
         "serde",
+        "serde_json",
         "thiserror",
         "uuid",
         // Sólo en pruebas: ver [dev-dependencies].

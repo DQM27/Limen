@@ -1,0 +1,36 @@
+[package]
+name = "limen-escritorio"
+description = "Cascarón de Tauri de la app de escritorio de Limen: registra los comandos y abre la base"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+name = "limen_escritorio_lib"
+# Sin "cdylib": esa variante sólo hace falta para móvil, y en Windows con el
+# toolchain GNU desborda el límite de ordinales del enlazador (mismo motivo
+# que en Lattis). Esta app es sólo de escritorio.
+crate-type = ["staticlib", "rlib"]
+# Sin pruebas propias: el ejecutable de pruebas enlaza Tauri y en Windows no
+# arranca (STATUS_ENTRYPOINT_NOT_FOUND: falta el manifiesto de comctl32 v6).
+# La lógica vive en `limen-escritorio-comandos`, que sí se prueba.
+test = false
+doctest = false
+
+[build-dependencies]
+tauri-build.workspace = true
+
+# Adaptador de entrada: sólo conecta la interfaz con `comandos`. La lógica
+# vive en `limen-escritorio-comandos`; aquí no hay reglas ni acceso directo
+# a la base. La prueba `tests/arquitectura.rs` vigila esta lista.
+[dependencies]
+limen-composicion.workspace = true
+limen-escritorio-comandos.workspace = true
+limen-infra-plataforma.workspace = true
+limen-infra-surreal.workspace = true
+tauri.workspace = true
+tauri-plugin-log.workspace = true
+
+[lints]
+workspace = true

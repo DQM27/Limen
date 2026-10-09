@@ -32,6 +32,18 @@ pub struct ErrorJson {
     pub mensaje: String,
 }
 
+impl ErrorJson {
+    /// Ningún operador ha iniciado sesión en este equipo: nada se registra
+    /// sin saber quién lo hace (regla E6).
+    pub fn sin_operador() -> Self {
+        Self {
+            tipo: TipoErrorJson::Negocio,
+            codigo: "sin_operador",
+            mensaje: "Falta identificar al operador de este equipo".to_owned(),
+        }
+    }
+}
+
 /// Un dato que llegó de la interfaz y no se pudo leer. Son errores del
 /// operador o de la propia interfaz, no de una regla: por eso viven aquí y
 /// no en el dominio.

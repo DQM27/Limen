@@ -10,6 +10,7 @@
 
 mod dto;
 mod error;
+mod operador;
 
 use std::fmt;
 
@@ -28,6 +29,7 @@ pub use dto::{
     EntradaRegistradaDto, PersonaAdentroDto,
 };
 pub use error::{ErrorEntrada, ErrorJson, TipoErrorJson};
+pub use operador::{ErrorOperador, Operador, OperadorDelEquipo};
 
 use dto::{leer_uuid, leer_via};
 

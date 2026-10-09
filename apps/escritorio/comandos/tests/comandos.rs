@@ -495,6 +495,14 @@ mod tests {
     }
 
     #[test]
+    fn sin_operador_es_un_error_de_negocio_con_codigo_propio() {
+        let error = ErrorJson::sin_operador();
+        assert_eq!(error.tipo, TipoErrorJson::Negocio);
+        assert_eq!(error.codigo, "sin_operador");
+        assert_ne!(error.mensaje, "", "trae un mensaje para mostrar");
+    }
+
+    #[test]
     fn el_error_viaja_con_tres_campos_y_nada_mas() {
         let error: ErrorJson = ErrorCaso::<ErrorContratista>::NoEncontrado.into();
         assert_eq!(

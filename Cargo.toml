@@ -9,6 +9,7 @@ members = [
     "crates/infra-plataforma",
     "crates/composicion",
     "apps/escritorio/comandos",
+    "apps/escritorio/src-tauri",
 ]
 
 [workspace.package]
@@ -26,6 +27,9 @@ proptest = "1"
 log = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tauri = { version = "2", features = [] }
+tauri-build = { version = "2", features = [] }
+tauri-plugin-log = "2"
 tokio = { version = "1", default-features = false, features = ["macros", "rt"] }
 # Sólo motores escritos en Rust: `kv-mem` (pruebas) y `kv-surrealkv` (equipos).
 # RocksDB (`kv-rocksdb`) está prohibido: compila C++ y alarga muchísimo la
@@ -42,6 +46,7 @@ limen-pruebas-contrato = { path = "crates/pruebas-contrato" }
 limen-infra-plataforma = { path = "crates/infra-plataforma" }
 limen-composicion = { path = "crates/composicion" }
 limen-escritorio-comandos = { path = "apps/escritorio/comandos" }
+limen-escritorio = { path = "apps/escritorio/src-tauri" }
 
 # Lints: lo de Lattis (pedantic + nursery + su lista de `deny`) y más estricto
 # todavía. La CI corre clippy con `-D warnings`, así que todo `warn` también
