@@ -23,4 +23,6 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --all
 ```
 
-Las reglas de negocio acordadas están en [`docs/reglas.md`](docs/reglas.md).
+- [`docs/arquitectura.md`](docs/arquitectura.md): capas, patrones (hexagonal, Unit of Work,
+  raíz de composición), base de datos, sincronización, pruebas y recetas.
+- [`docs/reglas.md`](docs/reglas.md): catálogo de reglas de negocio acordadas.
