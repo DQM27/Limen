@@ -3,18 +3,17 @@
 //!
 //! No es un juguete: se comporta como la base real en lo que importa a los
 //! casos de uso, para que una prueba que pasa acá también pase contra
-//! `SurrealDB` (eso lo verificarán las pruebas de contrato):
+//! `SurrealDB`:
 //!
 //! - las lecturas ven sólo lo confirmado, nunca lo anotado en la misma
 //!   Unit of Work;
 //! - `confirmar()` aplica todo o nada;
-//! - al confirmar se revisan las mismas restricciones de unicidad que la
-//!   base (cédula de contratista, nombre de empresa), paso a paso como ella.
+//! - al confirmar se revisan las mismas restricciones que la base (cédula de
+//!   contratista, nombre de empresa, número de gafete, presencia única y
+//!   gafete prestado), paso a paso como ella.
 //!
 //! La batería de `limen-pruebas-contrato` corre contra este doble y contra
 //! `SurrealDB` para garantizar que se comportan igual.
-//!
-//! Además permite sembrar datos y simular fallas para las pruebas.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
@@ -23,21 +22,36 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use limen_aplicacion::puertos::{
-    ConsultaPresencias, EntradaAuditoria, ErrorPersistencia, FabricaUnidadDeTrabajo, GeneradorIds,
-    RegistroAuditoria, Reloj, RepositorioContratistas, RepositorioEmpresas, Restriccion,
-    UnidadDeTrabajo,
+    EntradaAuditoria, ErrorPersistencia, FabricaUnidadDeTrabajo, GeneradorIds, RegistroAuditoria,
+    Reloj, RepositorioContratistas, RepositorioEmpresas, RepositorioGafetes, RepositorioIngresos,
+    RepositorioPresencias, RepositorioReloj, Restriccion, UnidadDeTrabajo,
 };
 use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::{Contratista, ContratistaId};
 use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
+use limen_dominio::gafete::{Gafete, NumeroGafete, TipoGafete};
+use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoId};
+use limen_dominio::presencia::Via;
 use uuid::Uuid;
+
+type ClaveGafete = (TipoGafete, NumeroGafete);
+
+/// Lo guardado. Se clona entero al confirmar para aplicar todo o nada.
+#[derive(Debug, Default, Clone)]
+struct Contenido {
+    contratistas: BTreeMap<ContratistaId, Contratista>,
+    empresas: BTreeMap<EmpresaId, Empresa>,
+    presencias: BTreeMap<String, Via>,
+    gafetes: BTreeMap<ClaveGafete, Gafete>,
+    prestamos: BTreeSet<ClaveGafete>,
+    ingresos: BTreeMap<IngresoId, IngresoContratista>,
+    ultimo_movimiento: Option<DateTime<Utc>>,
+    auditoria: Vec<EntradaAuditoria>,
+}
 
 #[derive(Debug, Default)]
 struct Datos {
-    contratistas: BTreeMap<ContratistaId, Contratista>,
-    empresas: BTreeMap<EmpresaId, Empresa>,
-    adentro: BTreeSet<ContratistaId>,
-    auditoria: Vec<EntradaAuditoria>,
+    contenido: Contenido,
     confirmaciones: usize,
     falla_proxima_confirmacion: Option<ErrorPersistencia>,
     falla_lecturas: Option<ErrorPersistencia>,
@@ -61,15 +75,23 @@ impl AlmacenMemoria {
         self.datos.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn leer<T>(&self, lectura: impl FnOnce(&Datos) -> T) -> Result<T, ErrorPersistencia> {
+    fn leer<T>(&self, lectura: impl FnOnce(&Contenido) -> T) -> Result<T, ErrorPersistencia> {
         let datos = self.bloquear();
         datos
             .falla_lecturas
             .clone()
-            .map_or_else(|| Ok(lectura(&datos)), Err)
+            .map_or_else(|| Ok(lectura(&datos.contenido)), Err)
     }
 
-    // --- Para preparar y revisar las pruebas ---
+    fn sembrar(&self, cambio: impl FnOnce(&mut Contenido)) {
+        cambio(&mut self.bloquear().contenido);
+    }
+
+    fn mirar<T>(&self, lectura: impl FnOnce(&Contenido) -> T) -> T {
+        lectura(&self.bloquear().contenido)
+    }
+
+    // --- Para preparar las pruebas ---
 
     /// Generador de IDs compartido por todo lo que usa este almacén: dos
     /// casos de uso de la misma prueba nunca reciben el mismo ID.
@@ -77,21 +99,33 @@ impl AlmacenMemoria {
         self.ids.clone()
     }
 
-    /// Guarda una empresa directo, como si ya existiera.
     pub fn sembrar_empresa(&self, empresa: Empresa) {
-        self.bloquear().empresas.insert(empresa.id(), empresa);
+        self.sembrar(|c| {
+            c.empresas.insert(empresa.id(), empresa);
+        });
     }
 
-    /// Guarda un contratista directo, como si ya existiera.
     pub fn sembrar_contratista(&self, contratista: Contratista) {
-        self.bloquear()
-            .contratistas
-            .insert(contratista.id(), contratista);
+        self.sembrar(|c| {
+            c.contratistas.insert(contratista.id(), contratista);
+        });
     }
 
-    /// Marca a un contratista como adentro (lo hará el módulo de ingresos).
-    pub fn marcar_adentro(&self, contratista: ContratistaId) {
-        self.bloquear().adentro.insert(contratista);
+    pub fn sembrar_gafete(&self, gafete: Gafete) {
+        self.sembrar(|c| {
+            c.gafetes.insert((gafete.tipo(), gafete.numero()), gafete);
+        });
+    }
+
+    /// Marca a una persona como adentro por una vía.
+    pub fn marcar_adentro(&self, cedula: &Cedula, via: Via) {
+        self.sembrar(|c| {
+            c.presencias.insert(cedula.as_str().to_owned(), via);
+        });
+    }
+
+    pub fn fijar_ultimo_movimiento(&self, en: DateTime<Utc>) {
+        self.sembrar(|c| c.ultimo_movimiento = Some(en));
     }
 
     /// La próxima confirmación falla con `error`, sin aplicar nada.
@@ -104,16 +138,39 @@ impl AlmacenMemoria {
         self.bloquear().falla_lecturas = Some(error);
     }
 
+    // --- Para revisar las pruebas ---
+
     pub fn contratistas(&self) -> Vec<Contratista> {
-        self.bloquear().contratistas.values().cloned().collect()
+        self.mirar(|c| c.contratistas.values().cloned().collect())
     }
 
     pub fn empresas(&self) -> Vec<Empresa> {
-        self.bloquear().empresas.values().cloned().collect()
+        self.mirar(|c| c.empresas.values().cloned().collect())
+    }
+
+    pub fn gafetes(&self) -> Vec<Gafete> {
+        self.mirar(|c| c.gafetes.values().cloned().collect())
+    }
+
+    pub fn ingresos(&self) -> Vec<IngresoContratista> {
+        self.mirar(|c| c.ingresos.values().cloned().collect())
+    }
+
+    /// Por qué vía está adentro una persona, si lo está.
+    pub fn via_adentro(&self, cedula: &Cedula) -> Option<Via> {
+        self.mirar(|c| c.presencias.get(cedula.as_str()).copied())
+    }
+
+    pub fn prestado(&self, tipo: TipoGafete, numero: NumeroGafete) -> bool {
+        self.mirar(|c| c.prestamos.contains(&(tipo, numero)))
+    }
+
+    pub fn ultimo_movimiento(&self) -> Option<DateTime<Utc>> {
+        self.mirar(|c| c.ultimo_movimiento)
     }
 
     pub fn auditoria(&self) -> Vec<EntradaAuditoria> {
-        self.bloquear().auditoria.clone()
+        self.mirar(|c| c.auditoria.clone())
     }
 
     /// Cuántas veces se confirmó con éxito una Unit of Work.
@@ -138,6 +195,19 @@ impl FabricaUnidadDeTrabajo for AlmacenMemoria {
             },
             presencias: PresenciasMemoria {
                 almacen: self.clone(),
+                pendientes: Vec::new(),
+            },
+            gafetes: GafetesMemoria {
+                almacen: self.clone(),
+                pendientes: Vec::new(),
+            },
+            ingresos: IngresosMemoria {
+                almacen: self.clone(),
+                pendientes: Vec::new(),
+            },
+            reloj: RelojMemoria {
+                almacen: self.clone(),
+                pendiente: None,
             },
             auditoria: AuditoriaMemoria {
                 pendientes: Vec::new(),
@@ -152,6 +222,9 @@ pub struct UowMemoria {
     contratistas: ContratistasMemoria,
     empresas: EmpresasMemoria,
     presencias: PresenciasMemoria,
+    gafetes: GafetesMemoria,
+    ingresos: IngresosMemoria,
+    reloj: RelojMemoria,
     auditoria: AuditoriaMemoria,
 }
 
@@ -161,39 +234,117 @@ impl UowMemoria {
         if let Some(error) = datos.falla_proxima_confirmacion.take() {
             return Err(error);
         }
-        verificar_unicos(
-            &datos.contratistas,
-            &self.contratistas.pendientes,
-            Contratista::id,
-            |c| c.cedula().as_str(),
-            Restriccion::CedulaContratista,
-        )?;
-        verificar_unicos(
-            &datos.empresas,
-            &self.empresas.pendientes,
-            Empresa::id,
-            |e| e.nombre().as_str(),
-            Restriccion::NombreEmpresa,
-        )?;
-
-        // Todas las restricciones pasaron: se aplica todo junto.
-        for contratista in self.contratistas.pendientes {
-            datos.contratistas.insert(contratista.id(), contratista);
-        }
+        // Se aplica todo sobre una copia; si algo choca, la copia se descarta.
+        let mut nuevo = datos.contenido.clone();
         for empresa in self.empresas.pendientes {
-            datos.empresas.insert(empresa.id(), empresa);
+            let ocupado = nuevo
+                .empresas
+                .values()
+                .any(|otra| otra.id() != empresa.id() && otra.nombre() == empresa.nombre());
+            if ocupado {
+                return Err(ErrorPersistencia::Conflicto(Restriccion::NombreEmpresa));
+            }
+            nuevo.empresas.insert(empresa.id(), empresa);
         }
-        datos.auditoria.extend(self.auditoria.pendientes);
+        for contratista in self.contratistas.pendientes {
+            let ocupada = nuevo
+                .contratistas
+                .values()
+                .any(|otro| otro.id() != contratista.id() && otro.cedula() == contratista.cedula());
+            if ocupada {
+                return Err(ErrorPersistencia::Conflicto(Restriccion::CedulaContratista));
+            }
+            nuevo.contratistas.insert(contratista.id(), contratista);
+        }
+        for operacion in self.gafetes.pendientes {
+            aplicar_gafete(&mut nuevo, operacion)?;
+        }
+        for operacion in self.presencias.pendientes {
+            aplicar_presencia(&mut nuevo, operacion)?;
+        }
+        for ingreso in self.ingresos.pendientes {
+            nuevo.ingresos.insert(ingreso.id(), ingreso);
+        }
+        if let Some(en) = self.reloj.pendiente {
+            nuevo.ultimo_movimiento = Some(en);
+        }
+        nuevo.auditoria.extend(self.auditoria.pendientes);
+
+        datos.contenido = nuevo;
         datos.confirmaciones += 1;
         drop(datos);
         Ok(())
     }
 }
 
+#[derive(Debug, Clone)]
+enum OperacionGafete {
+    Agregar(Gafete),
+    Actualizar(Gafete),
+    Prestar(ClaveGafete),
+    Devolver(ClaveGafete),
+}
+
+fn aplicar_gafete(
+    contenido: &mut Contenido,
+    operacion: OperacionGafete,
+) -> Result<(), ErrorPersistencia> {
+    match operacion {
+        OperacionGafete::Agregar(gafete) => {
+            let clave = (gafete.tipo(), gafete.numero());
+            if contenido.gafetes.contains_key(&clave) {
+                return Err(ErrorPersistencia::Conflicto(Restriccion::NumeroGafete));
+            }
+            contenido.gafetes.insert(clave, gafete);
+        }
+        OperacionGafete::Actualizar(gafete) => {
+            contenido
+                .gafetes
+                .insert((gafete.tipo(), gafete.numero()), gafete);
+        }
+        OperacionGafete::Prestar(clave) => {
+            if !contenido.prestamos.insert(clave) {
+                return Err(ErrorPersistencia::Conflicto(Restriccion::GafetePrestado));
+            }
+        }
+        OperacionGafete::Devolver(clave) => {
+            contenido.prestamos.remove(&clave);
+        }
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+enum OperacionPresencia {
+    Entrada(String, Via),
+    Salida(String),
+}
+
+fn aplicar_presencia(
+    contenido: &mut Contenido,
+    operacion: OperacionPresencia,
+) -> Result<(), ErrorPersistencia> {
+    match operacion {
+        OperacionPresencia::Entrada(cedula, via) => {
+            if contenido.presencias.contains_key(&cedula) {
+                return Err(ErrorPersistencia::Conflicto(Restriccion::PresenciaPersona));
+            }
+            contenido.presencias.insert(cedula, via);
+        }
+        OperacionPresencia::Salida(cedula) => {
+            contenido.presencias.remove(&cedula);
+        }
+    }
+    Ok(())
+}
+
 impl UnidadDeTrabajo for UowMemoria {
     type Contratistas = ContratistasMemoria;
     type Empresas = EmpresasMemoria;
     type Presencias = PresenciasMemoria;
+    type Gafetes = GafetesMemoria;
+    type Ingresos = IngresosMemoria;
+    type Reloj = RelojMemoria;
     type Auditoria = AuditoriaMemoria;
 
     fn contratistas(&mut self) -> &mut ContratistasMemoria {
@@ -204,8 +355,20 @@ impl UnidadDeTrabajo for UowMemoria {
         &mut self.empresas
     }
 
-    fn presencias(&self) -> &PresenciasMemoria {
-        &self.presencias
+    fn presencias(&mut self) -> &mut PresenciasMemoria {
+        &mut self.presencias
+    }
+
+    fn gafetes(&mut self) -> &mut GafetesMemoria {
+        &mut self.gafetes
+    }
+
+    fn ingresos(&mut self) -> &mut IngresosMemoria {
+        &mut self.ingresos
+    }
+
+    fn reloj(&mut self) -> &mut RelojMemoria {
+        &mut self.reloj
     }
 
     fn auditoria(&mut self) -> &mut AuditoriaMemoria {
@@ -216,34 +379,6 @@ impl UnidadDeTrabajo for UowMemoria {
         // Todo ocurre en memoria: el futuro ya nace resuelto.
         std::future::ready(self.confirmar_ahora())
     }
-}
-
-/// Lo que hace el índice único de la base: la unicidad se revisa en cada
-/// escritura, en orden, contra el estado que va quedando (como `SurrealDB`,
-/// sentencia por sentencia).
-fn verificar_unicos<Id: Ord + Copy, E>(
-    guardados: &BTreeMap<Id, E>,
-    pendientes: &[E],
-    id: impl Fn(&E) -> Id,
-    clave: impl Fn(&E) -> &str,
-    restriccion: Restriccion,
-) -> Result<(), ErrorPersistencia> {
-    let mut claves: BTreeMap<Id, &str> = guardados
-        .iter()
-        .map(|(id_guardado, entidad)| (*id_guardado, clave(entidad)))
-        .collect();
-    for pendiente in pendientes {
-        let id_pendiente = id(pendiente);
-        let clave_pendiente = clave(pendiente);
-        let ocupada = claves
-            .iter()
-            .any(|(otro, valor)| *otro != id_pendiente && *valor == clave_pendiente);
-        if ocupada {
-            return Err(ErrorPersistencia::Conflicto(restriccion));
-        }
-        claves.insert(id_pendiente, clave_pendiente);
-    }
-    Ok(())
 }
 
 #[derive(Debug)]
@@ -257,19 +392,15 @@ impl RepositorioContratistas for ContratistasMemoria {
         &self,
         id: ContratistaId,
     ) -> impl Future<Output = Result<Option<Contratista>, ErrorPersistencia>> + Send {
-        std::future::ready(
-            self.almacen
-                .leer(|datos| datos.contratistas.get(&id).cloned()),
-        )
+        std::future::ready(self.almacen.leer(|c| c.contratistas.get(&id).cloned()))
     }
 
     fn obtener_por_cedula(
         &self,
         cedula: &Cedula,
     ) -> impl Future<Output = Result<Option<Contratista>, ErrorPersistencia>> + Send {
-        std::future::ready(self.almacen.leer(|datos| {
-            datos
-                .contratistas
+        std::future::ready(self.almacen.leer(|c| {
+            c.contratistas
                 .values()
                 .find(|contratista| contratista.cedula() == cedula)
                 .cloned()
@@ -281,8 +412,8 @@ impl RepositorioContratistas for ContratistasMemoria {
         cedula: &Cedula,
         excepto: Option<ContratistaId>,
     ) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send {
-        std::future::ready(self.almacen.leer(|datos| {
-            datos.contratistas.values().any(|contratista| {
+        std::future::ready(self.almacen.leer(|c| {
+            c.contratistas.values().any(|contratista| {
                 contratista.cedula() == cedula && Some(contratista.id()) != excepto
             })
         }))
@@ -304,14 +435,14 @@ impl RepositorioEmpresas for EmpresasMemoria {
         &self,
         id: EmpresaId,
     ) -> impl Future<Output = Result<Option<Empresa>, ErrorPersistencia>> + Send {
-        std::future::ready(self.almacen.leer(|datos| datos.empresas.get(&id).cloned()))
+        std::future::ready(self.almacen.leer(|c| c.empresas.get(&id).cloned()))
     }
 
     fn existe(
         &self,
         id: EmpresaId,
     ) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send {
-        std::future::ready(self.almacen.leer(|datos| datos.empresas.contains_key(&id)))
+        std::future::ready(self.almacen.leer(|c| c.empresas.contains_key(&id)))
     }
 
     fn nombre_en_uso(
@@ -319,9 +450,8 @@ impl RepositorioEmpresas for EmpresasMemoria {
         nombre: &NombreEmpresa,
         excepto: Option<EmpresaId>,
     ) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send {
-        std::future::ready(self.almacen.leer(|datos| {
-            datos
-                .empresas
+        std::future::ready(self.almacen.leer(|c| {
+            c.empresas
                 .values()
                 .any(|empresa| empresa.nombre() == nombre && Some(empresa.id()) != excepto)
         }))
@@ -335,17 +465,141 @@ impl RepositorioEmpresas for EmpresasMemoria {
 #[derive(Debug)]
 pub struct PresenciasMemoria {
     almacen: AlmacenMemoria,
+    pendientes: Vec<OperacionPresencia>,
 }
 
-impl ConsultaPresencias for PresenciasMemoria {
-    fn esta_adentro(
+impl RepositorioPresencias for PresenciasMemoria {
+    fn via_adentro(
         &self,
-        contratista: ContratistaId,
-    ) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send {
+        cedula: &Cedula,
+    ) -> impl Future<Output = Result<Option<Via>, ErrorPersistencia>> + Send {
         std::future::ready(
             self.almacen
-                .leer(|datos| datos.adentro.contains(&contratista)),
+                .leer(|c| c.presencias.get(cedula.as_str()).copied()),
         )
+    }
+
+    fn anotar_entrada(&mut self, cedula: &Cedula, via: Via, _desde: DateTime<Utc>) {
+        self.pendientes
+            .push(OperacionPresencia::Entrada(cedula.as_str().to_owned(), via));
+    }
+
+    fn anotar_salida(&mut self, cedula: &Cedula) {
+        self.pendientes
+            .push(OperacionPresencia::Salida(cedula.as_str().to_owned()));
+    }
+}
+
+#[derive(Debug)]
+pub struct GafetesMemoria {
+    almacen: AlmacenMemoria,
+    pendientes: Vec<OperacionGafete>,
+}
+
+impl RepositorioGafetes for GafetesMemoria {
+    fn obtener(
+        &self,
+        tipo: TipoGafete,
+        numero: NumeroGafete,
+    ) -> impl Future<Output = Result<Option<Gafete>, ErrorPersistencia>> + Send {
+        std::future::ready(
+            self.almacen
+                .leer(|c| c.gafetes.get(&(tipo, numero)).cloned()),
+        )
+    }
+
+    fn existentes(
+        &self,
+        tipo: TipoGafete,
+        numeros: &[NumeroGafete],
+    ) -> impl Future<Output = Result<Vec<NumeroGafete>, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|c| {
+            let mut encontrados: Vec<NumeroGafete> = numeros
+                .iter()
+                .copied()
+                .filter(|numero| c.gafetes.contains_key(&(tipo, *numero)))
+                .collect();
+            encontrados.sort_unstable();
+            encontrados.dedup();
+            encontrados
+        }))
+    }
+
+    fn prestado(
+        &self,
+        tipo: TipoGafete,
+        numero: NumeroGafete,
+    ) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|c| c.prestamos.contains(&(tipo, numero))))
+    }
+
+    fn agregar(&mut self, gafete: &Gafete) {
+        self.pendientes
+            .push(OperacionGafete::Agregar(gafete.clone()));
+    }
+
+    fn actualizar(&mut self, gafete: &Gafete) {
+        self.pendientes
+            .push(OperacionGafete::Actualizar(gafete.clone()));
+    }
+
+    fn anotar_prestamo(&mut self, tipo: TipoGafete, numero: NumeroGafete, _desde: DateTime<Utc>) {
+        self.pendientes
+            .push(OperacionGafete::Prestar((tipo, numero)));
+    }
+
+    fn anotar_devolucion(&mut self, tipo: TipoGafete, numero: NumeroGafete) {
+        self.pendientes
+            .push(OperacionGafete::Devolver((tipo, numero)));
+    }
+}
+
+#[derive(Debug)]
+pub struct IngresosMemoria {
+    almacen: AlmacenMemoria,
+    pendientes: Vec<IngresoContratista>,
+}
+
+impl RepositorioIngresos for IngresosMemoria {
+    fn obtener(
+        &self,
+        id: IngresoId,
+    ) -> impl Future<Output = Result<Option<IngresoContratista>, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|c| c.ingresos.get(&id).cloned()))
+    }
+
+    fn abierto_con_gafete(
+        &self,
+        numero: NumeroGafete,
+    ) -> impl Future<Output = Result<Option<IngresoContratista>, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|c| {
+            c.ingresos
+                .values()
+                .find(|ingreso| ingreso.esta_abierto() && ingreso.gafete() == Some(numero))
+                .cloned()
+        }))
+    }
+
+    fn guardar(&mut self, ingreso: &IngresoContratista) {
+        self.pendientes.push(ingreso.clone());
+    }
+}
+
+#[derive(Debug)]
+pub struct RelojMemoria {
+    almacen: AlmacenMemoria,
+    pendiente: Option<DateTime<Utc>>,
+}
+
+impl RepositorioReloj for RelojMemoria {
+    fn ultimo_movimiento(
+        &self,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|c| c.ultimo_movimiento))
+    }
+
+    fn anotar_movimiento(&mut self, en: DateTime<Utc>) {
+        self.pendiente = Some(en);
     }
 }
 

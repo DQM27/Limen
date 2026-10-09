@@ -24,8 +24,8 @@
 
 use chrono::NaiveDate;
 use limen_aplicacion::puertos::{
-    ConsultaPresencias, ErrorPersistencia, FabricaUnidadDeTrabajo, RepositorioContratistas,
-    RepositorioEmpresas, Restriccion, UnidadDeTrabajo,
+    ErrorPersistencia, FabricaUnidadDeTrabajo, RepositorioContratistas, RepositorioEmpresas,
+    RepositorioPresencias, Restriccion, UnidadDeTrabajo,
 };
 use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::{Contratista, ContratistaGuardado, ContratistaId};
@@ -33,6 +33,10 @@ use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
 use limen_dominio::nombre::NombrePersona;
 use limen_dominio::tipo_ingreso::TipoIngreso;
 use uuid::Uuid;
+
+mod movimientos;
+
+pub use movimientos::*;
 
 /// Genera un `#[tokio::test]` por cada prueba de la batería. `$fabrica` es
 /// una expresión (puede usar `.await`) que crea un almacén nuevo y vacío.
@@ -54,6 +58,18 @@ macro_rules! bateria_de_contrato {
             intercambiar_cedulas_en_una_misma_uow_choca,
             nombre_de_empresa_repetido_choca,
             nombre_en_uso_excluye_a_la_propia_empresa,
+            // Presencias, gafetes, ingresos y reloj (`movimientos`).
+            una_persona_entra_y_sale,
+            salir_sin_estar_adentro_no_falla,
+            dos_equipos_registran_a_la_misma_persona_y_el_segundo_choca,
+            guarda_y_lee_un_gafete_con_y_sin_deudor,
+            un_numero_de_gafete_repetido_choca_solo_en_su_tipo,
+            existentes_devuelve_los_del_tipo_de_menor_a_mayor,
+            un_gafete_no_se_presta_dos_veces_hasta_que_se_devuelve,
+            guarda_y_lee_un_ingreso_abierto_y_cerrado,
+            abierto_con_gafete_ignora_los_ingresos_cerrados,
+            el_reloj_guarda_el_ultimo_movimiento,
+            un_choque_no_aplica_nada_de_ningun_repositorio,
         );
     };
     (@pruebas $fabrica:expr; $($prueba:ident),+ $(,)?) => {
@@ -208,11 +224,9 @@ pub async fn lo_inexistente_no_se_encuentra<F: FabricaUnidadDeTrabajo>(fabrica: 
         !uow.empresas().existe(id_empresa(9)).await.unwrap(),
         "no existe"
     );
-    assert!(
-        !uow.presencias()
-            .esta_adentro(id_contratista(9))
-            .await
-            .unwrap(),
+    assert_eq!(
+        uow.presencias().via_adentro(&cedula).await.unwrap(),
+        None,
         "nadie está adentro"
     );
 }

@@ -5,7 +5,7 @@ use limen_dominio::empresa::{Empresa, EmpresaId, ErrorEmpresa, HechosEmpresa, No
 
 use crate::errores::ErrorCaso;
 use crate::puertos::{
-    AccionAuditada, EntidadAuditada, EntradaAuditoria, FabricaUnidadDeTrabajo, GeneradorIds,
+    AccionAuditada, EntradaAuditoria, FabricaUnidadDeTrabajo, GeneradorIds, RegistroAuditado,
     RegistroAuditoria, Reloj, RepositorioEmpresas, Restriccion, UnidadDeTrabajo,
 };
 use crate::sesion::Sesion;
@@ -52,8 +52,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarEmpresa<F, R
         uow.empresas().guardar(&empresa);
         uow.auditoria().anotar(EntradaAuditoria::nueva(
             self.ids.nuevo(),
-            EntidadAuditada::Empresa,
-            id.uuid(),
+            RegistroAuditado::Empresa(id),
             AccionAuditada::Alta,
             empresa.cambios_de_alta(),
             sesion,
@@ -113,8 +112,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RenombrarEmpresa<F, R
         uow.empresas().guardar(&empresa);
         uow.auditoria().anotar(EntradaAuditoria::nueva(
             self.ids.nuevo(),
-            EntidadAuditada::Empresa,
-            id.uuid(),
+            RegistroAuditado::Empresa(id),
             AccionAuditada::Edicion,
             cambios.clone(),
             sesion,

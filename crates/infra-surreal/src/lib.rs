@@ -19,5 +19,8 @@ mod unidad_de_trabajo;
 
 pub use almacen::AlmacenSurreal;
 pub use registros::{AuditoriaRegistro, CambioRegistro};
-pub use repositorios::{AuditoriaSurreal, ContratistasSurreal, EmpresasSurreal, PresenciasSurreal};
+pub use repositorios::{
+    AuditoriaSurreal, ContratistasSurreal, EmpresasSurreal, GafetesSurreal, IngresosSurreal,
+    PresenciasSurreal, RelojSurreal,
+};
 pub use unidad_de_trabajo::UowSurreal;

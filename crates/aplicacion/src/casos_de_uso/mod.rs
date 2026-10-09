@@ -11,3 +11,5 @@
 
 pub mod contratistas;
 pub mod empresas;
+pub mod gafetes;
+pub mod ingresos;

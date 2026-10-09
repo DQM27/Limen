@@ -11,11 +11,19 @@ mod tests {
         ComandoContratista, ConsultarContratista, EditarContratista, RegistrarContratista,
     };
     use limen_aplicacion::casos_de_uso::empresas::RegistrarEmpresa;
+    use limen_aplicacion::casos_de_uso::gafetes::{CambiarGafete, CambioGafete, RegistrarGafetes};
+    use limen_aplicacion::casos_de_uso::ingresos::{
+        ComandoEntrada, RegistrarEntrada, RegistrarSalida,
+    };
     use limen_aplicacion::errores::ErrorCaso;
+    use limen_aplicacion::puertos::RegistroAuditado;
     use limen_aplicacion::sesion::{OperadorId, Sesion};
     use limen_dominio::acceso::ResultadoAcceso;
     use limen_dominio::contratista::ErrorContratista;
     use limen_dominio::empresa::EmpresaId;
+    use limen_dominio::gafete::{Deudor, ErrorPrestamoGafete, NumeroGafete, TipoGafete};
+    use limen_dominio::ingreso_contratista::ErrorIngreso;
+    use limen_dominio::medio::TipoMedio;
     use limen_dominio::tipo_ingreso::TipoIngreso;
     use limen_infra_memoria::{IdsSecuenciales, RelojFijo};
     use limen_infra_surreal::AlmacenSurreal;
@@ -101,7 +109,10 @@ mod tests {
             .unwrap();
         assert_eq!(cambios.len(), 1, "sólo cambió el acceso");
 
-        let historial = almacen.auditoria_de(id.uuid()).await.unwrap();
+        let historial = almacen
+            .auditoria_de(RegistroAuditado::Contratista(id))
+            .await
+            .unwrap();
         let acciones: Vec<_> = historial.iter().map(|e| e.accion.as_str()).collect();
         assert_eq!(
             acciones,
@@ -148,5 +159,101 @@ mod tests {
             .unwrap();
         assert_eq!(ficha.contratista.nombre().as_str(), "JOSE PEÑA");
         assert_eq!(ficha.acceso, ResultadoAcceso::Permitido, "PRAIND vigente");
+    }
+
+    fn entrada_con_gafete(
+        contratista: limen_dominio::contratista::ContratistaId,
+    ) -> ComandoEntrada {
+        ComandoEntrada {
+            contratista,
+            medio: TipoMedio::Vehiculo,
+            placa: Some("abc-123".into()),
+            gafete: Some(7),
+        }
+    }
+
+    #[tokio::test]
+    async fn entrada_y_salida_por_gafete_contra_surrealdb() {
+        let almacen = AlmacenSurreal::en_memoria().await.unwrap();
+        let ids = IdsSecuenciales::new();
+        let (_, contratista) = registrar_todo(&almacen, &ids).await;
+        RegistrarGafetes::new(almacen.clone(), reloj(), ids.clone())
+            .ejecutar(&sesion(), TipoGafete::Contratista, 1, 10)
+            .await
+            .unwrap();
+        let entrar = RegistrarEntrada::new(almacen.clone(), reloj(), ids.clone());
+
+        let entrada = entrar
+            .ejecutar(&sesion(), &entrada_con_gafete(contratista))
+            .await
+            .unwrap();
+        assert_eq!(entrada.acceso, ResultadoAcceso::Permitido);
+
+        // Adentro y con el gafete prestado: no puede entrar otra vez.
+        assert_eq!(
+            entrar
+                .ejecutar(&sesion(), &entrada_con_gafete(contratista))
+                .await,
+            Err(ErrorCaso::Negocio(ErrorIngreso::YaEstaAdentro(
+                limen_dominio::presencia::YaEstaAdentro(limen_dominio::presencia::Via::Contratista)
+            )))
+        );
+
+        RegistrarSalida::new(almacen.clone(), reloj())
+            .por_gafete(&sesion(), 7)
+            .await
+            .unwrap();
+        // Ya salió: el gafete quedó libre y la persona puede volver a entrar.
+        assert_eq!(
+            RegistrarSalida::new(almacen.clone(), reloj())
+                .por_gafete(&sesion(), 7)
+                .await,
+            Err(ErrorCaso::NoEncontrado),
+            "no queda ningún ingreso abierto con ese gafete"
+        );
+        entrar
+            .ejecutar(&sesion(), &entrada_con_gafete(contratista))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn un_gafete_perdido_no_se_presta_y_el_cambio_queda_auditado() {
+        let almacen = AlmacenSurreal::en_memoria().await.unwrap();
+        let ids = IdsSecuenciales::new();
+        let (_, contratista) = registrar_todo(&almacen, &ids).await;
+        RegistrarGafetes::new(almacen.clone(), reloj(), ids.clone())
+            .ejecutar(&sesion(), TipoGafete::Contratista, 7, 7)
+            .await
+            .unwrap();
+        CambiarGafete::new(almacen.clone(), reloj(), ids.clone())
+            .ejecutar(
+                &sesion(),
+                TipoGafete::Contratista,
+                7,
+                CambioGafete::MarcarPerdido(Deudor::Contratista(contratista)),
+            )
+            .await
+            .unwrap();
+
+        let resultado = RegistrarEntrada::new(almacen.clone(), reloj(), ids.clone())
+            .ejecutar(&sesion(), &entrada_con_gafete(contratista))
+            .await;
+        assert!(
+            matches!(
+                resultado,
+                Err(ErrorCaso::Negocio(ErrorIngreso::Gafete(
+                    ErrorPrestamoGafete::NoDisponible(_)
+                )))
+            ),
+            "{resultado:?}"
+        );
+
+        let gafete =
+            RegistroAuditado::Gafete(TipoGafete::Contratista, NumeroGafete::nuevo(7).unwrap());
+        let historial = almacen.auditoria_de(gafete).await.unwrap();
+        let acciones: Vec<_> = historial.iter().map(|e| e.accion.as_str()).collect();
+        assert_eq!(acciones, ["alta", "edicion"]);
+        assert_eq!(historial[0].registro, "CONTRATISTA-7");
     }
 }

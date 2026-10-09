@@ -2,11 +2,9 @@
 
 use std::path::Path;
 
-use limen_aplicacion::puertos::ErrorPersistencia;
+use limen_aplicacion::puertos::{ErrorPersistencia, RegistroAuditado};
 use surrealdb::Surreal;
 use surrealdb::engine::local::{Db, Mem, SurrealKv};
-
-use uuid::Uuid;
 
 use crate::error::tecnica;
 use crate::registros::AuditoriaRegistro;
@@ -53,18 +51,22 @@ impl AlmacenSurreal {
         Ok(Self { db })
     }
 
-    /// Historial de auditoría de un registro (contratista o empresa), del
+    /// Historial de auditoría de un registro, del
     /// más antiguo al más reciente. Se ordena por el ID de cada entrada
     /// (UUID v7), no por la hora: dos cambios en el mismo instante empatan
     /// en la hora pero no en el ID.
     pub async fn auditoria_de(
         &self,
-        registro: Uuid,
+        registro: RegistroAuditado,
     ) -> Result<Vec<AuditoriaRegistro>, ErrorPersistencia> {
         let mut respuesta = self
             .db
-            .query("SELECT * OMIT id FROM auditoria WHERE registro = $registro ORDER BY id")
-            .bind(("registro", registro))
+            .query(
+                "SELECT * OMIT id FROM auditoria \
+                 WHERE entidad = $entidad AND registro = $registro ORDER BY id",
+            )
+            .bind(("entidad", registro.entidad().to_owned()))
+            .bind(("registro", registro.clave()))
             .await
             .map_err(tecnica)?;
         respuesta.take(0).map_err(tecnica)

@@ -9,9 +9,10 @@ mod auditoria;
 mod persistencia;
 mod reloj;
 
-pub use auditoria::{AccionAuditada, EntidadAuditada, EntradaAuditoria, RegistroAuditoria};
+pub use auditoria::{AccionAuditada, EntradaAuditoria, RegistroAuditado, RegistroAuditoria};
 pub use persistencia::{
-    ConsultaPresencias, ErrorPersistencia, FabricaUnidadDeTrabajo, RepositorioContratistas,
-    RepositorioEmpresas, Restriccion, UnidadDeTrabajo,
+    ErrorPersistencia, FabricaUnidadDeTrabajo, RepositorioContratistas, RepositorioEmpresas,
+    RepositorioGafetes, RepositorioIngresos, RepositorioPresencias, RepositorioReloj, Restriccion,
+    UnidadDeTrabajo,
 };
 pub use reloj::{GeneradorIds, Reloj};

@@ -11,9 +11,13 @@
 
 use std::future::Future;
 
+use chrono::{DateTime, Utc};
 use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::{Contratista, ContratistaId};
 use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
+use limen_dominio::gafete::{Gafete, NumeroGafete, TipoGafete};
+use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoId};
+use limen_dominio::presencia::Via;
 
 use super::auditoria::RegistroAuditoria;
 
@@ -25,6 +29,12 @@ use super::auditoria::RegistroAuditoria;
 pub enum Restriccion {
     CedulaContratista,
     NombreEmpresa,
+    /// Ya hay un gafete con ese tipo y número en el catálogo.
+    NumeroGafete,
+    /// La persona ya está adentro (por cualquier vía).
+    PresenciaPersona,
+    /// El gafete ya está prestado.
+    GafetePrestado,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -47,12 +57,18 @@ pub trait FabricaUnidadDeTrabajo: Send + Sync {
 pub trait UnidadDeTrabajo: Send {
     type Contratistas: RepositorioContratistas;
     type Empresas: RepositorioEmpresas;
-    type Presencias: ConsultaPresencias;
+    type Presencias: RepositorioPresencias;
+    type Gafetes: RepositorioGafetes;
+    type Ingresos: RepositorioIngresos;
+    type Reloj: RepositorioReloj;
     type Auditoria: RegistroAuditoria;
 
     fn contratistas(&mut self) -> &mut Self::Contratistas;
     fn empresas(&mut self) -> &mut Self::Empresas;
-    fn presencias(&self) -> &Self::Presencias;
+    fn presencias(&mut self) -> &mut Self::Presencias;
+    fn gafetes(&mut self) -> &mut Self::Gafetes;
+    fn ingresos(&mut self) -> &mut Self::Ingresos;
+    fn reloj(&mut self) -> &mut Self::Reloj;
     fn auditoria(&mut self) -> &mut Self::Auditoria;
 
     /// Aplica todas las escrituras anotadas en una sola transacción: todas o
@@ -102,11 +118,82 @@ pub trait RepositorioEmpresas: Send + Sync {
     fn guardar(&mut self, empresa: &Empresa);
 }
 
-/// Quién está adentro ahora mismo. La llena el módulo de ingresos (todavía
-/// no existe); los contratistas sólo la consultan.
-pub trait ConsultaPresencias: Send + Sync {
-    fn esta_adentro(
+/// Quién está adentro ahora y por qué vía, por cédula (reglas E1 y A7).
+pub trait RepositorioPresencias: Send + Sync {
+    fn via_adentro(
         &self,
-        contratista: ContratistaId,
+        cedula: &Cedula,
+    ) -> impl Future<Output = Result<Option<Via>, ErrorPersistencia>> + Send;
+
+    /// Anota que la persona entró. Al confirmar choca
+    /// ([`Restriccion::PresenciaPersona`]) si ya estaba adentro.
+    fn anotar_entrada(&mut self, cedula: &Cedula, via: Via, desde: DateTime<Utc>);
+
+    /// Anota que la persona salió.
+    fn anotar_salida(&mut self, cedula: &Cedula);
+}
+
+/// Catálogo de gafetes y cuáles están prestados ahora.
+pub trait RepositorioGafetes: Send + Sync {
+    fn obtener(
+        &self,
+        tipo: TipoGafete,
+        numero: NumeroGafete,
+    ) -> impl Future<Output = Result<Option<Gafete>, ErrorPersistencia>> + Send;
+
+    /// Cuáles de `numeros` ya existen en el catálogo de `tipo`, de menor a
+    /// mayor.
+    fn existentes(
+        &self,
+        tipo: TipoGafete,
+        numeros: &[NumeroGafete],
+    ) -> impl Future<Output = Result<Vec<NumeroGafete>, ErrorPersistencia>> + Send;
+
+    fn prestado(
+        &self,
+        tipo: TipoGafete,
+        numero: NumeroGafete,
     ) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send;
+
+    /// Anota un gafete nuevo. Al confirmar choca
+    /// ([`Restriccion::NumeroGafete`]) si el número ya existe en su tipo.
+    fn agregar(&mut self, gafete: &Gafete);
+
+    /// Anota el cambio de estado de un gafete existente.
+    fn actualizar(&mut self, gafete: &Gafete);
+
+    /// Anota que el gafete se prestó. Al confirmar choca
+    /// ([`Restriccion::GafetePrestado`]) si ya estaba prestado.
+    fn anotar_prestamo(&mut self, tipo: TipoGafete, numero: NumeroGafete, desde: DateTime<Utc>);
+
+    /// Anota que el gafete se devolvió.
+    fn anotar_devolucion(&mut self, tipo: TipoGafete, numero: NumeroGafete);
+}
+
+/// Ingresos de contratistas.
+pub trait RepositorioIngresos: Send + Sync {
+    fn obtener(
+        &self,
+        id: IngresoId,
+    ) -> impl Future<Output = Result<Option<IngresoContratista>, ErrorPersistencia>> + Send;
+
+    /// El ingreso abierto que tiene prestado el gafete de contratista
+    /// `numero`, si hay alguno.
+    fn abierto_con_gafete(
+        &self,
+        numero: NumeroGafete,
+    ) -> impl Future<Output = Result<Option<IngresoContratista>, ErrorPersistencia>> + Send;
+
+    /// Anota la entrada o la salida; se aplica al confirmar.
+    fn guardar(&mut self, ingreso: &IngresoContratista);
+}
+
+/// La hora del último movimiento registrado en el equipo (regla E5).
+pub trait RepositorioReloj: Send + Sync {
+    fn ultimo_movimiento(
+        &self,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, ErrorPersistencia>> + Send;
+
+    /// Anota la hora de un movimiento nuevo.
+    fn anotar_movimiento(&mut self, en: DateTime<Utc>);
 }

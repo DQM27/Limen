@@ -1,25 +1,31 @@
 //! Unit of Work sobre `SurrealDB`: las escrituras anotadas se confirman en
 //! una sola consulta `BEGIN TRANSACTION; … COMMIT TRANSACTION;`, con todos
-//! los valores como parámetros enlazados. Si una sentencia falla (por
-//! ejemplo, un índice único), la base descarta la transacción entera.
+//! los valores como parámetros enlazados. Si una sentencia falla (un índice
+//! único, una clave natural repetida), la base descarta la transacción
+//! entera.
 
 use limen_aplicacion::puertos::{ErrorPersistencia, FabricaUnidadDeTrabajo, UnidadDeTrabajo};
 
 use crate::almacen::AlmacenSurreal;
 use crate::error::{al_confirmar, tecnica};
 use crate::repositorios::{
-    AuditoriaSurreal, ContratistasSurreal, EmpresasSurreal, PresenciasSurreal,
+    AuditoriaSurreal, ContratistasSurreal, EmpresasSurreal, Escritura, GafetesSurreal,
+    IngresosSurreal, PresenciasSurreal, RelojSurreal,
 };
 
 impl FabricaUnidadDeTrabajo for AlmacenSurreal {
     type Uow = UowSurreal;
 
     fn nueva(&self) -> UowSurreal {
+        let db = self.db();
         UowSurreal {
             almacen: self.clone(),
-            contratistas: ContratistasSurreal::new(self.db().clone()),
-            empresas: EmpresasSurreal::new(self.db().clone()),
-            presencias: PresenciasSurreal::new(self.db().clone()),
+            contratistas: ContratistasSurreal::new(db.clone()),
+            empresas: EmpresasSurreal::new(db.clone()),
+            presencias: PresenciasSurreal::new(db.clone()),
+            gafetes: GafetesSurreal::new(db.clone()),
+            ingresos: IngresosSurreal::new(db.clone()),
+            reloj: RelojSurreal::new(db.clone()),
             auditoria: AuditoriaSurreal::default(),
         }
     }
@@ -31,6 +37,9 @@ pub struct UowSurreal {
     contratistas: ContratistasSurreal,
     empresas: EmpresasSurreal,
     presencias: PresenciasSurreal,
+    gafetes: GafetesSurreal,
+    ingresos: IngresosSurreal,
+    reloj: RelojSurreal,
     auditoria: AuditoriaSurreal,
 }
 
@@ -38,6 +47,9 @@ impl UnidadDeTrabajo for UowSurreal {
     type Contratistas = ContratistasSurreal;
     type Empresas = EmpresasSurreal;
     type Presencias = PresenciasSurreal;
+    type Gafetes = GafetesSurreal;
+    type Ingresos = IngresosSurreal;
+    type Reloj = RelojSurreal;
     type Auditoria = AuditoriaSurreal;
 
     fn contratistas(&mut self) -> &mut ContratistasSurreal {
@@ -48,8 +60,20 @@ impl UnidadDeTrabajo for UowSurreal {
         &mut self.empresas
     }
 
-    fn presencias(&self) -> &PresenciasSurreal {
-        &self.presencias
+    fn presencias(&mut self) -> &mut PresenciasSurreal {
+        &mut self.presencias
+    }
+
+    fn gafetes(&mut self) -> &mut GafetesSurreal {
+        &mut self.gafetes
+    }
+
+    fn ingresos(&mut self) -> &mut IngresosSurreal {
+        &mut self.ingresos
+    }
+
+    fn reloj(&mut self) -> &mut RelojSurreal {
+        &mut self.reloj
     }
 
     fn auditoria(&mut self) -> &mut AuditoriaSurreal {
@@ -57,44 +81,46 @@ impl UnidadDeTrabajo for UowSurreal {
     }
 
     async fn confirmar(self) -> Result<(), ErrorPersistencia> {
-        let empresas = self.empresas.pendientes;
-        let contratistas = self.contratistas.pendientes;
-        let auditoria = self.auditoria.pendientes;
-        if empresas.is_empty() && contratistas.is_empty() && auditoria.is_empty() {
+        // El orden importa: las empresas antes que los contratistas (uno
+        // nuevo puede apuntar a una empresa creada en la misma transacción),
+        // y dentro de cada repositorio, en el orden en que se anotaron.
+        let escrituras: Vec<Escritura> = [
+            self.empresas.pendientes,
+            self.contratistas.pendientes,
+            self.gafetes.pendientes,
+            self.presencias.pendientes,
+            self.ingresos.pendientes,
+            self.reloj.pendientes,
+            self.auditoria.pendientes,
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        if escrituras.is_empty() {
             return Ok(());
         }
 
-        // Las empresas van primero: un contratista nuevo puede apuntar a una
-        // empresa creada en la misma transacción.
         let mut sentencias = vec!["BEGIN TRANSACTION;".to_owned()];
         sentencias.extend(
-            (0..empresas.len()).map(|i| format!("UPSERT $empresa_id_{i} CONTENT $empresa_{i};")),
-        );
-        sentencias.extend(
-            (0..contratistas.len())
-                .map(|i| format!("UPSERT $contratista_id_{i} CONTENT $contratista_{i};")),
-        );
-        sentencias.extend(
-            (0..auditoria.len())
-                .map(|i| format!("CREATE $auditoria_id_{i} CONTENT $auditoria_{i};")),
+            escrituras
+                .iter()
+                .enumerate()
+                .map(|(i, escritura)| match escritura {
+                    Escritura::Crear(..) => format!("CREATE $id_{i} CONTENT $datos_{i};"),
+                    Escritura::Guardar(..) => format!("UPSERT $id_{i} CONTENT $datos_{i};"),
+                    Escritura::Borrar(_) => format!("DELETE $id_{i};"),
+                }),
         );
         sentencias.push("COMMIT TRANSACTION;".to_owned());
 
         let mut consulta = self.almacen.db().query(sentencias.join("\n"));
-        for (i, (id, datos)) in empresas.into_iter().enumerate() {
-            consulta = consulta
-                .bind((format!("empresa_id_{i}"), id))
-                .bind((format!("empresa_{i}"), datos));
-        }
-        for (i, (id, datos)) in contratistas.into_iter().enumerate() {
-            consulta = consulta
-                .bind((format!("contratista_id_{i}"), id))
-                .bind((format!("contratista_{i}"), datos));
-        }
-        for (i, (id, entrada)) in auditoria.into_iter().enumerate() {
-            consulta = consulta
-                .bind((format!("auditoria_id_{i}"), id))
-                .bind((format!("auditoria_{i}"), entrada));
+        for (i, escritura) in escrituras.into_iter().enumerate() {
+            consulta = match escritura {
+                Escritura::Crear(id, datos) | Escritura::Guardar(id, datos) => consulta
+                    .bind((format!("id_{i}"), id))
+                    .bind((format!("datos_{i}"), datos)),
+                Escritura::Borrar(id) => consulta.bind((format!("id_{i}"), id)),
+            };
         }
 
         let mut respuesta = consulta.await.map_err(tecnica)?;

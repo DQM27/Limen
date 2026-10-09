@@ -1,29 +1,58 @@
 //! Repositorios: lecturas inmediatas contra la base y escrituras anotadas
 //! para la Unit of Work.
 
+use chrono::{DateTime, Utc};
 use limen_aplicacion::puertos::{
-    ConsultaPresencias, EntradaAuditoria, ErrorPersistencia, RegistroAuditoria,
-    RepositorioContratistas, RepositorioEmpresas,
+    EntradaAuditoria, ErrorPersistencia, RegistroAuditoria, RepositorioContratistas,
+    RepositorioEmpresas, RepositorioGafetes, RepositorioIngresos, RepositorioPresencias,
+    RepositorioReloj,
 };
 use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::{Contratista, ContratistaId};
 use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
+use limen_dominio::gafete::{Gafete, NumeroGafete, TipoGafete};
+use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoId};
+use limen_dominio::presencia::Via;
 use surrealdb::Surreal;
 use surrealdb::engine::local::Db;
-use surrealdb::types::RecordId;
+use surrealdb::types::{RecordId, SurrealValue, Value};
 
-use crate::error::tecnica;
+use crate::error::{dato_corrupto, tecnica};
 use crate::registros::{
-    AuditoriaRegistro, ContratistaDatos, ContratistaLeido, EmpresaDatos, EmpresaLeida,
-    TABLA_AUDITORIA, TABLA_PRESENCIA, id_contratista, id_empresa, id_registro,
+    AuditoriaRegistro, ContratistaDatos, ContratistaLeido, EmpresaDatos, EmpresaLeida, GafeteDatos,
+    IngresoDatos, IngresoLeido, PresenciaDatos, PrestamoDatos, RelojDatos, TABLA_AUDITORIA,
+    TABLA_GAFETE, TABLA_PRESENCIA, id_contratista, id_empresa, id_gafete, id_ingreso, id_presencia,
+    id_prestamo, id_registro, id_reloj,
 };
+
+/// Una escritura anotada, pendiente de confirmar.
+#[derive(Debug, Clone)]
+pub enum Escritura {
+    /// Crea el registro; falla si ya existe. Es lo que hace cumplir las
+    /// claves naturales (un gafete, un préstamo, una presencia).
+    Crear(RecordId, Value),
+    /// Crea o reemplaza el registro.
+    Guardar(RecordId, Value),
+    /// Borra el registro si existe.
+    Borrar(RecordId),
+}
+
+impl Escritura {
+    fn crear(id: RecordId, datos: impl SurrealValue) -> Self {
+        Self::Crear(id, datos.into_value())
+    }
+
+    fn guardar(id: RecordId, datos: impl SurrealValue) -> Self {
+        Self::Guardar(id, datos.into_value())
+    }
+}
 
 // --- Contratistas ---
 
 #[derive(Debug)]
 pub struct ContratistasSurreal {
     db: Surreal<Db>,
-    pub(crate) pendientes: Vec<(RecordId, ContratistaDatos)>,
+    pub(crate) pendientes: Vec<Escritura>,
 }
 
 impl ContratistasSurreal {
@@ -84,7 +113,7 @@ impl RepositorioContratistas for ContratistasSurreal {
     }
 
     fn guardar(&mut self, contratista: &Contratista) {
-        self.pendientes.push((
+        self.pendientes.push(Escritura::guardar(
             id_contratista(contratista.id()),
             ContratistaDatos::from(contratista),
         ));
@@ -96,7 +125,7 @@ impl RepositorioContratistas for ContratistasSurreal {
 #[derive(Debug)]
 pub struct EmpresasSurreal {
     db: Surreal<Db>,
-    pub(crate) pendientes: Vec<(RecordId, EmpresaDatos)>,
+    pub(crate) pendientes: Vec<Escritura>,
 }
 
 impl EmpresasSurreal {
@@ -141,8 +170,10 @@ impl RepositorioEmpresas for EmpresasSurreal {
     }
 
     fn guardar(&mut self, empresa: &Empresa) {
-        self.pendientes
-            .push((id_empresa(empresa.id()), EmpresaDatos::from(empresa)));
+        self.pendientes.push(Escritura::guardar(
+            id_empresa(empresa.id()),
+            EmpresaDatos::from(empresa),
+        ));
     }
 }
 
@@ -151,17 +182,247 @@ impl RepositorioEmpresas for EmpresasSurreal {
 #[derive(Debug)]
 pub struct PresenciasSurreal {
     db: Surreal<Db>,
+    pub(crate) pendientes: Vec<Escritura>,
 }
 
 impl PresenciasSurreal {
     pub(crate) const fn new(db: Surreal<Db>) -> Self {
-        Self { db }
+        Self {
+            db,
+            pendientes: Vec::new(),
+        }
     }
 }
 
-impl ConsultaPresencias for PresenciasSurreal {
-    async fn esta_adentro(&self, contratista: ContratistaId) -> Result<bool, ErrorPersistencia> {
-        existe_registro(&self.db, id_registro(TABLA_PRESENCIA, contratista.uuid())).await
+impl RepositorioPresencias for PresenciasSurreal {
+    async fn via_adentro(&self, cedula: &Cedula) -> Result<Option<Via>, ErrorPersistencia> {
+        let mut respuesta = self
+            .db
+            .query("SELECT VALUE via FROM ONLY $id")
+            .bind(("id", id_presencia(cedula)))
+            .await
+            .map_err(tecnica)?;
+        let via: Option<String> = respuesta.take(0).map_err(tecnica)?;
+        via.map(|codigo| {
+            Via::desde_codigo(&codigo)
+                .ok_or_else(|| dato_corrupto(TABLA_PRESENCIA, format!("vía desconocida: {codigo}")))
+        })
+        .transpose()
+    }
+
+    /// Crea `presencia:⟨cédula⟩`: si la persona ya está adentro, la base
+    /// rechaza la transacción.
+    fn anotar_entrada(&mut self, cedula: &Cedula, via: Via, desde: DateTime<Utc>) {
+        self.pendientes.push(Escritura::crear(
+            id_presencia(cedula),
+            PresenciaDatos {
+                via: via.codigo().to_owned(),
+                desde,
+            },
+        ));
+    }
+
+    fn anotar_salida(&mut self, cedula: &Cedula) {
+        self.pendientes
+            .push(Escritura::Borrar(id_presencia(cedula)));
+    }
+}
+
+// --- Gafetes ---
+
+#[derive(Debug)]
+pub struct GafetesSurreal {
+    db: Surreal<Db>,
+    pub(crate) pendientes: Vec<Escritura>,
+}
+
+impl GafetesSurreal {
+    pub(crate) const fn new(db: Surreal<Db>) -> Self {
+        Self {
+            db,
+            pendientes: Vec::new(),
+        }
+    }
+}
+
+impl RepositorioGafetes for GafetesSurreal {
+    async fn obtener(
+        &self,
+        tipo: TipoGafete,
+        numero: NumeroGafete,
+    ) -> Result<Option<Gafete>, ErrorPersistencia> {
+        let mut respuesta = self
+            .db
+            .query("SELECT * OMIT id FROM ONLY $id")
+            .bind(("id", id_gafete(tipo, numero)))
+            .await
+            .map_err(tecnica)?;
+        let datos: Option<GafeteDatos> = respuesta.take(0).map_err(tecnica)?;
+        datos.map(Gafete::try_from).transpose()
+    }
+
+    async fn existentes(
+        &self,
+        tipo: TipoGafete,
+        numeros: &[NumeroGafete],
+    ) -> Result<Vec<NumeroGafete>, ErrorPersistencia> {
+        if numeros.is_empty() {
+            return Ok(Vec::new());
+        }
+        let buscados: Vec<i64> = numeros.iter().map(|n| i64::from(n.valor())).collect();
+        let mut respuesta = self
+            .db
+            .query(
+                "SELECT VALUE numero FROM gafete WHERE tipo = $tipo AND numero IN $numeros \
+                 ORDER BY numero",
+            )
+            .bind(("tipo", tipo.codigo().to_owned()))
+            .bind(("numeros", buscados))
+            .await
+            .map_err(tecnica)?;
+        let encontrados: Vec<i64> = respuesta.take(0).map_err(tecnica)?;
+        encontrados
+            .into_iter()
+            .map(|valor| {
+                u32::try_from(valor)
+                    .ok()
+                    .and_then(|n| NumeroGafete::nuevo(n).ok())
+                    .ok_or_else(|| dato_corrupto(TABLA_GAFETE, format!("número inválido: {valor}")))
+            })
+            .collect()
+    }
+
+    async fn prestado(
+        &self,
+        tipo: TipoGafete,
+        numero: NumeroGafete,
+    ) -> Result<bool, ErrorPersistencia> {
+        existe_registro(&self.db, id_prestamo(tipo, numero)).await
+    }
+
+    /// Crea `gafete:⟨TIPO-NÚMERO⟩`: un número repetido hace fallar la
+    /// transacción.
+    fn agregar(&mut self, gafete: &Gafete) {
+        self.pendientes.push(Escritura::crear(
+            id_gafete(gafete.tipo(), gafete.numero()),
+            GafeteDatos::from(gafete),
+        ));
+    }
+
+    fn actualizar(&mut self, gafete: &Gafete) {
+        self.pendientes.push(Escritura::guardar(
+            id_gafete(gafete.tipo(), gafete.numero()),
+            GafeteDatos::from(gafete),
+        ));
+    }
+
+    /// Crea `prestamo_gafete:⟨TIPO-NÚMERO⟩`: si otro equipo ya lo prestó,
+    /// la transacción falla.
+    fn anotar_prestamo(&mut self, tipo: TipoGafete, numero: NumeroGafete, desde: DateTime<Utc>) {
+        self.pendientes.push(Escritura::crear(
+            id_prestamo(tipo, numero),
+            PrestamoDatos { desde },
+        ));
+    }
+
+    fn anotar_devolucion(&mut self, tipo: TipoGafete, numero: NumeroGafete) {
+        self.pendientes
+            .push(Escritura::Borrar(id_prestamo(tipo, numero)));
+    }
+}
+
+// --- Ingresos ---
+
+#[derive(Debug)]
+pub struct IngresosSurreal {
+    db: Surreal<Db>,
+    pub(crate) pendientes: Vec<Escritura>,
+}
+
+impl IngresosSurreal {
+    pub(crate) const fn new(db: Surreal<Db>) -> Self {
+        Self {
+            db,
+            pendientes: Vec::new(),
+        }
+    }
+}
+
+impl RepositorioIngresos for IngresosSurreal {
+    async fn obtener(
+        &self,
+        id: IngresoId,
+    ) -> Result<Option<IngresoContratista>, ErrorPersistencia> {
+        let mut respuesta = self
+            .db
+            .query("SELECT * FROM ONLY $id")
+            .bind(("id", id_ingreso(id)))
+            .await
+            .map_err(tecnica)?;
+        let leido: Option<IngresoLeido> = respuesta.take(0).map_err(tecnica)?;
+        leido.map(IngresoContratista::try_from).transpose()
+    }
+
+    async fn abierto_con_gafete(
+        &self,
+        numero: NumeroGafete,
+    ) -> Result<Option<IngresoContratista>, ErrorPersistencia> {
+        let mut respuesta = self
+            .db
+            .query(
+                "SELECT * FROM ingreso_contratista \
+                 WHERE gafete = $gafete AND salida_en = NONE LIMIT 1",
+            )
+            .bind(("gafete", i64::from(numero.valor())))
+            .await
+            .map_err(tecnica)?;
+        let leidos: Vec<IngresoLeido> = respuesta.take(0).map_err(tecnica)?;
+        leidos
+            .into_iter()
+            .next()
+            .map(IngresoContratista::try_from)
+            .transpose()
+    }
+
+    fn guardar(&mut self, ingreso: &IngresoContratista) {
+        self.pendientes.push(Escritura::guardar(
+            id_ingreso(ingreso.id()),
+            IngresoDatos::from(ingreso),
+        ));
+    }
+}
+
+// --- Reloj ---
+
+#[derive(Debug)]
+pub struct RelojSurreal {
+    db: Surreal<Db>,
+    pub(crate) pendientes: Vec<Escritura>,
+}
+
+impl RelojSurreal {
+    pub(crate) const fn new(db: Surreal<Db>) -> Self {
+        Self {
+            db,
+            pendientes: Vec::new(),
+        }
+    }
+}
+
+impl RepositorioReloj for RelojSurreal {
+    async fn ultimo_movimiento(&self) -> Result<Option<DateTime<Utc>>, ErrorPersistencia> {
+        let mut respuesta = self
+            .db
+            .query("SELECT VALUE en FROM ONLY $id")
+            .bind(("id", id_reloj()))
+            .await
+            .map_err(tecnica)?;
+        respuesta.take(0).map_err(tecnica)
+    }
+
+    fn anotar_movimiento(&mut self, en: DateTime<Utc>) {
+        self.pendientes
+            .push(Escritura::guardar(id_reloj(), RelojDatos { en }));
     }
 }
 
@@ -169,12 +430,12 @@ impl ConsultaPresencias for PresenciasSurreal {
 
 #[derive(Debug, Default)]
 pub struct AuditoriaSurreal {
-    pub(crate) pendientes: Vec<(RecordId, AuditoriaRegistro)>,
+    pub(crate) pendientes: Vec<Escritura>,
 }
 
 impl RegistroAuditoria for AuditoriaSurreal {
     fn anotar(&mut self, entrada: EntradaAuditoria) {
-        self.pendientes.push((
+        self.pendientes.push(Escritura::crear(
             id_registro(TABLA_AUDITORIA, entrada.id_entrada),
             AuditoriaRegistro::from(&entrada),
         ));

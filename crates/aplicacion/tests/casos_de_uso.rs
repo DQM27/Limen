@@ -11,12 +11,13 @@ mod tests {
     use limen_aplicacion::casos_de_uso::empresas::{RegistrarEmpresa, RenombrarEmpresa};
     use limen_aplicacion::errores::{ErrorCaso, MENSAJE_ERROR_TECNICO, TipoError};
     use limen_aplicacion::puertos::{
-        AccionAuditada, EntidadAuditada, ErrorPersistencia, Restriccion,
+        AccionAuditada, ErrorPersistencia, RegistroAuditado, Restriccion,
     };
     use limen_aplicacion::sesion::{OperadorId, Sesion};
     use limen_dominio::acceso::{MotivoDenegacion, ResultadoAcceso};
     use limen_dominio::contratista::{ContratistaId, ErrorContratista};
     use limen_dominio::empresa::{Empresa, EmpresaId, ErrorEmpresa, NombreEmpresa};
+    use limen_dominio::presencia::Via;
     use limen_dominio::tipo_ingreso::TipoIngreso;
     use limen_infra_memoria::{AlmacenMemoria, IdsSecuenciales, RelojFijo};
     use uuid::Uuid;
@@ -104,9 +105,8 @@ mod tests {
         let auditoria = almacen.auditoria();
         assert_eq!(auditoria.len(), 1, "un registro por operación");
         let alta = &auditoria[0];
-        assert_eq!(alta.entidad, EntidadAuditada::Contratista);
+        assert_eq!(alta.registro, RegistroAuditado::Contratista(id));
         assert_eq!(alta.accion, AccionAuditada::Alta);
-        assert_eq!(alta.id, id.uuid());
         assert_eq!(alta.operador, sesion().operador(), "quién lo hizo");
         assert_eq!(alta.en, instante(HOY), "cuándo, según el reloj");
         assert_eq!(alta.cambios.len(), 6, "todos los campos del contratista");
@@ -301,7 +301,8 @@ mod tests {
     async fn no_cambia_la_cedula_de_quien_esta_adentro() {
         let (almacen, empresa) = almacen_con_empresa();
         let id = con_contratista(&almacen, empresa).await;
-        almacen.marcar_adentro(id);
+        let cedula = almacen.contratistas()[0].cedula().clone();
+        almacen.marcar_adentro(&cedula, Via::Contratista);
         let mut otra_cedula = comando(empresa);
         otra_cedula.cedula = "222222222".into();
         assert_eq!(
@@ -438,8 +439,7 @@ mod tests {
         assert_eq!(almacen.empresas()[0].nombre().as_str(), "ACME S.A.");
         let auditoria = almacen.auditoria();
         assert_eq!(auditoria.len(), 1);
-        assert_eq!(auditoria[0].entidad, EntidadAuditada::Empresa);
-        assert_eq!(auditoria[0].id, id.uuid());
+        assert_eq!(auditoria[0].registro, RegistroAuditado::Empresa(id));
     }
 
     #[tokio::test]

@@ -12,8 +12,8 @@ use limen_dominio::tipo_ingreso::TipoIngreso;
 
 use crate::errores::ErrorCaso;
 use crate::puertos::{
-    AccionAuditada, ConsultaPresencias, EntidadAuditada, EntradaAuditoria, FabricaUnidadDeTrabajo,
-    GeneradorIds, RegistroAuditoria, Reloj, RepositorioContratistas, RepositorioEmpresas,
+    AccionAuditada, EntradaAuditoria, FabricaUnidadDeTrabajo, GeneradorIds, RegistroAuditado,
+    RegistroAuditoria, Reloj, RepositorioContratistas, RepositorioEmpresas, RepositorioPresencias,
     Restriccion, UnidadDeTrabajo,
 };
 use crate::sesion::Sesion;
@@ -84,8 +84,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarContratista<
         uow.contratistas().guardar(&contratista);
         uow.auditoria().anotar(EntradaAuditoria::nueva(
             self.ids.nuevo(),
-            EntidadAuditada::Contratista,
-            id.uuid(),
+            RegistroAuditado::Contratista(id),
             AccionAuditada::Alta,
             contratista.cambios_de_alta(),
             sesion,
@@ -132,7 +131,11 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> EditarContratista<F, 
         let hechos = HechosContratista {
             cedula_en_uso: uow.contratistas().cedula_en_uso(&cedula, Some(id)).await?,
             empresa_existe: uow.empresas().existe(comando.empresa).await?,
-            esta_adentro: uow.presencias().esta_adentro(id).await?,
+            esta_adentro: uow
+                .presencias()
+                .via_adentro(contratista.cedula())
+                .await?
+                .is_some(),
         };
         let cambios = contratista
             .editar(comando.datos(), hechos, self.reloj.hoy())
@@ -144,8 +147,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> EditarContratista<F, 
         uow.contratistas().guardar(&contratista);
         uow.auditoria().anotar(EntradaAuditoria::nueva(
             self.ids.nuevo(),
-            EntidadAuditada::Contratista,
-            id.uuid(),
+            RegistroAuditado::Contratista(id),
             AccionAuditada::Edicion,
             cambios.clone(),
             sesion,
