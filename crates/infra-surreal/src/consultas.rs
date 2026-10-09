@@ -5,7 +5,8 @@ use std::collections::HashSet;
 use chrono::{DateTime, NaiveDate, Utc};
 use limen_aplicacion::puertos::{
     AccionAuditada, CambioHistorial, Consultas, EntradaHistorial, ErrorPersistencia,
-    FilaContratista, IngresoAbierto, PersonaAdentro, RegistroAuditado, ResumenGafete,
+    FilaContratista, IngresoAbierto, MovimientoHistorial, PersonaAdentro, RegistroAuditado,
+    ResumenGafete,
 };
 use limen_dominio::busqueda::{
     Buscable, Criterio, MINIMO_DIGITOS_PARA_SUBCADENA, Nivel, cuantos_hasta, relevantes,
@@ -80,6 +81,72 @@ const ADENTRO_KOF: &str = "SELECT id, codigo_empleado AS cedula, nombre, \
     FROM prestamo_kof WHERE devolucion_en = NONE";
 const ADENTRO_CORREO: &str = "SELECT id, cedula, nombre, motivo AS procedencia, \
     placa, gafete, entrada_en FROM ingreso_correo WHERE salida_en = NONE";
+
+/// Una fila del historial: lo mismo que "adentro", más la salida.
+#[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
+struct FilaMovimiento {
+    id: RecordId,
+    cedula: String,
+    nombre: Option<String>,
+    procedencia: Option<String>,
+    placa: Option<String>,
+    gafete: Option<i64>,
+    entrada_en: DateTime<Utc>,
+    salida_en: Option<DateTime<Utc>>,
+}
+
+/// El rango se enlaza como parámetros (`$desde`, `$hasta`, `$limite`): nunca se
+/// concatena. La condición es `[desde, hasta)` sobre la entrada.
+const HISTORIAL_CONTRATISTAS: &str = "SELECT id, cedula, contratista.nombre AS nombre, \
+    contratista.empresa.nombre AS procedencia, placa, gafete, entrada_en, salida_en \
+    FROM ingreso_contratista WHERE entrada_en >= $desde AND entrada_en < $hasta \
+    ORDER BY entrada_en DESC LIMIT $limite";
+const HISTORIAL_PROVEEDORES: &str = "SELECT id, cedula, nombre, empresa.nombre AS procedencia, \
+    placa, gafete, entrada_en, salida_en FROM ingreso_proveedor \
+    WHERE entrada_en >= $desde AND entrada_en < $hasta ORDER BY entrada_en DESC LIMIT $limite";
+const HISTORIAL_CORREO: &str = "SELECT id, cedula, nombre, motivo AS procedencia, placa, gafete, \
+    entrada_en, salida_en FROM ingreso_correo \
+    WHERE entrada_en >= $desde AND entrada_en < $hasta ORDER BY entrada_en DESC LIMIT $limite";
+const HISTORIAL_KOF: &str = "SELECT id, codigo_empleado AS cedula, nombre, \
+    'Personal KOF' AS procedencia, gafete, entrega_en AS entrada_en, devolucion_en AS salida_en \
+    FROM prestamo_kof WHERE entrega_en >= $desde AND entrega_en < $hasta \
+    ORDER BY entrega_en DESC LIMIT $limite";
+
+/// Extremos de un rango abierto: antes de que existiera cualquier movimiento y
+/// después de cualquiera.
+const SEGUNDOS_EXTREMO_INICIAL: i64 = -2_208_988_800; // 1900-01-01
+const SEGUNDOS_EXTREMO_FINAL: i64 = 253_402_300_799; // 9999-12-31 23:59:59
+
+impl FilaMovimiento {
+    /// `None` si la fila no tiene nombre (el contratista ya no existe): no
+    /// debería pasar, porque nada se borra.
+    fn a_movimiento(
+        self,
+        tabla: &str,
+        ingreso: fn(uuid::Uuid) -> IngresoAbierto,
+        identidad: fn(&str) -> Result<Identidad, String>,
+        registra_medio: bool,
+    ) -> Result<Option<MovimientoHistorial>, ErrorPersistencia> {
+        let corrupto = |detalle: String| dato_corrupto(tabla, detalle);
+        let Some(nombre) = self.nombre else {
+            return Ok(None);
+        };
+        Ok(Some(MovimientoHistorial {
+            ingreso: ingreso(uuid_de(&self.id, tabla)?),
+            identidad: identidad(&self.cedula).map_err(corrupto)?,
+            nombre: NombrePersona::nuevo(&nombre).map_err(|e| corrupto(e.to_string()))?,
+            procedencia: self.procedencia.unwrap_or_default(),
+            medio: if registra_medio {
+                Some(medio_de(self.placa, tabla)?)
+            } else {
+                None
+            },
+            gafete: self.gafete.map(|n| numero_de(n, tabla)).transpose()?,
+            entrada: self.entrada_en,
+            salida: self.salida_en,
+        }))
+    }
+}
 
 /// La identidad de quien entró con cédula.
 fn de_cedula(texto: &str) -> Result<Identidad, String> {
@@ -235,6 +302,26 @@ fn siguiente(digitos: &str) -> String {
 impl AlmacenSurreal {
     async fn filas_adentro(&self, consulta: &str) -> Result<Vec<FilaAdentro>, ErrorPersistencia> {
         let mut respuesta = self.db().query(consulta).await.map_err(tecnica)?;
+        respuesta.take(0).map_err(tecnica)
+    }
+
+    /// Las filas de una vía cuya entrada cae en `[desde, hasta)`, las más
+    /// recientes primero y hasta `limite`.
+    async fn filas_de_historial(
+        &self,
+        consulta: &str,
+        desde: DateTime<Utc>,
+        hasta: DateTime<Utc>,
+        limite: i64,
+    ) -> Result<Vec<FilaMovimiento>, ErrorPersistencia> {
+        let mut respuesta = self
+            .db()
+            .query(consulta)
+            .bind(("desde", desde))
+            .bind(("hasta", hasta))
+            .bind(("limite", limite))
+            .await
+            .map_err(tecnica)?;
         respuesta.take(0).map_err(tecnica)
     }
 
@@ -479,6 +566,75 @@ impl Consultas for AlmacenSurreal {
                 })
             })
             .collect()
+    }
+
+    async fn historial_de_ingresos(
+        &self,
+        desde: Option<DateTime<Utc>>,
+        hasta: Option<DateTime<Utc>>,
+        limite: usize,
+    ) -> Result<Vec<MovimientoHistorial>, ErrorPersistencia> {
+        let extremo = |segundos: i64| {
+            DateTime::from_timestamp(segundos, 0)
+                .ok_or_else(|| ErrorPersistencia::Tecnica("extremo de fechas inválido".to_owned()))
+        };
+        let desde = desde.map_or_else(|| extremo(SEGUNDOS_EXTREMO_INICIAL), Ok)?;
+        let hasta = hasta.map_or_else(|| extremo(SEGUNDOS_EXTREMO_FINAL), Ok)?;
+        let limite = i64::try_from(limite).unwrap_or(i64::MAX);
+        let mut movimientos = Vec::new();
+        for fila in self
+            .filas_de_historial(HISTORIAL_CONTRATISTAS, desde, hasta, limite)
+            .await?
+        {
+            movimientos.extend(fila.a_movimiento(
+                TABLA_INGRESO_CONTRATISTA,
+                |uuid| IngresoAbierto::Contratista(IngresoId::desde_uuid(uuid)),
+                de_cedula,
+                true,
+            )?);
+        }
+        for fila in self
+            .filas_de_historial(HISTORIAL_PROVEEDORES, desde, hasta, limite)
+            .await?
+        {
+            movimientos.extend(fila.a_movimiento(
+                TABLA_INGRESO_PROVEEDOR,
+                |uuid| IngresoAbierto::Proveedor(IngresoProveedorId::desde_uuid(uuid)),
+                de_cedula,
+                true,
+            )?);
+        }
+        for fila in self
+            .filas_de_historial(HISTORIAL_CORREO, desde, hasta, limite)
+            .await?
+        {
+            movimientos.extend(fila.a_movimiento(
+                TABLA_INGRESO_CORREO,
+                |uuid| IngresoAbierto::Correo(IngresoCorreoId::desde_uuid(uuid)),
+                de_cedula,
+                true,
+            )?);
+        }
+        for fila in self
+            .filas_de_historial(HISTORIAL_KOF, desde, hasta, limite)
+            .await?
+        {
+            // El personal KOF no registra cómo llegó.
+            movimientos.extend(fila.a_movimiento(
+                TABLA_PRESTAMO_KOF,
+                |uuid| IngresoAbierto::Kof(PrestamoKofId::desde_uuid(uuid)),
+                de_empleado,
+                false,
+            )?);
+        }
+        // Cada vía ya trajo lo más reciente; juntas se ordenan y se corta.
+        movimientos.sort_by(|a, b| {
+            b.entrada
+                .cmp(&a.entrada)
+                .then_with(|| a.identidad.to_string().cmp(&b.identidad.to_string()))
+        });
+        movimientos.truncate(usize::try_from(limite).unwrap_or(usize::MAX));
+        Ok(movimientos)
     }
 
     async fn listar_contratistas(&self) -> Result<Vec<FilaContratista>, ErrorPersistencia> {

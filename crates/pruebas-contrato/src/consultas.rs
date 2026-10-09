@@ -231,6 +231,195 @@ pub async fn quienes_estan_adentro_ignora_a_quienes_ya_salieron<
     );
 }
 
+// --- Historial de ingresos ---
+
+/// Además de lo de `sembrar_las_cuatro_vias` (todo del 9 de octubre, abierto),
+/// un ingreso de contratista y uno por correo ya cerrados del día anterior.
+async fn sembrar_historial<F: FabricaUnidadDeTrabajo>(fabrica: &F) {
+    sembrar_las_cuatro_vias(fabrica).await;
+    let mut uow = fabrica.nueva();
+    uow.ingresos()
+        .guardar(&IngresoContratista::restaurar(IngresoGuardado {
+            id: IngresoId::desde_uuid(Uuid::from_u128(5002)),
+            contratista: id_contratista(1),
+            cedula: cedula("111111111"),
+            medio: Medio::APie,
+            gafete: None,
+            entrada: marca("2026-10-08T14:00:00Z"),
+            salida: Some(marca("2026-10-08T15:00:00Z")),
+        }));
+    uow.ingresos_correo()
+        .guardar(&IngresoCorreo::restaurar(IngresoCorreoGuardado {
+            id: IngresoCorreoId::desde_uuid(Uuid::from_u128(7002)),
+            visitante: Visitante::restaurar(
+                cedula("444444444"),
+                NombrePersona::nuevo("ELENA RUIZ").unwrap(),
+            ),
+            motivo: Motivo::nuevo("Reunión").unwrap(),
+            medio: Medio::APie,
+            gafete: NumeroGafete::nuevo(2).unwrap(),
+            entrada: marca("2026-10-08T09:00:00Z"),
+            salida: Some(marca("2026-10-08T10:00:00Z")),
+        }));
+    uow.confirmar().await.unwrap();
+}
+
+fn instante(texto: &str) -> chrono::DateTime<chrono::Utc> {
+    marca(texto).en
+}
+
+pub async fn historial_de_ingresos_junta_las_cuatro_vias_y_trae_cada_fila<
+    F: FabricaUnidadDeTrabajo + Consultas,
+>(
+    fabrica: F,
+) {
+    assert!(
+        fabrica
+            .historial_de_ingresos(None, None, 100)
+            .await
+            .unwrap()
+            .is_empty(),
+        "una base vacía no tiene historial"
+    );
+    sembrar_historial(&fabrica).await;
+
+    // Sin rango: las cuatro vías y los dos días, del más reciente al más antiguo.
+    let todo = fabrica
+        .historial_de_ingresos(None, None, 100)
+        .await
+        .unwrap();
+    let orden: Vec<IngresoAbierto> = todo.iter().map(|m| m.ingreso).collect();
+    assert_eq!(
+        orden,
+        [
+            IngresoAbierto::Kof(PrestamoKofId::desde_uuid(Uuid::from_u128(8001))),
+            IngresoAbierto::Proveedor(IngresoProveedorId::desde_uuid(Uuid::from_u128(6001))),
+            IngresoAbierto::Correo(IngresoCorreoId::desde_uuid(Uuid::from_u128(7001))),
+            IngresoAbierto::Contratista(IngresoId::desde_uuid(Uuid::from_u128(5001))),
+            IngresoAbierto::Contratista(IngresoId::desde_uuid(Uuid::from_u128(5002))),
+            IngresoAbierto::Correo(IngresoCorreoId::desde_uuid(Uuid::from_u128(7002))),
+        ],
+        "KOF 11:00, proveedor 10:00, correo 09:00, contratista 08:00; después los \
+         cerrados del día anterior (14:00 y 09:00)"
+    );
+
+    // Lo que trae cada fila.
+    let kof = todo.first().unwrap();
+    assert_eq!(
+        kof.identidad.to_string(),
+        "5040017",
+        "el KOF se identifica por su código de empleado"
+    );
+    assert_eq!(kof.procedencia, "Personal KOF", "su procedencia");
+    assert_eq!(kof.medio, None, "el personal KOF no registra cómo llegó");
+    assert_eq!(kof.salida, None, "sigue adentro");
+    let abierto = todo.get(3).unwrap();
+    assert_eq!(abierto.procedencia, "ACME", "la empresa del contratista");
+    assert_eq!(
+        abierto.medio,
+        Some(Medio::Vehiculo(Placa::nueva("ABC-123").unwrap())),
+        "llegó en carro"
+    );
+    assert_eq!(
+        abierto.gafete,
+        Some(NumeroGafete::nuevo(7).unwrap()),
+        "su gafete"
+    );
+    assert_eq!(abierto.salida, None, "sigue adentro");
+    let cerrado = todo.get(4).unwrap();
+    assert_eq!(
+        cerrado.entrada,
+        instante("2026-10-08T14:00:00Z"),
+        "su entrada del día anterior"
+    );
+    assert_eq!(
+        cerrado.salida,
+        Some(instante("2026-10-08T15:00:00Z")),
+        "la salida del que ya se fue"
+    );
+    assert_eq!(
+        todo.get(1).unwrap().procedencia,
+        "GAS ZETA",
+        "la empresa del proveedor"
+    );
+    assert_eq!(
+        todo.get(2).unwrap().procedencia,
+        "Entrevista con RH",
+        "el motivo de la visita"
+    );
+}
+
+pub async fn historial_de_ingresos_filtra_por_rango_y_respeta_el_limite<
+    F: FabricaUnidadDeTrabajo + Consultas,
+>(
+    fabrica: F,
+) {
+    sembrar_historial(&fabrica).await;
+
+    // El rango incluye su inicio y excluye su fin.
+    let entre = fabrica
+        .historial_de_ingresos(
+            Some(instante("2026-10-09T08:00:00Z")),
+            Some(instante("2026-10-09T11:00:00Z")),
+            100,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        entre
+            .iter()
+            .map(|m| m.identidad.to_string())
+            .collect::<Vec<_>>(),
+        ["222222222", "333333333", "111111111"],
+        "las 08:00 entran, las 11:00 (el KOF) no"
+    );
+    let del_dia = fabrica
+        .historial_de_ingresos(
+            Some(instante("2026-10-08T06:00:00Z")),
+            Some(instante("2026-10-09T06:00:00Z")),
+            100,
+        )
+        .await
+        .unwrap();
+    assert_eq!(del_dia.len(), 2, "sólo lo del 8 de octubre");
+    let desde_ese_dia = fabrica
+        .historial_de_ingresos(Some(instante("2026-10-09T09:00:00Z")), None, 100)
+        .await
+        .unwrap();
+    assert_eq!(
+        desde_ese_dia.len(),
+        3,
+        "un extremo abierto: lo de las 09:00 en adelante"
+    );
+    let hasta_ese_dia = fabrica
+        .historial_de_ingresos(None, Some(instante("2026-10-09T00:00:00Z")), 100)
+        .await
+        .unwrap();
+    assert_eq!(hasta_ese_dia.len(), 2, "lo anterior al 9 de octubre");
+    assert!(
+        fabrica
+            .historial_de_ingresos(
+                Some(instante("2027-01-01T00:00:00Z")),
+                Some(instante("2027-02-01T00:00:00Z")),
+                100
+            )
+            .await
+            .unwrap()
+            .is_empty(),
+        "un rango sin movimientos"
+    );
+
+    // El límite corta después de juntar y ordenar las cuatro vías.
+    let dos = fabrica.historial_de_ingresos(None, None, 2).await.unwrap();
+    assert_eq!(
+        dos.iter()
+            .map(|m| m.identidad.to_string())
+            .collect::<Vec<_>>(),
+        ["5040017", "222222222"],
+        "los dos más recientes, de vías distintas"
+    );
+}
+
 // --- Buscadores ---
 
 /// Personas con nombres parecidos entre sí, con Ñ, con errores típicos y

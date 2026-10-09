@@ -83,6 +83,27 @@ pub struct EntradaHistorial {
     pub en: DateTime<Utc>,
 }
 
+/// Un movimiento del historial: una entrada, y su salida si ya ocurrió, por
+/// cualquiera de las cuatro vías. Para el personal KOF, la entrega del gafete
+/// provisional es la entrada y su devolución la salida.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MovimientoHistorial {
+    /// Cuál es el registro, y por qué vía entró.
+    pub ingreso: IngresoAbierto,
+    /// La cédula o, para el personal KOF, el código de empleado.
+    pub identidad: Identidad,
+    pub nombre: NombrePersona,
+    /// De dónde viene: la empresa (contratista y proveedor), el motivo de la
+    /// visita (ingreso por correo) o "Personal KOF".
+    pub procedencia: String,
+    /// Cómo llegó; el personal KOF no lo registra.
+    pub medio: Option<Medio>,
+    pub gafete: Option<NumeroGafete>,
+    pub entrada: DateTime<Utc>,
+    /// `None` mientras la persona siga adentro.
+    pub salida: Option<DateTime<Utc>>,
+}
+
 /// Un contratista con el nombre de su empresa: una fila de la grilla.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FilaContratista {
@@ -103,6 +124,17 @@ pub trait Consultas: Send + Sync {
     fn quienes_estan_adentro(
         &self,
     ) -> impl Future<Output = Result<Vec<PersonaAdentro>, ErrorPersistencia>> + Send;
+
+    /// Los movimientos de las cuatro vías cuya **entrada** cae en
+    /// `[desde, hasta)` (un extremo en `None` está abierto), del más reciente
+    /// al más antiguo (con la cédula o el código como desempate), hasta
+    /// `limite`. El límite corta después de ordenar y juntar las cuatro vías.
+    fn historial_de_ingresos(
+        &self,
+        desde: Option<DateTime<Utc>>,
+        hasta: Option<DateTime<Utc>>,
+        limite: usize,
+    ) -> impl Future<Output = Result<Vec<MovimientoHistorial>, ErrorPersistencia>> + Send;
 
     /// Todos los contratistas con el nombre de su empresa, por nombre y, a
     /// igual nombre, por cédula. Es lo que muestra la grilla.

@@ -28,6 +28,7 @@ pub mod personal_kof;
 pub mod praind;
 pub mod presencia;
 pub mod prestamo_kof;
+pub mod rango_fechas;
 pub mod reloj;
 pub mod tipo_ingreso;
 pub mod visitante;

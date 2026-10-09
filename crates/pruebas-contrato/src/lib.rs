@@ -105,6 +105,8 @@ macro_rules! bateria_de_contrato {
             listar_gafetes_trae_los_del_tipo_con_su_estado_y_si_estan_prestados,
             contratistas_con_praind_hasta_filtra_ordena_y_respeta_el_limite,
             listar_contratistas_trae_la_empresa_y_ordena_por_nombre_y_cedula,
+            historial_de_ingresos_junta_las_cuatro_vias_y_trae_cada_fila,
+            historial_de_ingresos_filtra_por_rango_y_respeta_el_limite,
         );
     };
     (@pruebas $fabrica:expr; $($prueba:ident),+ $(,)?) => {

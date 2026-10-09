@@ -20,12 +20,12 @@ use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, NaiveDate, NaiveTime, TimeDelta, TimeZone, Utc};
 use limen_aplicacion::puertos::{
     CambioHistorial, Consultas, EntradaAuditoria, EntradaHistorial, ErrorPersistencia,
-    FabricaUnidadDeTrabajo, FilaContratista, GeneradorIds, IngresoAbierto, PersonaAdentro,
-    RegistroAuditado, RegistroAuditoria, Reloj, RepositorioContratistas, RepositorioEmpresas,
-    RepositorioEmpresasProveedoras, RepositorioGafetes, RepositorioIngresos,
+    FabricaUnidadDeTrabajo, FilaContratista, GeneradorIds, IngresoAbierto, MovimientoHistorial,
+    PersonaAdentro, RegistroAuditado, RegistroAuditoria, Reloj, RepositorioContratistas,
+    RepositorioEmpresas, RepositorioEmpresasProveedoras, RepositorioGafetes, RepositorioIngresos,
     RepositorioIngresosCorreo, RepositorioIngresosProveedor, RepositorioPersonalKof,
     RepositorioPresencias, RepositorioPrestamosKof, RepositorioReloj, Restriccion, ResumenGafete,
     UnidadDeTrabajo,
@@ -385,6 +385,99 @@ impl Consultas for AlmacenMemoria {
                     prestado: c.prestamos.contains(clave),
                 })
                 .collect()
+        }))
+    }
+
+    fn historial_de_ingresos(
+        &self,
+        desde: Option<DateTime<Utc>>,
+        hasta: Option<DateTime<Utc>>,
+        limite: usize,
+    ) -> impl Future<Output = Result<Vec<MovimientoHistorial>, ErrorPersistencia>> + Send {
+        std::future::ready(self.leer(|c| {
+            let en_el_rango = |entrada: DateTime<Utc>| {
+                desde.is_none_or(|desde| entrada >= desde)
+                    && hasta.is_none_or(|hasta| entrada < hasta)
+            };
+            let mut movimientos = Vec::new();
+            for ingreso in c.ingresos.values().filter(|i| en_el_rango(i.entrada().en)) {
+                let Some(contratista) = c.contratistas.get(&ingreso.contratista()) else {
+                    continue;
+                };
+                movimientos.push(MovimientoHistorial {
+                    ingreso: IngresoAbierto::Contratista(ingreso.id()),
+                    identidad: Identidad::from(ingreso.cedula()),
+                    nombre: contratista.nombre().clone(),
+                    procedencia: c
+                        .empresas
+                        .get(&contratista.empresa())
+                        .map(|empresa| empresa.nombre().to_string())
+                        .unwrap_or_default(),
+                    medio: Some(ingreso.medio().clone()),
+                    gafete: ingreso.gafete(),
+                    entrada: ingreso.entrada().en,
+                    salida: ingreso.salida().map(|marca| marca.en),
+                });
+            }
+            for ingreso in c
+                .ingresos_proveedor
+                .values()
+                .filter(|i| en_el_rango(i.entrada().en))
+            {
+                movimientos.push(MovimientoHistorial {
+                    ingreso: IngresoAbierto::Proveedor(ingreso.id()),
+                    identidad: Identidad::from(ingreso.cedula()),
+                    nombre: ingreso.visitante().nombre().clone(),
+                    procedencia: c
+                        .empresas_proveedoras
+                        .get(&ingreso.empresa())
+                        .map(|empresa| empresa.nombre().to_string())
+                        .unwrap_or_default(),
+                    medio: Some(ingreso.medio().clone()),
+                    gafete: Some(ingreso.gafete()),
+                    entrada: ingreso.entrada().en,
+                    salida: ingreso.salida().map(|marca| marca.en),
+                });
+            }
+            for ingreso in c
+                .ingresos_correo
+                .values()
+                .filter(|i| en_el_rango(i.entrada().en))
+            {
+                movimientos.push(MovimientoHistorial {
+                    ingreso: IngresoAbierto::Correo(ingreso.id()),
+                    identidad: Identidad::from(ingreso.cedula()),
+                    nombre: ingreso.visitante().nombre().clone(),
+                    procedencia: ingreso.motivo().to_string(),
+                    medio: Some(ingreso.medio().clone()),
+                    gafete: Some(ingreso.gafete()),
+                    entrada: ingreso.entrada().en,
+                    salida: ingreso.salida().map(|marca| marca.en),
+                });
+            }
+            for prestamo in c
+                .prestamos_kof
+                .values()
+                .filter(|p| en_el_rango(p.entrega().en))
+            {
+                movimientos.push(MovimientoHistorial {
+                    ingreso: IngresoAbierto::Kof(prestamo.id()),
+                    identidad: prestamo.identidad(),
+                    nombre: prestamo.nombre().clone(),
+                    procedencia: "Personal KOF".to_owned(),
+                    medio: None,
+                    gafete: Some(prestamo.gafete()),
+                    entrada: prestamo.entrega().en,
+                    salida: prestamo.devolucion().map(|marca| marca.en),
+                });
+            }
+            movimientos.sort_by(|a, b| {
+                b.entrada
+                    .cmp(&a.entrada)
+                    .then_with(|| a.identidad.to_string().cmp(&b.identidad.to_string()))
+            });
+            movimientos.truncate(limite);
+            movimientos
         }))
     }
 
@@ -1195,7 +1288,17 @@ impl Reloj for RelojFijo {
     fn hoy(&self) -> NaiveDate {
         self.hoy
     }
+
+    /// Costa Rica va seis horas detrás de UTC todo el año.
+    fn inicio_del_dia(&self, fecha: NaiveDate) -> DateTime<Utc> {
+        let medianoche = Utc.from_utc_datetime(&fecha.and_time(NaiveTime::MIN));
+        medianoche
+            + TimeDelta::try_hours(HORAS_DE_COSTA_RICA_DETRAS_DE_UTC)
+                .unwrap_or_else(TimeDelta::zero)
+    }
 }
+
+const HORAS_DE_COSTA_RICA_DETRAS_DE_UTC: i64 = 6;
 
 /// IDs predecibles (1, 2, 3...) para que las pruebas sepan qué esperar.
 #[derive(Debug, Clone, Default)]
