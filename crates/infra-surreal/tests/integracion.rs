@@ -86,7 +86,11 @@ mod tests {
         for _ in 0..100 {
             match AlmacenSurreal::en_disco(ruta).await {
                 Ok(almacen) => return almacen,
-                Err(error) if error.to_string().contains("locked") => {
+                // "locked" en Linux; "os error 33" en Windows.
+                Err(error)
+                    if error.to_string().contains("locked")
+                        || error.to_string().contains("os error 33") =>
+                {
                     tokio::time::sleep(std::time::Duration::from_millis(20)).await;
                 }
                 Err(error) => panic!("no se pudo reabrir la base: {error}"),

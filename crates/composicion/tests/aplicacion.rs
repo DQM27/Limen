@@ -367,7 +367,11 @@ mod tests {
                     app = Some(abierta);
                     break;
                 }
-                Err(error) if error.to_string().contains("locked") => {
+                // "locked" en Linux; "os error 33" en Windows.
+                Err(error)
+                    if error.to_string().contains("locked")
+                        || error.to_string().contains("os error 33") =>
+                {
                     tokio::time::sleep(std::time::Duration::from_millis(20)).await;
                 }
                 Err(error) => panic!("no se pudo reabrir: {error}"),
@@ -390,8 +394,12 @@ mod tests {
 
     #[tokio::test]
     async fn abrir_en_una_ruta_imposible_es_un_error_de_arranque() {
+        // Una carpeta que "cuelga" de un archivo normal no se puede crear en
+        // ningún sistema operativo.
+        let archivo = std::env::temp_dir().join(format!("limen-archivo-{}", Uuid::now_v7()));
+        std::fs::write(&archivo, b"no soy una carpeta").unwrap();
         let config = Config {
-            ruta_base: "/proc/limen-no-se-puede-crear/base".into(),
+            ruta_base: archivo.join("base"),
         };
         let error = AplicacionLimen::abrir(&config).await.unwrap_err();
         assert!(
@@ -400,6 +408,7 @@ mod tests {
                 .starts_with("No se pudo abrir la base de datos"),
             "{error}"
         );
+        drop(std::fs::remove_file(archivo));
     }
 
     #[tokio::test]
