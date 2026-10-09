@@ -118,6 +118,10 @@ mat-nav-list {
 }
 
 main {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  height: 100%;
   padding: 24px 32px;
 
   &:focus {

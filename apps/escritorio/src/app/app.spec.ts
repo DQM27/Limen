@@ -11,7 +11,11 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 async function crear(dentroDeLaApp: boolean) {
   vi.mocked(isTauri).mockReturnValue(dentroDeLaApp);
-  vi.mocked(invoke).mockResolvedValue({ id: 'abc', nombre: 'Operador provisional' });
+  vi.mocked(invoke).mockImplementation((comando: string) =>
+    Promise.resolve(
+      comando === 'operador_actual' ? { id: 'abc', nombre: 'Operador provisional' } : [],
+    ),
+  );
   TestBed.configureTestingModule({ imports: [App], providers: [provideRouter(routes)] });
   const fixture = TestBed.createComponent(App);
   await fixture.whenStable();

@@ -1,0 +1,34 @@
+<section class="tabla" role="region" [attr.aria-label]="etiqueta()">
+  <div class="barra-tabla">
+    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="buscador">
+      <mat-label>Buscar en {{ etiqueta() }}</mat-label>
+      <mat-icon matIconPrefix aria-hidden="true">search</mat-icon>
+      <input
+        matInput
+        type="search"
+        autocomplete="off"
+        [value]="filtro()"
+        (input)="escribirFiltro($event)"
+      />
+    </mat-form-field>
+    <p class="conteo" role="status" aria-live="polite">{{ conteo() }}</p>
+  </div>
+
+  <ag-grid-angular
+    class="rejilla"
+    [theme]="tema"
+    [columnDefs]="columnas()"
+    [defaultColDef]="columnaPorDefecto"
+    [rowData]="filas()"
+    [getRowId]="obtenerIdFila()"
+    [quickFilterText]="filtro()"
+    [localeText]="textos"
+    [loading]="cargando()"
+    [overlayNoRowsTemplate]="mensajeVacio()"
+    [pagination]="true"
+    [paginationPageSize]="50"
+    [paginationPageSizeSelector]="[25, 50, 100, 200]"
+    [enableCellTextSelection]="true"
+    (modelUpdated)="alActualizarFilas($event)"
+  />
+</section>

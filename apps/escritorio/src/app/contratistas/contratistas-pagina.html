@@ -1,0 +1,14 @@
+<h1>Contratistas</h1>
+
+@if (error(); as mensaje) {
+  <p class="error" role="alert">{{ mensaje }}</p>
+}
+
+<app-tabla
+  etiqueta="Contratistas"
+  [columnas]="columnas"
+  [filas]="filas()"
+  [cargando]="cargando()"
+  [idFila]="idFila"
+  mensajeVacio="Todavía no hay contratistas registrados"
+/>

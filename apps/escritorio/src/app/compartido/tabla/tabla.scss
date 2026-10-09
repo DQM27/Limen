@@ -1,0 +1,37 @@
+// La tabla ocupa todo el alto que le deja su pantalla. Nada más: el aspecto de
+// la grilla es el de serie de AG Grid.
+:host {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.tabla {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.barra-tabla {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.buscador {
+  width: min(420px, 100%);
+}
+
+.conteo {
+  margin: 0;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-medium);
+}
+
+.rejilla {
+  flex: 1;
+  min-height: 320px;
+}
