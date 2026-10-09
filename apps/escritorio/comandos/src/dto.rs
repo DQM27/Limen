@@ -12,7 +12,7 @@
 use chrono::{NaiveDate, SecondsFormat};
 use limen_aplicacion::casos_de_uso::contratistas::ComandoContratista;
 use limen_aplicacion::casos_de_uso::ingresos::{ComandoEntrada, EntradaContratista};
-use limen_aplicacion::puertos::{IngresoAbierto, PersonaAdentro};
+use limen_aplicacion::puertos::{FilaContratista, IngresoAbierto, PersonaAdentro};
 use limen_dominio::acceso::ResultadoAcceso;
 use limen_dominio::contratista::Contratista;
 use limen_dominio::empresa::{Empresa, EmpresaId};
@@ -133,6 +133,24 @@ impl From<&Contratista> for ContratistaDto {
             fecha_vencimiento_praind: contratista.fecha_vencimiento_praind().to_string(),
             tiene_acceso: contratista.tiene_acceso(),
             requiere_gafete: contratista.requiere_gafete(),
+        }
+    }
+}
+
+/// Una fila de la grilla de contratistas: el contratista y el nombre de su
+/// empresa, para no tener que pedirla aparte.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FilaContratistaDto {
+    #[serde(flatten)]
+    pub contratista: ContratistaDto,
+    pub empresa_nombre: String,
+}
+
+impl From<&FilaContratista> for FilaContratistaDto {
+    fn from(fila: &FilaContratista) -> Self {
+        Self {
+            contratista: ContratistaDto::from(&fila.contratista),
+            empresa_nombre: fila.empresa.as_str().to_owned(),
         }
     }
 }

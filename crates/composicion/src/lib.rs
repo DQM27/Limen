@@ -19,7 +19,7 @@ use std::path::PathBuf;
 
 use limen_aplicacion::casos_de_uso::consultas::{
     BuscarContratistas, BuscarEmpresas, BuscarEmpresasProveedoras, BuscarPersonalKof,
-    HistorialDeCambios, ListarGafetes, PraindPorVencer, QuienesEstanAdentro,
+    HistorialDeCambios, ListarContratistas, ListarGafetes, PraindPorVencer, QuienesEstanAdentro,
 };
 use limen_aplicacion::casos_de_uso::contratistas::{
     ConsultarContratista, EditarContratista, RegistrarContratista,
@@ -85,6 +85,7 @@ grupo! {
         consultar: ConsultarContratista<F, R>,
         buscar: BuscarContratistas<F>,
         praind_por_vencer: PraindPorVencer<F, R>,
+        listar: ListarContratistas<F>,
     }
 }
 
@@ -181,6 +182,7 @@ where
                 consultar: ConsultarContratista::new(a(), r()),
                 buscar: BuscarContratistas::new(a()),
                 praind_por_vencer: PraindPorVencer::new(a(), r()),
+                listar: ListarContratistas::new(a()),
             },
             gafetes: Gafetes {
                 registrar: RegistrarGafetes::new(a(), r(), i()),

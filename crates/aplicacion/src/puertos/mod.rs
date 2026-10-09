@@ -12,7 +12,8 @@ mod reloj;
 
 pub use auditoria::{AccionAuditada, EntradaAuditoria, RegistroAuditado, RegistroAuditoria};
 pub use consultas::{
-    CambioHistorial, Consultas, EntradaHistorial, IngresoAbierto, PersonaAdentro, ResumenGafete,
+    CambioHistorial, Consultas, EntradaHistorial, FilaContratista, IngresoAbierto, PersonaAdentro,
+    ResumenGafete,
 };
 pub use persistencia::{
     ErrorPersistencia, FabricaUnidadDeTrabajo, RepositorioContratistas, RepositorioEmpresas,

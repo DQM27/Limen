@@ -23,8 +23,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use chrono::{DateTime, NaiveDate, Utc};
 use limen_aplicacion::puertos::{
     CambioHistorial, Consultas, EntradaAuditoria, EntradaHistorial, ErrorPersistencia,
-    FabricaUnidadDeTrabajo, GeneradorIds, IngresoAbierto, PersonaAdentro, RegistroAuditado,
-    RegistroAuditoria, Reloj, RepositorioContratistas, RepositorioEmpresas,
+    FabricaUnidadDeTrabajo, FilaContratista, GeneradorIds, IngresoAbierto, PersonaAdentro,
+    RegistroAuditado, RegistroAuditoria, Reloj, RepositorioContratistas, RepositorioEmpresas,
     RepositorioEmpresasProveedoras, RepositorioGafetes, RepositorioIngresos,
     RepositorioIngresosCorreo, RepositorioIngresosProveedor, RepositorioPersonalKof,
     RepositorioPresencias, RepositorioPrestamosKof, RepositorioReloj, Restriccion, ResumenGafete,
@@ -385,6 +385,39 @@ impl Consultas for AlmacenMemoria {
                     prestado: c.prestamos.contains(clave),
                 })
                 .collect()
+        }))
+    }
+
+    fn listar_contratistas(
+        &self,
+    ) -> impl Future<Output = Result<Vec<FilaContratista>, ErrorPersistencia>> + Send {
+        std::future::ready(self.leer(|c| {
+            let mut filas: Vec<FilaContratista> = c
+                .contratistas
+                .values()
+                .filter_map(|contratista| {
+                    // Nada se borra, así que la empresa siempre existe.
+                    c.empresas
+                        .get(&contratista.empresa())
+                        .map(|empresa| FilaContratista {
+                            contratista: contratista.clone(),
+                            empresa: empresa.nombre().clone(),
+                        })
+                })
+                .collect();
+            filas.sort_by(|a, b| {
+                a.contratista
+                    .nombre()
+                    .as_str()
+                    .cmp(b.contratista.nombre().as_str())
+                    .then_with(|| {
+                        a.contratista
+                            .cedula()
+                            .as_str()
+                            .cmp(b.contratista.cedula().as_str())
+                    })
+            });
+            filas
         }))
     }
 

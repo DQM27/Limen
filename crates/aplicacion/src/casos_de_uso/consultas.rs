@@ -11,7 +11,8 @@ use limen_dominio::praind::DIAS_ADVERTENCIA_PRAIND;
 
 use crate::errores::ErrorCaso;
 use crate::puertos::{
-    Consultas, EntradaHistorial, PersonaAdentro, RegistroAuditado, Reloj, ResumenGafete,
+    Consultas, EntradaHistorial, FilaContratista, PersonaAdentro, RegistroAuditado, Reloj,
+    ResumenGafete,
 };
 
 /// Cuántos resultados devuelve un buscador como máximo: una lista más larga
@@ -38,6 +39,22 @@ impl<C: Consultas> QuienesEstanAdentro<C> {
 
     pub async fn ejecutar(&self) -> Result<Vec<PersonaAdentro>, ErrorConsulta> {
         Ok(self.consultas.quienes_estan_adentro().await?)
+    }
+}
+
+/// Todos los contratistas con el nombre de su empresa, para la grilla.
+#[derive(Debug)]
+pub struct ListarContratistas<C> {
+    consultas: C,
+}
+
+impl<C: Consultas> ListarContratistas<C> {
+    pub const fn new(consultas: C) -> Self {
+        Self { consultas }
+    }
+
+    pub async fn ejecutar(&self) -> Result<Vec<FilaContratista>, ErrorConsulta> {
+        Ok(self.consultas.listar_contratistas().await?)
     }
 }
 

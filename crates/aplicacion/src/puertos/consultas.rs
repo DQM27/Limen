@@ -10,7 +10,7 @@ use std::future::Future;
 use chrono::{DateTime, NaiveDate, Utc};
 use limen_dominio::busqueda::Criterio;
 use limen_dominio::contratista::Contratista;
-use limen_dominio::empresa::Empresa;
+use limen_dominio::empresa::{Empresa, NombreEmpresa};
 use limen_dominio::empresa_proveedora::EmpresaProveedora;
 use limen_dominio::gafete::{Gafete, NumeroGafete, TipoGafete};
 use limen_dominio::ingreso_contratista::IngresoId;
@@ -83,6 +83,13 @@ pub struct EntradaHistorial {
     pub en: DateTime<Utc>,
 }
 
+/// Un contratista con el nombre de su empresa: una fila de la grilla.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FilaContratista {
+    pub contratista: Contratista,
+    pub empresa: NombreEmpresa,
+}
+
 /// Un gafete del catálogo y si está prestado ahora.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResumenGafete {
@@ -96,6 +103,12 @@ pub trait Consultas: Send + Sync {
     fn quienes_estan_adentro(
         &self,
     ) -> impl Future<Output = Result<Vec<PersonaAdentro>, ErrorPersistencia>> + Send;
+
+    /// Todos los contratistas con el nombre de su empresa, por nombre y, a
+    /// igual nombre, por cédula. Es lo que muestra la grilla.
+    fn listar_contratistas(
+        &self,
+    ) -> impl Future<Output = Result<Vec<FilaContratista>, ErrorPersistencia>> + Send;
 
     /// Contratistas que cumplen el criterio, del mejor al peor resultado
     /// (ver [`limen_dominio::busqueda`]), hasta `limite`.

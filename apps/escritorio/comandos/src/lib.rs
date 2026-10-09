@@ -26,7 +26,7 @@ use limen_dominio::prestamo_kof::PrestamoKofId;
 
 pub use dto::{
     AccesoDto, ContratistaDto, ContratistaEntrada, EmpresaDto, EntradaContratistaEntrada,
-    EntradaRegistradaDto, PersonaAdentroDto,
+    EntradaRegistradaDto, FilaContratistaDto, PersonaAdentroDto,
 };
 pub use error::{ErrorEntrada, ErrorJson, TipoErrorJson};
 pub use operador::{ErrorOperador, NOMBRE_PROVISIONAL, Operador, OperadorDelEquipo};
@@ -121,6 +121,12 @@ where
             }
         }
         Ok(())
+    }
+
+    /// Todos los contratistas con el nombre de su empresa, para la grilla.
+    pub async fn listar_contratistas(&self) -> Result<Vec<FilaContratistaDto>, ErrorJson> {
+        let filas = self.app.contratistas.listar.ejecutar().await?;
+        Ok(filas.iter().map(FilaContratistaDto::from).collect())
     }
 
     /// Busca contratistas por cédula (el inicio) o por nombre.

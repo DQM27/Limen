@@ -17,7 +17,7 @@
 
 use limen_escritorio_comandos::{
     ContratistaDto, ContratistaEntrada, EmpresaDto, EntradaContratistaEntrada,
-    EntradaRegistradaDto, ErrorJson, Operador, PersonaAdentroDto,
+    EntradaRegistradaDto, ErrorJson, FilaContratistaDto, Operador, PersonaAdentroDto,
 };
 use tauri::State;
 
@@ -39,6 +39,12 @@ pub fn operador_actual(estado: State<'_, Estado>) -> Option<Operador> {
 pub async fn dentro(estado: State<'_, Estado>) -> Resultado<Vec<PersonaAdentroDto>> {
     estado.operador().sesion()?;
     estado.comandos().dentro().await
+}
+
+#[tauri::command]
+pub async fn listar_contratistas(estado: State<'_, Estado>) -> Resultado<Vec<FilaContratistaDto>> {
+    estado.operador().sesion()?;
+    estado.comandos().listar_contratistas().await
 }
 
 #[tauri::command]

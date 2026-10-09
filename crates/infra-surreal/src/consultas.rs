@@ -5,14 +5,14 @@ use std::collections::HashSet;
 use chrono::{DateTime, NaiveDate, Utc};
 use limen_aplicacion::puertos::{
     AccionAuditada, CambioHistorial, Consultas, EntradaHistorial, ErrorPersistencia,
-    IngresoAbierto, PersonaAdentro, RegistroAuditado, ResumenGafete,
+    FilaContratista, IngresoAbierto, PersonaAdentro, RegistroAuditado, ResumenGafete,
 };
 use limen_dominio::busqueda::{
     Buscable, Criterio, MINIMO_DIGITOS_PARA_SUBCADENA, Nivel, cuantos_hasta, relevantes,
 };
 use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::Contratista;
-use limen_dominio::empresa::Empresa;
+use limen_dominio::empresa::{Empresa, NombreEmpresa};
 use limen_dominio::empresa_proveedora::EmpresaProveedora;
 use limen_dominio::gafete::{Gafete, TipoGafete};
 use limen_dominio::ingreso_contratista::IngresoId;
@@ -41,6 +41,20 @@ use crate::registros::{
 struct FilaNombre {
     id: RecordId,
     nombre_busqueda: String,
+}
+
+/// Una fila de la grilla de contratistas: el contratista y el nombre de su
+/// empresa, que la base resuelve con el vínculo.
+#[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
+struct FilaListado {
+    id: RecordId,
+    cedula: String,
+    nombre: String,
+    empresa: RecordId,
+    tipo_ingreso: String,
+    fecha_vencimiento_praind: NaiveDate,
+    tiene_acceso: bool,
+    empresa_nombre: Option<String>,
 }
 
 /// Una fila de "quién está adentro", igual para las tres vías: cada consulta
@@ -462,6 +476,44 @@ impl Consultas for AlmacenSurreal {
                 Ok(ResumenGafete {
                     prestado: en_prestamo.contains(&clave),
                     gafete,
+                })
+            })
+            .collect()
+    }
+
+    async fn listar_contratistas(&self) -> Result<Vec<FilaContratista>, ErrorPersistencia> {
+        let mut respuesta = self
+            .db()
+            .query(
+                "SELECT id, cedula, nombre, empresa, tipo_ingreso, fecha_vencimiento_praind, \
+                 tiene_acceso, empresa.nombre AS empresa_nombre \
+                 FROM contratista ORDER BY nombre, cedula",
+            )
+            .await
+            .map_err(tecnica)?;
+        let filas: Vec<FilaListado> = respuesta.take(0).map_err(tecnica)?;
+        filas
+            .into_iter()
+            .map(|fila| {
+                let empresa = fila.empresa_nombre.ok_or_else(|| {
+                    dato_corrupto(
+                        "contratista",
+                        "la empresa del contratista no existe".to_owned(),
+                    )
+                })?;
+                let contratista = Contratista::try_from(ContratistaLeido {
+                    id: fila.id,
+                    cedula: fila.cedula,
+                    nombre: fila.nombre,
+                    empresa: fila.empresa,
+                    tipo_ingreso: fila.tipo_ingreso,
+                    fecha_vencimiento_praind: fila.fecha_vencimiento_praind,
+                    tiene_acceso: fila.tiene_acceso,
+                })?;
+                Ok(FilaContratista {
+                    contratista,
+                    empresa: NombreEmpresa::nuevo(&empresa)
+                        .map_err(|e| dato_corrupto("empresa", e.to_string()))?,
                 })
             })
             .collect()

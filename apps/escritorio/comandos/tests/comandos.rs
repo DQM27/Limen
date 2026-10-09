@@ -156,6 +156,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn la_grilla_lista_a_todos_con_el_nombre_de_su_empresa() {
+        let (comandos, contratista) = con_contratista().await;
+        let empresa = comandos
+            .buscar_empresas("acme", 1)
+            .await
+            .unwrap()
+            .remove(0)
+            .id;
+
+        let filas = comandos.listar_contratistas().await.unwrap();
+
+        assert_eq!(
+            serde_json::to_value(&filas).unwrap(),
+            json!([{
+                "id": contratista,
+                "cedula": "111111111",
+                "nombre": "JOSE PEÑA",
+                "empresa_id": empresa,
+                "tipo_ingreso": "PRAIND",
+                "fecha_vencimiento_praind": "2099-01-01",
+                "tiene_acceso": true,
+                "requiere_gafete": true,
+                "empresa_nombre": "ACME S.A.",
+            }]),
+            "el contratista y el nombre de su empresa, en un solo objeto plano"
+        );
+    }
+
+    #[tokio::test]
     async fn la_salida_por_gafete_cierra_el_ingreso() {
         let (comandos, contratista) = con_contratista().await;
         comandos

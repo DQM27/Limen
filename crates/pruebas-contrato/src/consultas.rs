@@ -740,6 +740,57 @@ pub async fn listar_gafetes_trae_los_del_tipo_con_su_estado_y_si_estan_prestados
     );
 }
 
+// --- Listado de contratistas ---
+
+pub async fn listar_contratistas_trae_la_empresa_y_ordena_por_nombre_y_cedula<
+    F: FabricaUnidadDeTrabajo + Consultas,
+>(
+    fabrica: F,
+) {
+    assert!(
+        fabrica.listar_contratistas().await.unwrap().is_empty(),
+        "sin contratistas, la lista está vacía"
+    );
+    sembrar(
+        &fabrica,
+        &[
+            contratista(1, "333333333", "BETO"),
+            contratista(2, "222222222", "ANA"),
+            contratista(3, "111111111", "ANA"),
+        ],
+    )
+    .await;
+
+    let filas = fabrica.listar_contratistas().await.unwrap();
+    let orden: Vec<(&str, &str)> = filas
+        .iter()
+        .map(|fila| {
+            (
+                fila.contratista.nombre().as_str(),
+                fila.contratista.cedula().as_str(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        orden,
+        [
+            ("ANA", "111111111"),
+            ("ANA", "222222222"),
+            ("BETO", "333333333")
+        ],
+        "por nombre y, a igual nombre, por cédula"
+    );
+    assert!(
+        filas.iter().all(|fila| fila.empresa.as_str() == "ACME"),
+        "cada fila trae el nombre de su empresa"
+    );
+    assert_eq!(
+        filas.first().map(|fila| fila.contratista.id()),
+        Some(id_contratista(3)),
+        "y el contratista completo, no sólo sus datos de la grilla"
+    );
+}
+
 // --- PRAIND por vencer ---
 
 pub async fn contratistas_con_praind_hasta_filtra_ordena_y_respeta_el_limite<

@@ -59,6 +59,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             comandos::operador_actual,
             comandos::dentro,
+            comandos::listar_contratistas,
             comandos::buscar_contratistas,
             comandos::buscar_empresas,
             comandos::registrar_salida,
