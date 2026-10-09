@@ -93,6 +93,8 @@ describe('carcasa de la app', () => {
     expect(boton?.getAttribute('aria-expanded')).toBe('false');
     expect(boton?.getAttribute('aria-label')).toBe('Expandir el menú');
     expect(raiz.querySelector('.barra.reducida')).not.toBeNull();
+    // El contenido y la barra comparten fila: el contenido ocupa lo que deja la barra.
+    expect(raiz.querySelector('.carcasa > .barra + main#contenido')).not.toBeNull();
     // Reducida, el enlace conserva su nombre accesible aunque no se vea el texto.
     expect(raiz.querySelector('nav a[routerLink], nav a[href]')?.getAttribute('aria-label')).toBe(
       'Contratistas',

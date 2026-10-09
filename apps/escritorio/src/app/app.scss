@@ -20,22 +20,22 @@
   }
 }
 
+// La barra y el contenido comparten una fila: cuando la barra cambia de ancho,
+// el contenido ocupa el resto solo (nada se mide ni se fija a mano).
 .carcasa {
+  display: flex;
   height: 100%;
-  --mat-sidenav-content-background-color: var(--mat-sys-surface);
 }
 
 .barra {
   display: flex;
+  flex: none;
   flex-direction: column;
+  box-sizing: border-box;
   width: 248px;
+  border-right: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mat-sys-surface-container-low);
   transition: width 150ms ease;
-
-  // La barra es una superficie propia, no el mismo fondo que el contenido, y
-  // sin esquinas redondeadas pegadas al borde de la ventana.
-  --mat-sidenav-container-background-color: var(--mat-sys-surface-container-low);
-  --mat-sidenav-container-shape: 0;
-  --mat-sidenav-container-divider-color: var(--mat-sys-outline-variant);
 
   // Ítems compactos, con esquinas suaves y separados del borde.
   --mat-list-list-item-container-shape: 8px;
@@ -59,7 +59,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 64px;
+  min-height: 56px;
   padding: 0 8px 0 24px;
 
   .reducida & {
@@ -117,12 +117,16 @@ mat-nav-list {
   font: var(--mat-sys-body-medium);
 }
 
+// El contenido aprovecha todo lo que deja la barra, con un margen mínimo:
+// las pantallas de tabla no pierden espacio en bordes.
 main {
   display: flex;
+  flex: 1;
   flex-direction: column;
   box-sizing: border-box;
+  min-width: 0;
   height: 100%;
-  padding: 24px 32px;
+  padding: 8px 12px;
 
   &:focus {
     outline: none;

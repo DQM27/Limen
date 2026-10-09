@@ -7,6 +7,9 @@ import { esErrorApp } from '../nucleo/tauri';
 import type { FilaContratista } from '../nucleo/tipos';
 import { etiquetaDeAcceso, etiquetaDeTipo } from './etiquetas';
 
+/** El buscador general sólo mira lo que identifica a la persona. */
+const fueraDelBuscador = (): string => '';
+
 @Component({
   selector: 'app-contratistas-pagina',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -22,31 +25,33 @@ export class ContratistasPagina {
   protected readonly idFila = (fila: FilaContratista): string => fila.id;
 
   protected readonly columnas: ColDef<FilaContratista>[] = [
-    { field: 'cedula', headerName: 'Cédula', flex: 0, width: 140 },
+    { field: 'cedula', headerName: 'Cédula', flex: 1.2, minWidth: 120 },
     { field: 'nombre', headerName: 'Nombre', flex: 2, minWidth: 220 },
-    { field: 'empresa_nombre', headerName: 'Empresa', flex: 2, minWidth: 180 },
+    { field: 'empresa_nombre', headerName: 'Empresa', flex: 1.5, minWidth: 150 },
     {
       field: 'tipo_ingreso',
       headerName: 'Tipo',
-      flex: 0,
-      width: 120,
-      valueFormatter: (p) => (p.value ? etiquetaDeTipo(p.value) : ''),
+      flex: 1,
+      minWidth: 100,
+      valueGetter: (p) => (p.data ? etiquetaDeTipo(p.data.tipo_ingreso) : ''),
+      getQuickFilterText: fueraDelBuscador,
     },
     {
       field: 'fecha_vencimiento_praind',
+      type: 'fecha',
       headerName: 'Vence PRAIND',
-      flex: 0,
-      width: 150,
+      flex: 1.2,
+      minWidth: 140,
       valueFormatter: (p) => fechaCorta(p.value),
-      // El filtro y el filtro rápido buscan lo que la persona ve, no el ISO.
-      filterValueGetter: (p) => fechaCorta(p.data?.fecha_vencimiento_praind),
+      getQuickFilterText: fueraDelBuscador,
     },
     {
       colId: 'estado',
       headerName: 'Estado',
-      flex: 1,
-      minWidth: 170,
+      flex: 1.2,
+      minWidth: 150,
       valueGetter: (p) => (p.data ? etiquetaDeAcceso(p.data.acceso) : ''),
+      getQuickFilterText: fueraDelBuscador,
     },
   ];
 

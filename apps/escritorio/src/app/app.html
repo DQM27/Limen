@@ -1,7 +1,7 @@
 <a class="saltar" href="#contenido" (click)="irAlContenido($event)">Saltar al contenido</a>
 
-<mat-sidenav-container class="carcasa">
-  <mat-sidenav mode="side" opened disableClose class="barra" [class.reducida]="!expandida()">
+<div class="carcasa">
+  <aside class="barra" [class.reducida]="!expandida()">
     <div class="barra-cabecera">
       @if (expandida()) {
         <span class="marca">Limen</span>
@@ -70,11 +70,9 @@
         </span>
       }
     </div>
-  </mat-sidenav>
+  </aside>
 
-  <mat-sidenav-content>
-    <main id="contenido" tabindex="-1">
-      <router-outlet />
-    </main>
-  </mat-sidenav-content>
-</mat-sidenav-container>
+  <main id="contenido" tabindex="-1">
+    <router-outlet />
+  </main>
+</div>
