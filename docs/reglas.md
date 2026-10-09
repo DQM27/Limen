@@ -65,7 +65,8 @@ reconstruir cómo estaba el contratista el día que entró.
 | E5 | Si el reloj del equipo retrocedió respecto al último movimiento, no se registran movimientos. | ✅ |
 | E6 | El movimiento lo registra una sesión válida y activa. | ⏳ |
 | E7 | Ante una salida duplicada desde dos equipos, gana la primera. | ⏳ |
-| E8 | Sin conexión se registra igual; al sincronizar se avisa si hubo choque (E1). | ⏳ |
+| E8 | **Nunca se bloquea un registro por falta de red.** Sin conexión se registra de forma provisional con las reglas locales; al sincronizar, si hubo choque entre equipos (E1, gafete prestado dos veces, entró estando vetado), el registro **no se borra**: queda en conflicto y se abre una incidencia. Ver [`operacion-sin-conexion.md`](operacion-sin-conexion.md). | ⏳ |
+| E9 | Una incidencia se resuelve aceptándola, corrigiéndola con un hecho de corrección o escalándola; siempre con motivo y auditada. Nunca se borra el hecho. | ⏳ |
 
 ## F. Gafetes
 

@@ -60,6 +60,11 @@ El personal KOF cuenta como "adentro" mientras tenga un gafete provisional sin d
 (confirmado por el usuario): entregar el gafete es su entrada y devolverlo, su salida. La
 pantalla "dentro" junta las cuatro vías en un solo lugar (útil en una emergencia).
 
+Regla de oro para la sincronización: **la portería nunca se bloquea por la red.** Sin
+conexión se registra con las reglas locales; los choques entre equipos se detectan al
+sincronizar y se convierten en incidencias, sin borrar nada. Léelo completo en
+[`docs/operacion-sin-conexion.md`](docs/operacion-sin-conexion.md) antes de tocar la nube.
+
 ## Cosas que ya costaron un tropiezo
 
 - Corre `cargo clippy --all-targets -- -D warnings` **antes** de cada commit, no sólo
