@@ -1,0 +1,19 @@
+[package]
+name = "limen-infra-memoria"
+description = "Implementación en memoria de los puertos de Limen, para pruebas"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+limen-dominio.workspace = true
+limen-aplicacion.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+
+[lints]
+workspace = true

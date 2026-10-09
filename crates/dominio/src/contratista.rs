@@ -21,7 +21,7 @@ use std::fmt;
 use chrono::NaiveDate;
 use uuid::Uuid;
 
-use crate::auditoria::{CambioCampo, anotar_si_cambia};
+use crate::auditoria::{CambioCampo, CamposAuditables, cambios_de_alta, diferencias};
 use crate::cedula::{Cedula, CedulaInvalida};
 use crate::empresa::EmpresaId;
 use crate::nombre::{NombreInvalido, NombrePersona};
@@ -209,36 +209,36 @@ impl Contratista {
             return Err(ErrorContratista::CedulaNoEditableAdentro);
         }
 
-        let mut cambios = Vec::new();
-        anotar_si_cambia(&mut cambios, "cedula", &self.cedula, &cedula);
-        anotar_si_cambia(&mut cambios, "nombre", &self.nombre, &nombre);
-        anotar_si_cambia(&mut cambios, "empresa", &self.empresa, &datos.empresa);
-        anotar_si_cambia(
-            &mut cambios,
-            "tipo_ingreso",
-            &self.tipo_ingreso,
-            &datos.tipo_ingreso,
-        );
-        anotar_si_cambia(
-            &mut cambios,
-            "fecha_vencimiento_praind",
-            &self.fecha_vencimiento_praind,
-            &datos.fecha_vencimiento_praind,
-        );
-        anotar_si_cambia(
-            &mut cambios,
-            "tiene_acceso",
-            &self.tiene_acceso,
-            &datos.tiene_acceso,
-        );
-
+        let antes = self.campos_auditables();
         self.cedula = cedula;
         self.nombre = nombre;
         self.empresa = datos.empresa;
         self.tipo_ingreso = datos.tipo_ingreso;
         self.fecha_vencimiento_praind = datos.fecha_vencimiento_praind;
         self.tiene_acceso = datos.tiene_acceso;
-        Ok(cambios)
+        Ok(diferencias(antes, self.campos_auditables()))
+    }
+
+    /// Lo que la auditoría registra del alta: todos los campos.
+    pub fn cambios_de_alta(&self) -> Vec<CambioCampo> {
+        cambios_de_alta(self.campos_auditables())
+    }
+
+    /// Todos los campos que la auditoría vigila, en un orden fijo. Un campo
+    /// nuevo del contratista se agrega acá y queda auditado en el alta y en
+    /// cada edición.
+    fn campos_auditables(&self) -> CamposAuditables {
+        vec![
+            ("cedula", self.cedula.to_string()),
+            ("nombre", self.nombre.to_string()),
+            ("empresa", self.empresa.to_string()),
+            ("tipo_ingreso", self.tipo_ingreso.to_string()),
+            (
+                "fecha_vencimiento_praind",
+                self.fecha_vencimiento_praind.to_string(),
+            ),
+            ("tiene_acceso", self.tiene_acceso.to_string()),
+        ]
     }
 
     pub fn restaurar(guardado: ContratistaGuardado) -> Self {
@@ -448,6 +448,44 @@ mod tests {
         assert_eq!(cambios[0].antes, "JOSE PEÑA");
         assert_eq!(cambios[0].despues, "JOSE PENA");
         assert!(!contratista.tiene_acceso());
+    }
+
+    #[test]
+    fn el_alta_audita_todos_los_campos() {
+        let cambios = registrado().cambios_de_alta();
+        let campos: Vec<_> = cambios.iter().map(|cambio| cambio.campo).collect();
+        assert_eq!(
+            campos,
+            [
+                "cedula",
+                "nombre",
+                "empresa",
+                "tipo_ingreso",
+                "fecha_vencimiento_praind",
+                "tiene_acceso"
+            ],
+            "el alta registra cada campo"
+        );
+        assert_eq!(cambios[0].despues, "111111111", "con su valor normalizado");
+        assert_eq!(
+            cambios[3].despues, "PRAIND",
+            "el tipo con su código estable"
+        );
+    }
+
+    #[test]
+    fn un_error_al_editar_no_cambia_nada() {
+        let mut contratista = registrado();
+        let antes = contratista.clone();
+        let mut invalidos = datos();
+        invalidos.nombre = "otro nombre";
+        invalidos.fecha_vencimiento_praind = fecha("2020-01-01");
+        assert_eq!(
+            contratista.editar(invalidos, hechos(), hoy()),
+            Err(ErrorContratista::PraindVencido),
+            "la fecha vencida frena la edición"
+        );
+        assert_eq!(contratista, antes, "ni el nombre se aplicó");
     }
 
     #[test]

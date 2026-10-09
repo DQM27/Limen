@@ -8,7 +8,7 @@ use std::fmt;
 
 use uuid::Uuid;
 
-use crate::auditoria::{CambioCampo, anotar_si_cambia};
+use crate::auditoria::{CambioCampo, CamposAuditables, cambios_de_alta, diferencias};
 
 /// Largo máximo del nombre de una empresa.
 pub const LARGO_MAXIMO_NOMBRE_EMPRESA: usize = 150;
@@ -133,10 +133,18 @@ impl Empresa {
         if nombre != self.nombre && hechos.nombre_en_uso {
             return Err(ErrorEmpresa::NombreRepetido);
         }
-        let mut cambios = Vec::new();
-        anotar_si_cambia(&mut cambios, "nombre", &self.nombre, &nombre);
+        let antes = self.campos_auditables();
         self.nombre = nombre;
-        Ok(cambios)
+        Ok(diferencias(antes, self.campos_auditables()))
+    }
+
+    /// Lo que la auditoría registra del alta: todos los campos.
+    pub fn cambios_de_alta(&self) -> Vec<CambioCampo> {
+        cambios_de_alta(self.campos_auditables())
+    }
+
+    fn campos_auditables(&self) -> CamposAuditables {
+        vec![("nombre", self.nombre.to_string())]
     }
 
     /// Reconstruye una empresa ya guardada. Los tipos de los parámetros

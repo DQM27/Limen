@@ -17,7 +17,6 @@
 La guía completa está en [`docs/arquitectura.md`](docs/arquitectura.md): léela antes de
 empezar a trabajar. Resumen:
 
-
 - Arquitectura hexagonal. Dependencias sólo hacia adentro:
   `apps → composicion → infra-* → aplicacion → dominio`.
 - **Toda regla de negocio vive en `crates/dominio`**, sin excepción. Si una regla
