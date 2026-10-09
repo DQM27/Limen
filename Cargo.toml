@@ -6,6 +6,7 @@ members = [
     "crates/infra-memoria",
     "crates/infra-surreal",
     "crates/pruebas-contrato",
+    "crates/infra-plataforma",
 ]
 
 [workspace.package]
@@ -18,6 +19,7 @@ publish = false
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 thiserror = "2"
 uuid = { version = "1", features = ["v7"] }
+chrono-tz = { version = "0.10", default-features = false, features = ["std"] }
 proptest = "1"
 tokio = { version = "1", default-features = false, features = ["macros", "rt"] }
 # Sólo motores escritos en Rust: `kv-mem` (pruebas) y `kv-surrealkv` (equipos).
@@ -32,6 +34,7 @@ limen-aplicacion = { path = "crates/aplicacion" }
 limen-infra-memoria = { path = "crates/infra-memoria" }
 limen-infra-surreal = { path = "crates/infra-surreal" }
 limen-pruebas-contrato = { path = "crates/pruebas-contrato" }
+limen-infra-plataforma = { path = "crates/infra-plataforma" }
 
 # Lints: lo de Lattis (pedantic + nursery + su lista de `deny`) y más estricto
 # todavía. La CI corre clippy con `-D warnings`, así que todo `warn` también

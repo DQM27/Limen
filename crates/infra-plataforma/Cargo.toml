@@ -1,0 +1,17 @@
+[package]
+name = "limen-infra-plataforma"
+description = "Adaptadores de plataforma de Limen: reloj real y generador de IDs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+limen-aplicacion.workspace = true
+# `clock`: sólo este crate lee la hora del sistema; el resto la recibe.
+chrono = { workspace = true, features = ["clock"] }
+chrono-tz.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
