@@ -14,7 +14,7 @@ Estado: ✅ implementada en `crates/dominio` · ⏳ acordada, pendiente de imple
 | A3 | Contratistas, proveedores y correo: sólo cédula nacional o de extranjero, números de 9 a 13 dígitos. | ✅ |
 | A5 | Nombre de persona: sólo letras de la A a la Z, la Ñ y espacios. Las tildes y la diéresis se quitan solas ("José" → "JOSE"); números y símbolos (incluidos apóstrofo y guion) se rechazan. | ✅ |
 | A6 | Todo nombre de persona o empresa se guarda en MAYÚSCULAS y sin espacios de más. | ✅ |
-| A7 | Una persona sólo puede estar adentro por una vía a la vez (contratista, proveedor, correo o KOF). El personal KOF se identifica por código de empleado, no por cédula. | ⏳ |
+| A7 | Una persona sólo puede estar adentro por una vía a la vez (contratista, proveedor, correo o KOF). El personal KOF se identifica por código de empleado, no por cédula. | ✅ dominio; ⏳ proveedor, correo y KOF |
 | A8 | Veto por persona: una cédula con acceso denegado se rechaza por cualquier vía. | ⏳ |
 
 ## B. Contratistas
@@ -58,11 +58,11 @@ reconstruir cómo estaba el contratista el día que entró.
 
 | Código | Regla | Estado |
 |---|---|---|
-| E1 | No puede tener dos ingresos abiertos, ni en otro equipo ni en otro sitio. | ⏳ |
-| E2 | En vehículo la placa es obligatoria; a pie no se indica placa. | ⏳ |
-| E3 | Si lleva gafete, debe existir en el catálogo, estar disponible y no estar en uso. | ⏳ |
-| E4 | La salida no puede ser anterior a la entrada. | ⏳ |
-| E5 | Si el reloj del equipo retrocedió respecto al último movimiento, no se registran movimientos. | ⏳ |
+| E1 | No puede tener dos ingresos abiertos. "Ya está adentro" pesa más que el acceso denegado: lo que corresponde es registrar la salida. (Entre equipos y sitios: fase de nube.) | ✅ |
+| E2 | En vehículo la placa es obligatoria (mayúsculas; letras, números, espacios y guiones; hasta 20); a pie lo escrito se descarta. | ✅ |
+| E3 | Si lleva gafete, debe existir en el catálogo, estar disponible y no estar prestado. El gafete es opcional ("sin gafete") aunque el tipo lo requiera; a IN HOUSE se le ignora el número. | ✅ |
+| E4 | La salida no puede ser anterior a la entrada, y un ingreso no se cierra dos veces. | ✅ |
+| E5 | Si el reloj del equipo retrocedió respecto al último movimiento, no se registran movimientos. | ✅ |
 | E6 | El movimiento lo registra una sesión válida y activa. | ⏳ |
 | E7 | Ante una salida duplicada desde dos equipos, gana la primera. | ⏳ |
 | E8 | Sin conexión se registra igual; al sincronizar se avisa si hubo choque (E1). | ⏳ |
@@ -71,12 +71,12 @@ reconstruir cómo estaba el contratista el día que entró.
 
 | Código | Regla | Estado |
 |---|---|---|
-| F1 | Número mayor a cero, sin repetir; se pueden crear por rango. | ⏳ |
-| F2 | Tipos: contratista, proveedor y provisional KOF. | ⏳ |
-| F3 | Estados: Disponible → Perdido → Disponible, y Disponible → De baja. | ⏳ |
-| F4 | Sólo un gafete disponible se da de baja o se marca perdido. | ⏳ |
-| F5 | Marcar perdido exige indicar quién lo debe. | ⏳ |
-| F6 | No se da de baja un gafete asignado a un ingreso activo. | ⏳ |
+| F1 | Número mayor a cero, sin repetir dentro de su tipo; se pueden crear por rango (hasta 1.000 de una vez). | ✅ |
+| F2 | Tipos: contratista, visita (la usa el ingreso por correo), proveedor y provisional KOF. | ✅ |
+| F3 | Estados: Disponible → Perdido → Disponible (pagado o apareció, queda en la auditoría), y Disponible → De baja. | ✅ |
+| F4 | Sólo un gafete disponible se da de baja o se marca perdido. | ✅ |
+| F5 | Marcar perdido exige indicar quién lo debe. | ✅ |
+| F6 | No se da de baja un gafete prestado en este momento. | ✅ |
 
 ## H. Proveedores
 
