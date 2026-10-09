@@ -39,3 +39,35 @@ cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
 cargo test
 ```
+
+## Estado actual y siguiente paso
+
+El **núcleo** (todo lo que funciona dentro de un equipo, sin pantalla ni nube) está
+completo y probado: dominio, aplicación, `infra-memoria`, `infra-surreal`, `infra-plataforma`
+y `composicion`. Cubre contratistas, empresas, gafetes, ingresos y salidas (contratista,
+proveedor y correo), personal KOF con su gafete provisional, el buscador y las consultas
+de lectura. El detalle está en [`docs/reglas.md`](docs/reglas.md) y en la hoja de ruta de
+`docs/arquitectura.md` (sección 13).
+
+Lo que sigue, en este orden: **(1)** app de escritorio con Tauri (`apps/escritorio`),
+empezando por contratistas: buscar, registrar, entrar y salir; **(2)** el resto de las
+pantallas; **(3)** usuarios y sesión (bloque L) y equipos (bloque M); **(4)** la nube
+(`infra-nube`: SurrealDB Cloud gratis en `aws-use1` para empezar, sincronización, Worker de
+Cloudflare); **(5)** móvil. El almacén clave-valor (configuración del equipo) se define
+cuando la pantalla diga qué necesita.
+
+Decisiones abiertas que conviene confirmar con el usuario: si el personal KOF debe contar
+como "estar adentro" (regla A7; hoy sólo se controla su gafete provisional, como en Lattis).
+
+## Cosas que ya costaron un tropiezo
+
+- Corre `cargo clippy --all-targets -- -D warnings` **antes** de cada commit, no sólo
+  `cargo test`: las pruebas y la batería de contrato también cumplen los lints (aserciones
+  con mensaje, sin indexar, funciones de menos de 100 líneas).
+- Todo puerto o repositorio nuevo se implementa en `infra-memoria` y en `infra-surreal`,
+  y se prueba con la batería de `pruebas-contrato` (que corre contra los dos).
+- Lo que debe ser único entre equipos usa una clave natural en la base (`presencia:⟨cédula⟩`,
+  `prestamo_gafete:⟨TIPO-NÚMERO⟩`…): la base rechaza al segundo y el caso de uso traduce el
+  choque al error de negocio. El nombre del índice o de la tabla va en `infra-surreal/src/error.rs`.
+- El buscador decide el orden en el dominio (`busqueda::relevantes`); los adaptadores sólo
+  traen candidatos. No poner reglas de búsqueda en las consultas.
