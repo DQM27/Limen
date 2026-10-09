@@ -474,7 +474,8 @@ sequenceDiagram
   Activos venga el cambio del operador o de la nube. Un solo camino.
 - Invariantes entre sitios (una persona dentro a la vez, regla A7): la nube es la
   autoridad. Sin conexión se acepta de forma provisional y, si al sincronizar hay
-  choque, el hecho no se descarta: queda en conflicto y se abre una **incidencia**.
+  choque, el hecho no se descarta: queda marcado con un **indicador de incidente**
+  (cualquier operador lo revisa; una persona vetada que entró dispara alerta).
   **La portería nunca se bloquea por la red** (a diferencia de Lattis). El detalle,
   la práctica en que se apoya y lo que falta confirmar están en
   [`operacion-sin-conexion.md`](operacion-sin-conexion.md).

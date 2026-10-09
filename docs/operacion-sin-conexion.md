@@ -4,8 +4,7 @@ Decisión de diseño sobre qué pasa cuando un equipo registra un movimiento y n
 hablar con la nube ni con los demás equipos. Se anota aquí para que cualquier sesión
 futura la respete al construir la sincronización y las pantallas.
 
-**Estado:** acordada en principio con el dueño; los puntos de la sección 7 están por
-confirmar.
+**Estado:** acordada con el dueño; quedan dos puntos por confirmar (sección 7).
 
 ---
 
@@ -93,10 +92,8 @@ posterior**, no una puerta cerrada.
 ### 4.2 El registro provisional
 
 Todo hecho creado sin poder consultar a los demás queda marcado como **pendiente de
-sincronizar**. Al sincronizar pasa a uno de dos estados:
-
-- **Confirmado:** nadie lo contradijo.
-- **En conflicto:** otro equipo dejó un hecho incompatible.
+sincronizar**. Al sincronizar, o queda confirmado (nadie lo contradijo) o queda
+**marcado como incidente**.
 
 El registro **nunca se borra**. Es un hecho: la persona sí entró.
 
@@ -104,17 +101,21 @@ El registro **nunca se borra**. Es un hecho: la persona sí entró.
 
 Las reglas entre equipos (A7, E1, un gafete prestado una vez) se comprueban al **unir**
 los hechos de todos los equipos. Si se violan, no se descarta el segundo hecho ni se
-falla el lote de sincronización: se abre una **incidencia** que enlaza los hechos
-involucrados.
+falla el lote de sincronización: **se marca el registro con el indicador de incidente**.
 
 Esto también significa que la unicidad de la nube (por ejemplo `presencia:⟨cédula⟩`)
-no puede ser lo que rechace el envío: tiene que convertirse en una incidencia. Se
-resuelve cuando se construya la sincronización (hoja de ruta, paso 7).
+no puede ser lo que rechace el envío: tiene que convertirse en esa marca. Se resuelve
+cuando se construya la sincronización (hoja de ruta, paso 7).
 
-### 4.4 Incidencias (la bitácora)
+### 4.4 El indicador de incidente (sin flujo aparte)
 
-Una incidencia guarda: de qué tipo es, los hechos involucrados, cuándo se detectó, y
-quién la resolvió y cómo.
+Se decidió mantenerlo simple: **no hay una tabla ni un flujo de incidencias**. Es una
+marca en el propio registro (ingreso o préstamo de gafete) con:
+
+- el **tipo** de incidente;
+- cuándo se detectó;
+- el registro con el que chocó (el otro ingreso, con su equipo, su operador y su hora);
+- si ya fue **revisado**, por quién y con qué nota.
 
 | Tipo | Qué pasó |
 |---|---|
@@ -123,22 +124,39 @@ quién la resolvió y cómo.
 | Entró estando vetado | Se registró la entrada de alguien al que otro equipo le había negado el acceso (A8) |
 | Salida duplicada | Dos salidas del mismo ingreso; gana la primera (E7), se anota |
 
-Se resuelve de tres maneras, siempre con motivo y quedando en la auditoría (B11):
+**La causa habitual es una salida que alguien no registró.** Si una persona aparece
+entrando dos veces, lo normal es que la primera visita nunca se cerró. Por eso un
+incidente de este tipo **abre una revisión interna de quién no sacó a la persona**: la
+pantalla muestra el ingreso anterior sin salida (quién lo registró, en qué equipo y a
+qué hora) para saber a quién preguntarle.
 
-1. **Aceptar:** los dos hechos son ciertos (por ejemplo, salió por un lado y volvió a
-   entrar por el otro).
-2. **Corregir:** se anula uno **con un hecho de corrección**, no borrándolo.
-3. **Escalar:** se pasa a seguridad o a un supervisor (útil para el veto).
+**Cualquier operador puede marcar un incidente como revisado**, dejando una nota. Queda
+auditado quién y cuándo (B11). Marcarlo como revisado **no borra ni cambia el hecho**;
+sólo cierra la revisión. Si hay que corregir algo (por ejemplo cerrar la visita que
+quedó abierta), se hace con el flujo normal, que también queda en la auditoría.
 
-En la lista "dentro" una persona cuenta **una sola vez**, aunque tenga una incidencia
-abierta.
+La lista de incidentes no es una entidad nueva: es una vista de los registros que
+tienen el indicador y todavía no están revisados. En la lista "dentro" una persona
+cuenta **una sola vez**, aunque tenga un incidente abierto.
+
+### 4.4.1 Persona vetada que entró sin conexión
+
+Es el único incidente que **avisa por sí solo**. Cuando se detecta (al sincronizar):
+
+- **En el punto de acceso:** una alerta visible y persistente en el equipo que registró
+  la entrada y en los demás equipos del punto, con el nombre de la persona y dónde
+  está.
+- **En el panel:** una alerta en vivo, además de aparecer en la lista de incidentes.
+
+Los demás incidentes sólo aparecen en la lista y en el aviso de la pantalla.
 
 ### 4.5 Lo que ve el operador
 
 - Un aviso fijo: "Sin conexión — N registros pendientes de sincronizar".
 - Nunca un mensaje que le impida registrar por falta de red.
-- Después de sincronizar, la lista de incidencias abiertas con el detalle del choque
-  (equipo, hora, persona o gafete), para que no se pierda en una pestaña.
+- Después de sincronizar, un aviso con la cantidad de incidentes sin revisar y la lista
+  con el detalle del choque (equipo, hora, persona o gafete), para que no se pierda en
+  una pestaña.
 
 ### 4.6 Qué tan viejos pueden ser los datos locales
 
@@ -155,7 +173,7 @@ llegó a este equipo. Para no confiar en datos demasiado viejos:
 - **Bloquear un registro por falta de conexión** (el comportamiento de Lattis).
 - **Borrar el registro conflictivo.** Se corrige con otro hecho.
 - **Resolver en silencio** con "gana el más reciente". Una pérdida silenciosa en un
-  registro de seguridad es peor que una incidencia visible.
+  registro de seguridad es peor que un incidente visible.
 - **Adivinar quién tiene la razón.** El orden de llegada ayuda a sugerir cuál es el
   duplicado (el hecho más tardío), pero la decisión es de una persona.
 
@@ -164,19 +182,30 @@ llegó a este equipo. Para no confiar en datos demasiado viejos:
 Nada de esto cambia el núcleo actual, que ya decide con datos locales y no consulta a
 nadie. Se construye junto con la sincronización (paso 7):
 
-1. Estado de sincronización en cada hecho (pendiente, confirmado, en conflicto).
-2. Tabla de incidencias y su caso de uso de resolución (en `dominio` y `aplicacion`).
+1. Estado de sincronización en cada hecho (pendiente, confirmado) y el indicador de
+   incidente (tipo, registro con el que chocó, revisión) en ingresos y préstamos.
+2. Un caso de uso para marcar un incidente como revisado, con nota (en `aplicacion`;
+   la regla de qué tipos existen, en `dominio`).
 3. Detección de las invariantes entre equipos al unir los hechos (en la nube).
-4. Aviso de "sin conexión" y lista de incidencias en las pantallas.
+4. Alerta de persona vetada: en los equipos del punto de acceso y en el panel (esto
+   usa el aviso en vivo y las notificaciones, sección 10 de `arquitectura.md`).
+5. Aviso de "sin conexión" y lista de incidentes en las pantallas.
 
-Las reglas **E7** y **E8** de `reglas.md` describen este comportamiento.
+Las reglas **E7**, **E8**, **E9** y **E10** de `reglas.md` describen este comportamiento.
 
-## 7. Por confirmar con el dueño
+## 7. Decisiones tomadas y por confirmar
 
-1. ¿Quién resuelve las incidencias: cualquier operador, o sólo un supervisor? (Hoy no
-   hay roles especiales, regla L1; si todos pueden, queda auditado quién y por qué.)
-2. ¿Se acepta el umbral de 24 horas para el aviso de datos viejos?
-3. ¿Un ingreso "entró estando vetado" debe avisar de inmediato a alguien (correo o
-   notificación) cuando se sincronice, además de la lista?
-4. ¿Alguna regla de Lattis que hoy bloquea sin conexión y que sí se deba mantener
+**Decidido por el dueño:**
+
+1. Cualquier operador puede marcar un incidente como revisado (sin roles especiales,
+   regla L1). Queda auditado quién y cuándo.
+2. Se mantiene simple: el registro se marca con un indicador de incidente, sin flujo ni
+   entidad aparte. Un doble ingreso abre una revisión interna de quién no registró la
+   salida.
+3. Si entra alguien vetado sin conexión, se alerta en el punto de acceso y en el panel.
+
+**Por confirmar:**
+
+1. ¿Se acepta el umbral de 24 horas para el aviso de datos viejos (4.6)?
+2. ¿Alguna regla de Lattis que hoy bloquea sin conexión y que sí se deba mantener
    bloqueando?

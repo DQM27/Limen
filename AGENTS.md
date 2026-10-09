@@ -62,7 +62,7 @@ pantalla "dentro" junta las cuatro vías en un solo lugar (útil en una emergenc
 
 Regla de oro para la sincronización: **la portería nunca se bloquea por la red.** Sin
 conexión se registra con las reglas locales; los choques entre equipos se detectan al
-sincronizar y se convierten en incidencias, sin borrar nada. Léelo completo en
+sincronizar y marcan el registro con un indicador de incidente, sin borrar nada. Léelo completo en
 [`docs/operacion-sin-conexion.md`](docs/operacion-sin-conexion.md) antes de tocar la nube.
 
 ## Cosas que ya costaron un tropiezo
