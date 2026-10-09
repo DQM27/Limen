@@ -19,7 +19,7 @@ use std::path::PathBuf;
 
 use limen_aplicacion::casos_de_uso::consultas::{
     BuscarContratistas, BuscarEmpresas, BuscarEmpresasProveedoras, BuscarPersonalKof,
-    QuienesEstanAdentro,
+    HistorialDeCambios, ListarGafetes, PraindPorVencer, QuienesEstanAdentro,
 };
 use limen_aplicacion::casos_de_uso::contratistas::{
     ConsultarContratista, EditarContratista, RegistrarContratista,
@@ -84,6 +84,7 @@ grupo! {
         editar: EditarContratista<F, R, G>,
         consultar: ConsultarContratista<F, R>,
         buscar: BuscarContratistas<F>,
+        praind_por_vencer: PraindPorVencer<F, R>,
     }
 }
 
@@ -92,6 +93,7 @@ grupo! {
     Gafetes {
         registrar: RegistrarGafetes<F, R, G>,
         cambiar: CambiarGafete<F, R, G>,
+        listar: ListarGafetes<F>,
     }
 }
 
@@ -146,6 +148,8 @@ pub struct Aplicacion<F, R, G> {
     pub kof: Kof<F, R, G>,
     /// Quién está adentro ahora.
     pub quienes_estan_adentro: QuienesEstanAdentro<F>,
+    /// Qué cambió en un registro, quién y cuándo.
+    pub historial: HistorialDeCambios<F>,
 }
 
 impl<F, R, G> fmt::Debug for Aplicacion<F, R, G> {
@@ -176,10 +180,12 @@ where
                 editar: EditarContratista::new(a(), r(), i()),
                 consultar: ConsultarContratista::new(a(), r()),
                 buscar: BuscarContratistas::new(a()),
+                praind_por_vencer: PraindPorVencer::new(a(), r()),
             },
             gafetes: Gafetes {
                 registrar: RegistrarGafetes::new(a(), r(), i()),
                 cambiar: CambiarGafete::new(a(), r(), i()),
+                listar: ListarGafetes::new(a()),
             },
             ingresos: Ingresos {
                 entrada: RegistrarEntrada::new(a(), r(), i()),
@@ -204,6 +210,7 @@ where
                 devolver_gafete: DevolverGafeteKof::new(a(), r()),
             },
             quienes_estan_adentro: QuienesEstanAdentro::new(a()),
+            historial: HistorialDeCambios::new(a()),
         }
     }
 }

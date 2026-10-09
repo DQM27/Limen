@@ -100,6 +100,9 @@ macro_rules! bateria_de_contrato {
             buscar_contratistas_respeta_el_limite_y_el_criterio_vacio,
             buscar_personal_kof_por_codigo_o_nombre,
             buscar_empresas_por_nombre_con_numeros_y_signos,
+            el_historial_va_en_orden_y_solo_trae_el_registro_pedido,
+            listar_gafetes_trae_los_del_tipo_con_su_estado_y_si_estan_prestados,
+            contratistas_con_praind_hasta_filtra_ordena_y_respeta_el_limite,
         );
     };
     (@pruebas $fabrica:expr; $($prueba:ident),+ $(,)?) => {

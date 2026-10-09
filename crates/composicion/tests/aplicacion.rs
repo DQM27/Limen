@@ -9,15 +9,18 @@ mod tests {
     use limen_aplicacion::casos_de_uso::ingresos::ComandoEntrada;
     use limen_aplicacion::casos_de_uso::proveedores::ComandoEntradaProveedor;
     use limen_aplicacion::puertos::{
-        Consultas, FabricaUnidadDeTrabajo, GeneradorIds, IngresoAbierto, Reloj,
+        AccionAuditada, Consultas, FabricaUnidadDeTrabajo, GeneradorIds, IngresoAbierto,
+        RegistroAuditado, Reloj,
     };
     use limen_aplicacion::sesion::{OperadorId, Sesion};
     use limen_composicion::{Aplicacion, AplicacionLimen, Config};
     use limen_dominio::acceso::ResultadoAcceso;
-    use limen_dominio::contratista::ContratistaId;
+    use limen_dominio::cedula::Cedula;
+    use limen_dominio::contratista::{Contratista, ContratistaGuardado, ContratistaId};
     use limen_dominio::empresa_proveedora::EmpresaProveedoraId;
     use limen_dominio::gafete::TipoGafete;
     use limen_dominio::medio::TipoMedio;
+    use limen_dominio::nombre::NombrePersona;
     use limen_dominio::personal_kof::PersonalKofId;
     use limen_dominio::tipo_ingreso::TipoIngreso;
     use limen_infra_memoria::{AlmacenMemoria, IdsSecuenciales, RelojFijo};
@@ -223,6 +226,50 @@ mod tests {
         );
     }
 
+    /// Las consultas de apoyo ven lo que pasó durante el día.
+    async fn consultas_de_apoyo<F, R, G>(app: &Aplicacion<F, R, G>, dia: &Dia)
+    where
+        F: FabricaUnidadDeTrabajo + Consultas + Clone,
+        R: Reloj + Clone,
+        G: GeneradorIds + Clone,
+    {
+        let historial = app
+            .historial
+            .ejecutar(RegistroAuditado::Contratista(dia.contratista))
+            .await
+            .unwrap();
+        assert_eq!(historial.len(), 1, "sólo el alta");
+        assert_eq!(historial[0].accion, AccionAuditada::Alta, "fue el alta");
+
+        let gafetes = app
+            .gafetes
+            .listar
+            .ejecutar(TipoGafete::Contratista)
+            .await
+            .unwrap();
+        assert_eq!(gafetes.len(), 10, "los diez gafetes de contratista");
+        let prestados: Vec<u32> = gafetes
+            .iter()
+            .filter(|resumen| resumen.prestado)
+            .map(|resumen| resumen.gafete.numero().valor())
+            .collect();
+        assert_eq!(
+            prestados,
+            [3],
+            "el 3 está prestado al contratista de adentro"
+        );
+
+        assert!(
+            app.contratistas
+                .praind_por_vencer
+                .ejecutar()
+                .await
+                .unwrap()
+                .is_empty(),
+            "su PRAIND vence en 2099"
+        );
+    }
+
     /// Salen, cada uno por su gafete.
     async fn salen_todos<F, R, G>(app: &Aplicacion<F, R, G>)
     where
@@ -258,6 +305,7 @@ mod tests {
     {
         let dia = preparar_el_dia(app).await;
         entran_todos(app, &dia).await;
+        consultas_de_apoyo(app, &dia).await;
         salen_todos(app).await;
     }
 
@@ -334,6 +382,59 @@ mod tests {
                 .to_string()
                 .starts_with("No se pudo abrir la base de datos"),
             "{error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn el_praind_por_vencer_usa_los_30_dias_de_advertencia_del_reloj() {
+        let almacen = AlmacenMemoria::new();
+        let hoy = NaiveDate::from_ymd_opt(2026, 10, 9).unwrap();
+        let reloj = RelojFijo::new("2026-10-09T14:00:00Z".parse().unwrap(), hoy);
+        let app = Aplicacion::nueva(&almacen, &reloj, &almacen.ids());
+        let sesion = sesion();
+        let acme = app
+            .empresas
+            .registrar
+            .ejecutar(&sesion, "acme")
+            .await
+            .unwrap();
+        // Alguien cuyo PRAIND venció después de registrarlo (hoy no se
+        // puede registrar uno vencido: regla B6).
+        almacen.sembrar_contratista(Contratista::restaurar(ContratistaGuardado {
+            id: ContratistaId::desde_uuid(Uuid::from_u128(700)),
+            cedula: Cedula::normalizar("1-1111-1111").unwrap(),
+            nombre: NombrePersona::nuevo("ana").unwrap(),
+            empresa: acme,
+            tipo_ingreso: TipoIngreso::Praind,
+            fecha_vencimiento_praind: "2026-10-01".parse().unwrap(),
+            tiene_acceso: true,
+        }));
+        for (cedula, nombre, vence) in [
+            ("2-2222-2222", "beto", "2026-11-08"),
+            ("3-3333-3333", "carlos", "2026-11-09"),
+        ] {
+            app.contratistas
+                .registrar
+                .ejecutar(
+                    &sesion,
+                    &ComandoContratista {
+                        cedula: cedula.into(),
+                        nombre: nombre.into(),
+                        empresa: acme,
+                        tipo_ingreso: TipoIngreso::Praind,
+                        fecha_vencimiento_praind: vence.parse().unwrap(),
+                        tiene_acceso: true,
+                    },
+                )
+                .await
+                .unwrap();
+        }
+        let por_vencer = app.contratistas.praind_por_vencer.ejecutar().await.unwrap();
+        let nombres: Vec<&str> = por_vencer.iter().map(|c| c.nombre().as_str()).collect();
+        assert_eq!(
+            nombres,
+            ["ANA", "BETO"],
+            "ANA ya venció y BETO vence en 30 días; CARLOS en 31"
         );
     }
 }

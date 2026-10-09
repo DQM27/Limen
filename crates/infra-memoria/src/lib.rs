@@ -22,11 +22,13 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use limen_aplicacion::puertos::{
-    Consultas, EntradaAuditoria, ErrorPersistencia, FabricaUnidadDeTrabajo, GeneradorIds,
-    IngresoAbierto, PersonaAdentro, RegistroAuditoria, Reloj, RepositorioContratistas,
-    RepositorioEmpresas, RepositorioEmpresasProveedoras, RepositorioGafetes, RepositorioIngresos,
+    CambioHistorial, Consultas, EntradaAuditoria, EntradaHistorial, ErrorPersistencia,
+    FabricaUnidadDeTrabajo, GeneradorIds, IngresoAbierto, PersonaAdentro, RegistroAuditado,
+    RegistroAuditoria, Reloj, RepositorioContratistas, RepositorioEmpresas,
+    RepositorioEmpresasProveedoras, RepositorioGafetes, RepositorioIngresos,
     RepositorioIngresosCorreo, RepositorioIngresosProveedor, RepositorioPersonalKof,
-    RepositorioPresencias, RepositorioPrestamosKof, RepositorioReloj, Restriccion, UnidadDeTrabajo,
+    RepositorioPresencias, RepositorioPrestamosKof, RepositorioReloj, Restriccion, ResumenGafete,
+    UnidadDeTrabajo,
 };
 use limen_dominio::busqueda::{Criterio, relevantes};
 use limen_dominio::cedula::Cedula;
@@ -323,6 +325,77 @@ impl Consultas for AlmacenMemoria {
         std::future::ready(
             self.leer(|c| relevantes(criterio, c.empresas_proveedoras.values().cloned(), limite)),
         )
+    }
+
+    fn historial_de(
+        &self,
+        registro: RegistroAuditado,
+    ) -> impl Future<Output = Result<Vec<EntradaHistorial>, ErrorPersistencia>> + Send {
+        std::future::ready(self.leer(|c| {
+            let mut entradas: Vec<&EntradaAuditoria> = c
+                .auditoria
+                .iter()
+                .filter(|entrada| entrada.registro == registro)
+                .collect();
+            // Igual que la base: el orden lo da el ID de cada entrada.
+            entradas.sort_by_key(|entrada| entrada.id_entrada);
+            entradas
+                .into_iter()
+                .map(|entrada| EntradaHistorial {
+                    accion: entrada.accion,
+                    cambios: entrada
+                        .cambios
+                        .iter()
+                        .map(|cambio| CambioHistorial {
+                            campo: cambio.campo.to_owned(),
+                            antes: cambio.antes.clone(),
+                            despues: cambio.despues.clone(),
+                        })
+                        .collect(),
+                    operador: entrada.operador,
+                    en: entrada.en,
+                })
+                .collect()
+        }))
+    }
+
+    fn listar_gafetes(
+        &self,
+        tipo: TipoGafete,
+    ) -> impl Future<Output = Result<Vec<ResumenGafete>, ErrorPersistencia>> + Send {
+        std::future::ready(self.leer(|c| {
+            c.gafetes
+                .iter()
+                .filter(|((del_tipo, _), _)| *del_tipo == tipo)
+                .map(|(clave, gafete)| ResumenGafete {
+                    gafete: gafete.clone(),
+                    prestado: c.prestamos.contains(clave),
+                })
+                .collect()
+        }))
+    }
+
+    fn contratistas_con_praind_hasta(
+        &self,
+        hasta: NaiveDate,
+        limite: usize,
+    ) -> impl Future<Output = Result<Vec<Contratista>, ErrorPersistencia>> + Send {
+        std::future::ready(self.leer(|c| {
+            let mut por_vencer: Vec<&Contratista> = c
+                .contratistas
+                .values()
+                .filter(|persona| {
+                    persona.tiene_acceso() && persona.fecha_vencimiento_praind() <= hasta
+                })
+                .collect();
+            por_vencer.sort_by(|a, b| {
+                a.fecha_vencimiento_praind()
+                    .cmp(&b.fecha_vencimiento_praind())
+                    .then_with(|| a.nombre().as_str().cmp(b.nombre().as_str()))
+                    .then_with(|| a.cedula().as_str().cmp(b.cedula().as_str()))
+            });
+            por_vencer.into_iter().take(limite).cloned().collect()
+        }))
     }
 }
 

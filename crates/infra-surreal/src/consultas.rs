@@ -2,8 +2,11 @@
 
 use std::collections::HashSet;
 
-use chrono::{DateTime, Utc};
-use limen_aplicacion::puertos::{Consultas, ErrorPersistencia, IngresoAbierto, PersonaAdentro};
+use chrono::{DateTime, NaiveDate, Utc};
+use limen_aplicacion::puertos::{
+    AccionAuditada, CambioHistorial, Consultas, EntradaHistorial, ErrorPersistencia,
+    IngresoAbierto, PersonaAdentro, RegistroAuditado, ResumenGafete,
+};
 use limen_dominio::busqueda::{
     Buscable, Criterio, MINIMO_DIGITOS_PARA_SUBCADENA, Nivel, cuantos_hasta, relevantes,
 };
@@ -11,19 +14,22 @@ use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::Contratista;
 use limen_dominio::empresa::Empresa;
 use limen_dominio::empresa_proveedora::EmpresaProveedora;
+use limen_dominio::gafete::{Gafete, TipoGafete};
 use limen_dominio::ingreso_contratista::IngresoId;
 use limen_dominio::ingreso_correo::IngresoCorreoId;
 use limen_dominio::ingreso_proveedor::IngresoProveedorId;
 use limen_dominio::nombre::NombrePersona;
+use limen_dominio::operador::OperadorId;
 use limen_dominio::personal_kof::PersonalKof;
-use surrealdb::types::{RecordId, SurrealValue};
+use surrealdb::types::{RecordId, RecordIdKey, SurrealValue};
 
 use crate::almacen::AlmacenSurreal;
 use crate::error::{dato_corrupto, tecnica};
+use crate::registros::clave_gafete;
 use crate::registros::{
-    ContratistaLeido, EmpresaLeida, EmpresaProveedoraLeida, PersonalKofLeido,
-    TABLA_INGRESO_CONTRATISTA, TABLA_INGRESO_CORREO, TABLA_INGRESO_PROVEEDOR, medio_de, numero_de,
-    uuid_de,
+    ContratistaLeido, EmpresaLeida, EmpresaProveedoraLeida, GafeteDatos, PersonalKofLeido,
+    TABLA_AUDITORIA, TABLA_INGRESO_CONTRATISTA, TABLA_INGRESO_CORREO, TABLA_INGRESO_PROVEEDOR,
+    medio_de, numero_de, uuid_de,
 };
 
 /// Sólo el nombre plegado de una fila: lo que necesita la búsqueda
@@ -347,5 +353,94 @@ impl Consultas for AlmacenSurreal {
             |fila: EmpresaProveedoraLeida| EmpresaProveedora::try_from(fila),
         )
         .await
+    }
+
+    async fn historial_de(
+        &self,
+        registro: RegistroAuditado,
+    ) -> Result<Vec<EntradaHistorial>, ErrorPersistencia> {
+        self.auditoria_de(registro)
+            .await?
+            .into_iter()
+            .map(|fila| {
+                let accion = AccionAuditada::desde_codigo(&fila.accion).ok_or_else(|| {
+                    dato_corrupto(
+                        TABLA_AUDITORIA,
+                        format!("acción desconocida: {}", fila.accion),
+                    )
+                })?;
+                Ok(EntradaHistorial {
+                    accion,
+                    cambios: fila
+                        .cambios
+                        .into_iter()
+                        .map(|cambio| CambioHistorial {
+                            campo: cambio.campo,
+                            antes: cambio.antes,
+                            despues: cambio.despues,
+                        })
+                        .collect(),
+                    operador: OperadorId::desde_uuid(fila.operador),
+                    en: fila.en,
+                })
+            })
+            .collect()
+    }
+
+    async fn listar_gafetes(
+        &self,
+        tipo: TipoGafete,
+    ) -> Result<Vec<ResumenGafete>, ErrorPersistencia> {
+        let mut respuesta = self
+            .db()
+            .query(
+                "SELECT * OMIT id FROM gafete WHERE tipo = $tipo ORDER BY numero; \
+                 SELECT VALUE id FROM prestamo_gafete;",
+            )
+            .bind(("tipo", tipo.codigo().to_owned()))
+            .await
+            .map_err(tecnica)?;
+        let gafetes: Vec<GafeteDatos> = respuesta.take(0).map_err(tecnica)?;
+        let ids_prestados: Vec<RecordId> = respuesta.take(1).map_err(tecnica)?;
+        // La clave de cada préstamo es `TIPO-NÚMERO`.
+        let en_prestamo: HashSet<String> = ids_prestados
+            .into_iter()
+            .filter_map(|id| match id.key {
+                RecordIdKey::String(clave) => Some(clave),
+                _ => None,
+            })
+            .collect();
+        gafetes
+            .into_iter()
+            .map(|datos| {
+                let gafete = Gafete::try_from(datos)?;
+                let clave = clave_gafete(gafete.tipo(), gafete.numero());
+                Ok(ResumenGafete {
+                    prestado: en_prestamo.contains(&clave),
+                    gafete,
+                })
+            })
+            .collect()
+    }
+
+    async fn contratistas_con_praind_hasta(
+        &self,
+        hasta: NaiveDate,
+        limite: usize,
+    ) -> Result<Vec<Contratista>, ErrorPersistencia> {
+        let limite = i64::try_from(limite).unwrap_or(i64::MAX);
+        let mut respuesta = self
+            .db()
+            .query(
+                "SELECT * FROM contratista \
+                 WHERE tiene_acceso = true AND fecha_vencimiento_praind <= $hasta \
+                 ORDER BY fecha_vencimiento_praind, nombre, cedula LIMIT $limite",
+            )
+            .bind(("hasta", hasta))
+            .bind(("limite", limite))
+            .await
+            .map_err(tecnica)?;
+        let filas: Vec<ContratistaLeido> = respuesta.take(0).map_err(tecnica)?;
+        filas.into_iter().map(Contratista::try_from).collect()
     }
 }

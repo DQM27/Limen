@@ -7,21 +7,23 @@
 
 use std::future::Future;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use limen_dominio::busqueda::Criterio;
 use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::Contratista;
 use limen_dominio::empresa::Empresa;
 use limen_dominio::empresa_proveedora::EmpresaProveedora;
-use limen_dominio::gafete::NumeroGafete;
+use limen_dominio::gafete::{Gafete, NumeroGafete, TipoGafete};
 use limen_dominio::ingreso_contratista::IngresoId;
 use limen_dominio::ingreso_correo::IngresoCorreoId;
 use limen_dominio::ingreso_proveedor::IngresoProveedorId;
 use limen_dominio::medio::Medio;
 use limen_dominio::nombre::NombrePersona;
+use limen_dominio::operador::OperadorId;
 use limen_dominio::personal_kof::PersonalKof;
 use limen_dominio::presencia::Via;
 
+use super::auditoria::{AccionAuditada, RegistroAuditado};
 use super::persistencia::ErrorPersistencia;
 
 /// El ingreso abierto de alguien que está adentro, según su vía. Es lo que
@@ -55,6 +57,30 @@ pub struct PersonaAdentro {
     pub medio: Medio,
     pub gafete: Option<NumeroGafete>,
     pub desde: DateTime<Utc>,
+}
+
+/// Un cambio guardado en el historial de un registro.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CambioHistorial {
+    pub campo: String,
+    pub antes: String,
+    pub despues: String,
+}
+
+/// Una entrada del historial de un registro: qué se hizo, quién y cuándo.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EntradaHistorial {
+    pub accion: AccionAuditada,
+    pub cambios: Vec<CambioHistorial>,
+    pub operador: OperadorId,
+    pub en: DateTime<Utc>,
+}
+
+/// Un gafete del catálogo y si está prestado ahora.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResumenGafete {
+    pub gafete: Gafete,
+    pub prestado: bool,
 }
 
 pub trait Consultas: Send + Sync {
@@ -94,4 +120,27 @@ pub trait Consultas: Send + Sync {
         criterio: &Criterio,
         limite: usize,
     ) -> impl Future<Output = Result<Vec<EmpresaProveedora>, ErrorPersistencia>> + Send;
+
+    /// El historial de cambios de un registro, del más antiguo al más
+    /// reciente (regla B11: todo cambio queda, por insignificante que sea).
+    fn historial_de(
+        &self,
+        registro: RegistroAuditado,
+    ) -> impl Future<Output = Result<Vec<EntradaHistorial>, ErrorPersistencia>> + Send;
+
+    /// Los gafetes de un tipo, por número, con su estado y si están
+    /// prestados.
+    fn listar_gafetes(
+        &self,
+        tipo: TipoGafete,
+    ) -> impl Future<Output = Result<Vec<ResumenGafete>, ErrorPersistencia>> + Send;
+
+    /// Contratistas con acceso cuyo PRAIND vence a más tardar en `hasta`
+    /// (incluidos los ya vencidos), del que vence primero al último; a
+    /// igual fecha, por nombre y cédula. Hasta `limite`.
+    fn contratistas_con_praind_hasta(
+        &self,
+        hasta: NaiveDate,
+        limite: usize,
+    ) -> impl Future<Output = Result<Vec<Contratista>, ErrorPersistencia>> + Send;
 }

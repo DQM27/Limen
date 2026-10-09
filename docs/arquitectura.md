@@ -590,6 +590,16 @@ Se avanza por capas, completando cada una para un módulo antes de pasar al sigu
 8. **Móvil.**
 9. Migración de datos desde Lattis y corte.
 
+### 13.0 Consultas de lectura
+
+El puerto `Consultas` (de sólo lectura, fuera de la Unit of Work) tiene lo que las
+pantallas necesitan mostrar: quién está adentro (las tres vías juntas, con el ingreso
+abierto para registrar la salida), los buscadores, el **historial de cambios** de un
+registro (regla B11), el **listado de gafetes** de un tipo con su estado y si están
+prestados, y los contratistas con el **PRAIND por vencer** (vencidos y los de los
+próximos 30 días). Cada una se prueba con la misma batería de contrato en memoria y en
+`SurrealDB`.
+
 ### 13.1 El buscador
 
 Toda la regla vive en `dominio/busqueda.rs`, para que cada adaptador y cada pantalla

@@ -60,6 +60,12 @@ pub enum AccionAuditada {
 }
 
 impl AccionAuditada {
+    pub fn desde_codigo(codigo: &str) -> Option<Self> {
+        [Self::Alta, Self::Edicion]
+            .into_iter()
+            .find(|accion| accion.codigo() == codigo)
+    }
+
     pub const fn codigo(self) -> &'static str {
         match self {
             Self::Alta => "alta",
