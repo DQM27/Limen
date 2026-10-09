@@ -9,8 +9,8 @@
 //!   Unit of Work;
 //! - `confirmar()` aplica todo o nada;
 //! - al confirmar se revisan las mismas restricciones que la base (cédula de
-//!   contratista, nombre de empresa, número de gafete, presencia única y
-//!   gafete prestado), paso a paso como ella.
+//!   contratista, nombre de empresa y de empresa proveedora, número de
+//!   gafete, presencia única y gafete prestado), paso a paso como ella.
 //!
 //! La batería de `limen-pruebas-contrato` corre contra este doble y contra
 //! `SurrealDB` para garantizar que se comportan igual.
@@ -23,14 +23,17 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use chrono::{DateTime, NaiveDate, Utc};
 use limen_aplicacion::puertos::{
     EntradaAuditoria, ErrorPersistencia, FabricaUnidadDeTrabajo, GeneradorIds, RegistroAuditoria,
-    Reloj, RepositorioContratistas, RepositorioEmpresas, RepositorioGafetes, RepositorioIngresos,
-    RepositorioPresencias, RepositorioReloj, Restriccion, UnidadDeTrabajo,
+    Reloj, RepositorioContratistas, RepositorioEmpresas, RepositorioEmpresasProveedoras,
+    RepositorioGafetes, RepositorioIngresos, RepositorioIngresosProveedor, RepositorioPresencias,
+    RepositorioReloj, Restriccion, UnidadDeTrabajo,
 };
 use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::{Contratista, ContratistaId};
 use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
+use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
 use limen_dominio::gafete::{Gafete, NumeroGafete, TipoGafete};
 use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoId};
+use limen_dominio::ingreso_proveedor::{IngresoProveedor, IngresoProveedorId};
 use limen_dominio::presencia::Via;
 use uuid::Uuid;
 
@@ -45,6 +48,8 @@ struct Contenido {
     gafetes: BTreeMap<ClaveGafete, Gafete>,
     prestamos: BTreeSet<ClaveGafete>,
     ingresos: BTreeMap<IngresoId, IngresoContratista>,
+    empresas_proveedoras: BTreeMap<EmpresaProveedoraId, EmpresaProveedora>,
+    ingresos_proveedor: BTreeMap<IngresoProveedorId, IngresoProveedor>,
     ultimo_movimiento: Option<DateTime<Utc>>,
     auditoria: Vec<EntradaAuditoria>,
 }
@@ -105,6 +110,12 @@ impl AlmacenMemoria {
         });
     }
 
+    pub fn sembrar_empresa_proveedora(&self, empresa: EmpresaProveedora) {
+        self.sembrar(|c| {
+            c.empresas_proveedoras.insert(empresa.id(), empresa);
+        });
+    }
+
     pub fn sembrar_contratista(&self, contratista: Contratista) {
         self.sembrar(|c| {
             c.contratistas.insert(contratista.id(), contratista);
@@ -156,6 +167,14 @@ impl AlmacenMemoria {
         self.mirar(|c| c.ingresos.values().cloned().collect())
     }
 
+    pub fn empresas_proveedoras(&self) -> Vec<EmpresaProveedora> {
+        self.mirar(|c| c.empresas_proveedoras.values().cloned().collect())
+    }
+
+    pub fn ingresos_proveedor(&self) -> Vec<IngresoProveedor> {
+        self.mirar(|c| c.ingresos_proveedor.values().cloned().collect())
+    }
+
     /// Por qué vía está adentro una persona, si lo está.
     pub fn via_adentro(&self, cedula: &Cedula) -> Option<Via> {
         self.mirar(|c| c.presencias.get(cedula.as_str()).copied())
@@ -205,6 +224,14 @@ impl FabricaUnidadDeTrabajo for AlmacenMemoria {
                 almacen: self.clone(),
                 pendientes: Vec::new(),
             },
+            empresas_proveedoras: EmpresasProveedorasMemoria {
+                almacen: self.clone(),
+                pendientes: Vec::new(),
+            },
+            ingresos_proveedor: IngresosProveedorMemoria {
+                almacen: self.clone(),
+                pendientes: Vec::new(),
+            },
             reloj: RelojMemoria {
                 almacen: self.clone(),
                 pendiente: None,
@@ -224,6 +251,8 @@ pub struct UowMemoria {
     presencias: PresenciasMemoria,
     gafetes: GafetesMemoria,
     ingresos: IngresosMemoria,
+    empresas_proveedoras: EmpresasProveedorasMemoria,
+    ingresos_proveedor: IngresosProveedorMemoria,
     reloj: RelojMemoria,
     auditoria: AuditoriaMemoria,
 }
@@ -256,6 +285,18 @@ impl UowMemoria {
             }
             nuevo.contratistas.insert(contratista.id(), contratista);
         }
+        for empresa in self.empresas_proveedoras.pendientes {
+            let ocupado = nuevo
+                .empresas_proveedoras
+                .values()
+                .any(|otra| otra.id() != empresa.id() && otra.nombre() == empresa.nombre());
+            if ocupado {
+                return Err(ErrorPersistencia::Conflicto(
+                    Restriccion::NombreEmpresaProveedora,
+                ));
+            }
+            nuevo.empresas_proveedoras.insert(empresa.id(), empresa);
+        }
         for operacion in self.gafetes.pendientes {
             aplicar_gafete(&mut nuevo, operacion)?;
         }
@@ -264,6 +305,9 @@ impl UowMemoria {
         }
         for ingreso in self.ingresos.pendientes {
             nuevo.ingresos.insert(ingreso.id(), ingreso);
+        }
+        for ingreso in self.ingresos_proveedor.pendientes {
+            nuevo.ingresos_proveedor.insert(ingreso.id(), ingreso);
         }
         if let Some(en) = self.reloj.pendiente {
             nuevo.ultimo_movimiento = Some(en);
@@ -344,6 +388,8 @@ impl UnidadDeTrabajo for UowMemoria {
     type Presencias = PresenciasMemoria;
     type Gafetes = GafetesMemoria;
     type Ingresos = IngresosMemoria;
+    type EmpresasProveedoras = EmpresasProveedorasMemoria;
+    type IngresosProveedor = IngresosProveedorMemoria;
     type Reloj = RelojMemoria;
     type Auditoria = AuditoriaMemoria;
 
@@ -365,6 +411,14 @@ impl UnidadDeTrabajo for UowMemoria {
 
     fn ingresos(&mut self) -> &mut IngresosMemoria {
         &mut self.ingresos
+    }
+
+    fn empresas_proveedoras(&mut self) -> &mut EmpresasProveedorasMemoria {
+        &mut self.empresas_proveedoras
+    }
+
+    fn ingresos_proveedor(&mut self) -> &mut IngresosProveedorMemoria {
+        &mut self.ingresos_proveedor
     }
 
     fn reloj(&mut self) -> &mut RelojMemoria {
@@ -581,6 +635,84 @@ impl RepositorioIngresos for IngresosMemoria {
     }
 
     fn guardar(&mut self, ingreso: &IngresoContratista) {
+        self.pendientes.push(ingreso.clone());
+    }
+}
+
+#[derive(Debug)]
+pub struct EmpresasProveedorasMemoria {
+    almacen: AlmacenMemoria,
+    pendientes: Vec<EmpresaProveedora>,
+}
+
+impl RepositorioEmpresasProveedoras for EmpresasProveedorasMemoria {
+    fn obtener(
+        &self,
+        id: EmpresaProveedoraId,
+    ) -> impl Future<Output = Result<Option<EmpresaProveedora>, ErrorPersistencia>> + Send {
+        std::future::ready(
+            self.almacen
+                .leer(|c| c.empresas_proveedoras.get(&id).cloned()),
+        )
+    }
+
+    fn existe(
+        &self,
+        id: EmpresaProveedoraId,
+    ) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send {
+        std::future::ready(
+            self.almacen
+                .leer(|c| c.empresas_proveedoras.contains_key(&id)),
+        )
+    }
+
+    fn nombre_en_uso(
+        &self,
+        nombre: &NombreEmpresa,
+        excepto: Option<EmpresaProveedoraId>,
+    ) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|c| {
+            c.empresas_proveedoras
+                .values()
+                .any(|empresa| empresa.nombre() == nombre && Some(empresa.id()) != excepto)
+        }))
+    }
+
+    fn guardar(&mut self, empresa: &EmpresaProveedora) {
+        self.pendientes.push(empresa.clone());
+    }
+}
+
+#[derive(Debug)]
+pub struct IngresosProveedorMemoria {
+    almacen: AlmacenMemoria,
+    pendientes: Vec<IngresoProveedor>,
+}
+
+impl RepositorioIngresosProveedor for IngresosProveedorMemoria {
+    fn obtener(
+        &self,
+        id: IngresoProveedorId,
+    ) -> impl Future<Output = Result<Option<IngresoProveedor>, ErrorPersistencia>> + Send {
+        std::future::ready(
+            self.almacen
+                .leer(|c| c.ingresos_proveedor.get(&id).cloned()),
+        )
+    }
+
+    fn abierto_con_gafete(
+        &self,
+        numero: NumeroGafete,
+    ) -> impl Future<Output = Result<Option<IngresoProveedor>, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|c| {
+            c.ingresos_proveedor
+                .values()
+                .find(|ingreso| ingreso.esta_abierto() && ingreso.gafete() == numero)
+                .cloned()
+        }))
+    }
+
+    fn guardar(&mut self, ingreso: &IngresoProveedor) {
         self.pendientes.push(ingreso.clone());
     }
 }

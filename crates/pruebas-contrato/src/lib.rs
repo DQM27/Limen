@@ -35,8 +35,10 @@ use limen_dominio::tipo_ingreso::TipoIngreso;
 use uuid::Uuid;
 
 mod movimientos;
+mod proveedores;
 
 pub use movimientos::*;
+pub use proveedores::*;
 
 /// Genera un `#[tokio::test]` por cada prueba de la batería. `$fabrica` es
 /// una expresión (puede usar `.await`) que crea un almacén nuevo y vacío.
@@ -70,6 +72,12 @@ macro_rules! bateria_de_contrato {
             abierto_con_gafete_ignora_los_ingresos_cerrados,
             el_reloj_guarda_el_ultimo_movimiento,
             un_choque_no_aplica_nada_de_ningun_repositorio,
+            // Proveedores (`proveedores`).
+            guarda_y_lee_una_empresa_proveedora,
+            nombre_de_empresa_proveedora_repetido_choca_solo_en_su_catalogo,
+            nombre_de_empresa_proveedora_en_uso_excluye_a_la_propia,
+            guarda_y_lee_un_ingreso_de_proveedor,
+            abierto_con_gafete_de_proveedor_ignora_los_cerrados,
         );
     };
     (@pruebas $fabrica:expr; $($prueba:ident),+ $(,)?) => {

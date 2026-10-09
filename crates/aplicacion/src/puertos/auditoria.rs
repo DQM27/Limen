@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 use limen_dominio::auditoria::CambioCampo;
 use limen_dominio::contratista::ContratistaId;
 use limen_dominio::empresa::EmpresaId;
+use limen_dominio::empresa_proveedora::EmpresaProveedoraId;
 use limen_dominio::gafete::{NumeroGafete, TipoGafete};
 use limen_dominio::operador::OperadorId;
 use uuid::Uuid;
@@ -16,6 +17,7 @@ use crate::sesion::Sesion;
 pub enum RegistroAuditado {
     Contratista(ContratistaId),
     Empresa(EmpresaId),
+    EmpresaProveedora(EmpresaProveedoraId),
     Gafete(TipoGafete, NumeroGafete),
 }
 
@@ -25,6 +27,7 @@ impl RegistroAuditado {
         match self {
             Self::Contratista(_) => "contratista",
             Self::Empresa(_) => "empresa",
+            Self::EmpresaProveedora(_) => "empresa_proveedora",
             Self::Gafete(..) => "gafete",
         }
     }
@@ -34,6 +37,7 @@ impl RegistroAuditado {
         match self {
             Self::Contratista(id) => id.to_string(),
             Self::Empresa(id) => id.to_string(),
+            Self::EmpresaProveedora(id) => id.to_string(),
             Self::Gafete(tipo, numero) => format!("{tipo}-{numero}"),
         }
     }

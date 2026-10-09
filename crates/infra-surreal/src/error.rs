@@ -14,8 +14,12 @@ use limen_aplicacion::puertos::{ErrorPersistencia, Restriccion};
 ///   "Database record \`tabla:clave\` already exists"; se busca la tabla
 ///   con la comilla invertida delante, para que `gafete:` no confunda con
 ///   `prestamo_gafete:`.
-const MARCAS_DE_CONFLICTO: [(&str, Restriccion); 5] = [
+const MARCAS_DE_CONFLICTO: [(&str, Restriccion); 6] = [
     ("contratista_cedula_unica", Restriccion::CedulaContratista),
+    (
+        "empresa_proveedora_nombre_unico",
+        Restriccion::NombreEmpresaProveedora,
+    ),
     ("empresa_nombre_unico", Restriccion::NombreEmpresa),
     ("`prestamo_gafete:", Restriccion::GafetePrestado),
     ("`gafete:", Restriccion::NumeroGafete),

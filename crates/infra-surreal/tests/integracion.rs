@@ -256,4 +256,64 @@ mod tests {
         assert_eq!(acciones, ["alta", "edicion"]);
         assert_eq!(historial[0].registro, "CONTRATISTA-7");
     }
+
+    #[tokio::test]
+    async fn un_proveedor_entra_y_sale_contra_surrealdb_y_respeta_el_veto() {
+        use limen_aplicacion::casos_de_uso::proveedores::{
+            ComandoEntradaProveedor, RegistrarEmpresaProveedora, RegistrarEntradaProveedor,
+            RegistrarSalidaProveedor,
+        };
+        use limen_dominio::ingreso_proveedor::ErrorIngresoProveedor;
+        use limen_dominio::visitante::PersonaVetada;
+
+        let almacen = AlmacenSurreal::en_memoria().await.unwrap();
+        let ids = IdsSecuenciales::new();
+        let empresa = RegistrarEmpresaProveedora::new(almacen.clone(), reloj(), ids.clone())
+            .ejecutar(&sesion(), "gas zeta")
+            .await
+            .unwrap();
+        RegistrarGafetes::new(almacen.clone(), reloj(), ids.clone())
+            .ejecutar(&sesion(), TipoGafete::Proveedor, 1, 5)
+            .await
+            .unwrap();
+        let entrar = RegistrarEntradaProveedor::new(almacen.clone(), reloj(), ids.clone());
+        let proveedor = ComandoEntradaProveedor {
+            cedula: "2-2222-2222".into(),
+            nombre: "maría solís".into(),
+            empresa,
+            medio: TipoMedio::APie,
+            placa: None,
+            gafete: 3,
+        };
+
+        entrar.ejecutar(&sesion(), &proveedor).await.unwrap();
+        RegistrarSalidaProveedor::new(almacen.clone(), reloj())
+            .por_gafete(&sesion(), 3)
+            .await
+            .unwrap();
+
+        // Un contratista sin acceso tampoco entra como proveedor (A8).
+        let (contratistas, contratista) = registrar_todo(&almacen, &ids).await;
+        let mut sin_acceso = comando(contratistas);
+        sin_acceso.tiene_acceso = false;
+        EditarContratista::new(almacen.clone(), reloj(), ids.clone())
+            .ejecutar(&sesion(), contratista, &sin_acceso)
+            .await
+            .unwrap();
+        let mut vetado = proveedor.clone();
+        vetado.cedula = "1-1111-1111".into();
+        assert_eq!(
+            entrar.ejecutar(&sesion(), &vetado).await,
+            Err(ErrorCaso::Negocio(ErrorIngresoProveedor::AccesoDenegado(
+                PersonaVetada
+            )))
+        );
+
+        let historial = almacen
+            .auditoria_de(RegistroAuditado::EmpresaProveedora(empresa))
+            .await
+            .unwrap();
+        assert_eq!(historial.len(), 1, "el alta de la empresa proveedora");
+        assert_eq!(historial[0].entidad, "empresa_proveedora");
+    }
 }

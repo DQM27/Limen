@@ -9,8 +9,8 @@ use limen_aplicacion::puertos::{ErrorPersistencia, FabricaUnidadDeTrabajo, Unida
 use crate::almacen::AlmacenSurreal;
 use crate::error::{al_confirmar, tecnica};
 use crate::repositorios::{
-    AuditoriaSurreal, ContratistasSurreal, EmpresasSurreal, Escritura, GafetesSurreal,
-    IngresosSurreal, PresenciasSurreal, RelojSurreal,
+    AuditoriaSurreal, ContratistasSurreal, EmpresasProveedorasSurreal, EmpresasSurreal, Escritura,
+    GafetesSurreal, IngresosProveedorSurreal, IngresosSurreal, PresenciasSurreal, RelojSurreal,
 };
 
 impl FabricaUnidadDeTrabajo for AlmacenSurreal {
@@ -25,6 +25,8 @@ impl FabricaUnidadDeTrabajo for AlmacenSurreal {
             presencias: PresenciasSurreal::new(db.clone()),
             gafetes: GafetesSurreal::new(db.clone()),
             ingresos: IngresosSurreal::new(db.clone()),
+            empresas_proveedoras: EmpresasProveedorasSurreal::new(db.clone()),
+            ingresos_proveedor: IngresosProveedorSurreal::new(db.clone()),
             reloj: RelojSurreal::new(db.clone()),
             auditoria: AuditoriaSurreal::default(),
         }
@@ -39,6 +41,8 @@ pub struct UowSurreal {
     presencias: PresenciasSurreal,
     gafetes: GafetesSurreal,
     ingresos: IngresosSurreal,
+    empresas_proveedoras: EmpresasProveedorasSurreal,
+    ingresos_proveedor: IngresosProveedorSurreal,
     reloj: RelojSurreal,
     auditoria: AuditoriaSurreal,
 }
@@ -49,6 +53,8 @@ impl UnidadDeTrabajo for UowSurreal {
     type Presencias = PresenciasSurreal;
     type Gafetes = GafetesSurreal;
     type Ingresos = IngresosSurreal;
+    type EmpresasProveedoras = EmpresasProveedorasSurreal;
+    type IngresosProveedor = IngresosProveedorSurreal;
     type Reloj = RelojSurreal;
     type Auditoria = AuditoriaSurreal;
 
@@ -72,6 +78,14 @@ impl UnidadDeTrabajo for UowSurreal {
         &mut self.ingresos
     }
 
+    fn empresas_proveedoras(&mut self) -> &mut EmpresasProveedorasSurreal {
+        &mut self.empresas_proveedoras
+    }
+
+    fn ingresos_proveedor(&mut self) -> &mut IngresosProveedorSurreal {
+        &mut self.ingresos_proveedor
+    }
+
     fn reloj(&mut self) -> &mut RelojSurreal {
         &mut self.reloj
     }
@@ -87,9 +101,11 @@ impl UnidadDeTrabajo for UowSurreal {
         let escrituras: Vec<Escritura> = [
             self.empresas.pendientes,
             self.contratistas.pendientes,
+            self.empresas_proveedoras.pendientes,
             self.gafetes.pendientes,
             self.presencias.pendientes,
             self.ingresos.pendientes,
+            self.ingresos_proveedor.pendientes,
             self.reloj.pendientes,
             self.auditoria.pendientes,
         ]

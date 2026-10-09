@@ -15,8 +15,10 @@ use chrono::{DateTime, Utc};
 use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::{Contratista, ContratistaId};
 use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
+use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
 use limen_dominio::gafete::{Gafete, NumeroGafete, TipoGafete};
 use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoId};
+use limen_dominio::ingreso_proveedor::{IngresoProveedor, IngresoProveedorId};
 use limen_dominio::presencia::Via;
 
 use super::auditoria::RegistroAuditoria;
@@ -29,6 +31,7 @@ use super::auditoria::RegistroAuditoria;
 pub enum Restriccion {
     CedulaContratista,
     NombreEmpresa,
+    NombreEmpresaProveedora,
     /// Ya hay un gafete con ese tipo y número en el catálogo.
     NumeroGafete,
     /// La persona ya está adentro (por cualquier vía).
@@ -60,6 +63,8 @@ pub trait UnidadDeTrabajo: Send {
     type Presencias: RepositorioPresencias;
     type Gafetes: RepositorioGafetes;
     type Ingresos: RepositorioIngresos;
+    type EmpresasProveedoras: RepositorioEmpresasProveedoras;
+    type IngresosProveedor: RepositorioIngresosProveedor;
     type Reloj: RepositorioReloj;
     type Auditoria: RegistroAuditoria;
 
@@ -68,6 +73,8 @@ pub trait UnidadDeTrabajo: Send {
     fn presencias(&mut self) -> &mut Self::Presencias;
     fn gafetes(&mut self) -> &mut Self::Gafetes;
     fn ingresos(&mut self) -> &mut Self::Ingresos;
+    fn empresas_proveedoras(&mut self) -> &mut Self::EmpresasProveedoras;
+    fn ingresos_proveedor(&mut self) -> &mut Self::IngresosProveedor;
     fn reloj(&mut self) -> &mut Self::Reloj;
     fn auditoria(&mut self) -> &mut Self::Auditoria;
 
@@ -196,4 +203,45 @@ pub trait RepositorioReloj: Send + Sync {
 
     /// Anota la hora de un movimiento nuevo.
     fn anotar_movimiento(&mut self, en: DateTime<Utc>);
+}
+
+/// Catálogo de empresas proveedoras (aparte del de contratistas).
+pub trait RepositorioEmpresasProveedoras: Send + Sync {
+    fn obtener(
+        &self,
+        id: EmpresaProveedoraId,
+    ) -> impl Future<Output = Result<Option<EmpresaProveedora>, ErrorPersistencia>> + Send;
+
+    fn existe(
+        &self,
+        id: EmpresaProveedoraId,
+    ) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send;
+
+    /// Si otra empresa proveedora (distinta de `excepto`) usa el nombre.
+    fn nombre_en_uso(
+        &self,
+        nombre: &NombreEmpresa,
+        excepto: Option<EmpresaProveedoraId>,
+    ) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send;
+
+    /// Anota el alta o el cambio. Al confirmar falla con
+    /// ([`Restriccion::NombreEmpresaProveedora`]) si el nombre ya está en uso.
+    fn guardar(&mut self, empresa: &EmpresaProveedora);
+}
+
+pub trait RepositorioIngresosProveedor: Send + Sync {
+    fn obtener(
+        &self,
+        id: IngresoProveedorId,
+    ) -> impl Future<Output = Result<Option<IngresoProveedor>, ErrorPersistencia>> + Send;
+
+    /// El ingreso de proveedor abierto que tiene prestado ese gafete de
+    /// proveedor, si lo hay.
+    fn abierto_con_gafete(
+        &self,
+        numero: NumeroGafete,
+    ) -> impl Future<Output = Result<Option<IngresoProveedor>, ErrorPersistencia>> + Send;
+
+    /// Anota el ingreso nuevo o su salida.
+    fn guardar(&mut self, ingreso: &IngresoProveedor);
 }

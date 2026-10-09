@@ -52,6 +52,25 @@ DEFINE FIELD OVERWRITE salida_en ON ingreso_contratista TYPE option<datetime>;
 DEFINE FIELD OVERWRITE salida_operador ON ingreso_contratista TYPE option<uuid>;
 DEFINE INDEX OVERWRITE ingreso_contratista_por_gafete ON ingreso_contratista FIELDS gafete, salida_en;
 
+-- Empresas proveedoras (regla H1): catálogo aparte del de contratistas.
+DEFINE TABLE OVERWRITE empresa_proveedora SCHEMAFULL;
+DEFINE FIELD OVERWRITE nombre ON empresa_proveedora TYPE string ASSERT string::len($value) > 0;
+DEFINE INDEX OVERWRITE empresa_proveedora_nombre_unico ON empresa_proveedora FIELDS nombre UNIQUE;
+
+-- Ingresos de proveedores (bloque H). Cédula y nombre llegan con cada
+-- ingreso: no hay catálogo de personas.
+DEFINE TABLE OVERWRITE ingreso_proveedor SCHEMAFULL;
+DEFINE FIELD OVERWRITE cedula ON ingreso_proveedor TYPE string;
+DEFINE FIELD OVERWRITE nombre ON ingreso_proveedor TYPE string;
+DEFINE FIELD OVERWRITE empresa ON ingreso_proveedor TYPE record<empresa_proveedora>;
+DEFINE FIELD OVERWRITE placa ON ingreso_proveedor TYPE option<string>;
+DEFINE FIELD OVERWRITE gafete ON ingreso_proveedor TYPE int;
+DEFINE FIELD OVERWRITE entrada_en ON ingreso_proveedor TYPE datetime;
+DEFINE FIELD OVERWRITE entrada_operador ON ingreso_proveedor TYPE uuid;
+DEFINE FIELD OVERWRITE salida_en ON ingreso_proveedor TYPE option<datetime>;
+DEFINE FIELD OVERWRITE salida_operador ON ingreso_proveedor TYPE option<uuid>;
+DEFINE INDEX OVERWRITE ingreso_proveedor_por_gafete ON ingreso_proveedor FIELDS gafete, salida_en;
+
 -- Hora del último movimiento del equipo (regla E5): un solo registro,
 -- reloj:ultimo.
 DEFINE TABLE OVERWRITE reloj SCHEMAFULL;
@@ -59,7 +78,7 @@ DEFINE FIELD OVERWRITE en ON reloj TYPE datetime;
 
 -- Auditoría (regla B11): sólo se agrega, nunca se edita ni se borra.
 DEFINE TABLE OVERWRITE auditoria SCHEMAFULL;
-DEFINE FIELD OVERWRITE entidad ON auditoria TYPE 'contratista' | 'empresa' | 'gafete';
+DEFINE FIELD OVERWRITE entidad ON auditoria TYPE 'contratista' | 'empresa' | 'empresa_proveedora' | 'gafete';
 DEFINE FIELD OVERWRITE registro ON auditoria TYPE string;
 DEFINE FIELD OVERWRITE accion ON auditoria TYPE 'alta' | 'edicion';
 DEFINE FIELD OVERWRITE cambios ON auditoria TYPE array<object>;

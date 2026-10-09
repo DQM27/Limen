@@ -9,13 +9,18 @@ use limen_aplicacion::puertos::{EntradaAuditoria, ErrorPersistencia};
 use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::{Contratista, ContratistaGuardado, ContratistaId};
 use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
+use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
 use limen_dominio::gafete::{Deudor, EstadoGafete, Gafete, NumeroGafete, TipoGafete};
 use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoGuardado, IngresoId};
+use limen_dominio::ingreso_proveedor::{
+    IngresoProveedor, IngresoProveedorGuardado, IngresoProveedorId,
+};
 use limen_dominio::medio::{Medio, Placa};
 use limen_dominio::movimiento::Marca;
 use limen_dominio::nombre::NombrePersona;
 use limen_dominio::operador::OperadorId;
 use limen_dominio::tipo_ingreso::TipoIngreso;
+use limen_dominio::visitante::Visitante;
 use surrealdb::types::{RecordId, RecordIdKey, SurrealValue};
 use uuid::Uuid;
 
@@ -27,6 +32,8 @@ pub const TABLA_GAFETE: &str = "gafete";
 pub const TABLA_PRESTAMO_GAFETE: &str = "prestamo_gafete";
 pub const TABLA_PRESENCIA: &str = "presencia";
 pub const TABLA_INGRESO_CONTRATISTA: &str = "ingreso_contratista";
+pub const TABLA_EMPRESA_PROVEEDORA: &str = "empresa_proveedora";
+pub const TABLA_INGRESO_PROVEEDOR: &str = "ingreso_proveedor";
 pub const TABLA_RELOJ: &str = "reloj";
 pub const TABLA_AUDITORIA: &str = "auditoria";
 
@@ -54,6 +61,14 @@ pub fn id_empresa(id: EmpresaId) -> RecordId {
 
 pub fn id_ingreso(id: IngresoId) -> RecordId {
     id_registro(TABLA_INGRESO_CONTRATISTA, id.uuid())
+}
+
+pub fn id_empresa_proveedora(id: EmpresaProveedoraId) -> RecordId {
+    id_registro(TABLA_EMPRESA_PROVEEDORA, id.uuid())
+}
+
+pub fn id_ingreso_proveedor(id: IngresoProveedorId) -> RecordId {
+    id_registro(TABLA_INGRESO_PROVEEDOR, id.uuid())
 }
 
 /// Clave natural de un gafete: `TIPO-NÚMERO` (por ejemplo `CONTRATISTA-25`).
@@ -94,6 +109,34 @@ fn numero_de(valor: i64, tabla: &str) -> Result<NumeroGafete, ErrorPersistencia>
         .ok()
         .and_then(|numero| NumeroGafete::nuevo(numero).ok())
         .ok_or_else(|| dato_corrupto(tabla, format!("número de gafete inválido: {valor}")))
+}
+
+/// El medio guardado: sin placa es a pie.
+fn medio_de(placa: Option<String>, tabla: &str) -> Result<Medio, ErrorPersistencia> {
+    placa.map_or(Ok(Medio::APie), |placa| {
+        Placa::nueva(&placa)
+            .map(Medio::Vehiculo)
+            .map_err(|e| dato_corrupto(tabla, e))
+    })
+}
+
+/// La salida guardada: hora y operador van juntos o no van.
+fn salida_de(
+    en: Option<DateTime<Utc>>,
+    operador: Option<Uuid>,
+    tabla: &str,
+) -> Result<Option<Marca>, ErrorPersistencia> {
+    match (en, operador) {
+        (Some(en), Some(operador)) => Ok(Some(Marca {
+            en,
+            operador: OperadorId::desde_uuid(operador),
+        })),
+        (None, None) => Ok(None),
+        _ => Err(dato_corrupto(
+            tabla,
+            "salida a medias: falta la hora o el operador",
+        )),
+    }
 }
 
 // --- Contratista ---
@@ -312,24 +355,8 @@ impl TryFrom<IngresoLeido> for IngresoContratista {
     fn try_from(leido: IngresoLeido) -> Result<Self, ErrorPersistencia> {
         let tabla = TABLA_INGRESO_CONTRATISTA;
         let corrupto = |detalle: String| dato_corrupto(tabla, detalle);
-        let medio = match leido.placa {
-            None => Medio::APie,
-            Some(placa) => {
-                Medio::Vehiculo(Placa::nueva(&placa).map_err(|e| corrupto(e.to_string()))?)
-            }
-        };
-        let salida = match (leido.salida_en, leido.salida_operador) {
-            (Some(en), Some(operador)) => Some(Marca {
-                en,
-                operador: OperadorId::desde_uuid(operador),
-            }),
-            (None, None) => None,
-            _ => {
-                return Err(corrupto(
-                    "salida a medias: falta la hora o el operador".to_owned(),
-                ));
-            }
-        };
+        let medio = medio_de(leido.placa, tabla)?;
+        let salida = salida_de(leido.salida_en, leido.salida_operador, tabla)?;
         Ok(Self::restaurar(IngresoGuardado {
             id: IngresoId::desde_uuid(uuid_de(&leido.id, tabla)?),
             contratista: ContratistaId::desde_uuid(uuid_de(&leido.contratista, TABLA_CONTRATISTA)?),
@@ -341,6 +368,112 @@ impl TryFrom<IngresoLeido> for IngresoContratista {
                 operador: OperadorId::desde_uuid(leido.entrada_operador),
             },
             salida,
+        }))
+    }
+}
+
+// --- Empresa proveedora ---
+
+#[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
+pub struct EmpresaProveedoraLeida {
+    pub id: RecordId,
+    pub nombre: String,
+}
+
+impl From<&EmpresaProveedora> for EmpresaDatos {
+    fn from(empresa: &EmpresaProveedora) -> Self {
+        Self {
+            nombre: empresa.nombre().as_str().to_owned(),
+        }
+    }
+}
+
+impl TryFrom<EmpresaProveedoraLeida> for EmpresaProveedora {
+    type Error = ErrorPersistencia;
+
+    fn try_from(leida: EmpresaProveedoraLeida) -> Result<Self, ErrorPersistencia> {
+        let tabla = TABLA_EMPRESA_PROVEEDORA;
+        let nombre = NombreEmpresa::nuevo(&leida.nombre).map_err(|e| dato_corrupto(tabla, e))?;
+        Ok(Self::restaurar(
+            EmpresaProveedoraId::desde_uuid(uuid_de(&leida.id, tabla)?),
+            nombre,
+        ))
+    }
+}
+
+// --- Ingreso de proveedor ---
+
+#[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
+pub struct IngresoProveedorDatos {
+    pub cedula: String,
+    pub nombre: String,
+    pub empresa: RecordId,
+    pub placa: Option<String>,
+    pub gafete: i64,
+    pub entrada_en: DateTime<Utc>,
+    pub entrada_operador: Uuid,
+    pub salida_en: Option<DateTime<Utc>>,
+    pub salida_operador: Option<Uuid>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
+pub struct IngresoProveedorLeido {
+    pub id: RecordId,
+    pub cedula: String,
+    pub nombre: String,
+    pub empresa: RecordId,
+    pub placa: Option<String>,
+    pub gafete: i64,
+    pub entrada_en: DateTime<Utc>,
+    pub entrada_operador: Uuid,
+    pub salida_en: Option<DateTime<Utc>>,
+    pub salida_operador: Option<Uuid>,
+}
+
+impl From<&IngresoProveedor> for IngresoProveedorDatos {
+    fn from(ingreso: &IngresoProveedor) -> Self {
+        let salida = ingreso.salida();
+        Self {
+            cedula: ingreso.cedula().as_str().to_owned(),
+            nombre: ingreso.visitante().nombre().as_str().to_owned(),
+            empresa: id_empresa_proveedora(ingreso.empresa()),
+            placa: ingreso
+                .medio()
+                .placa()
+                .map(|placa| placa.as_str().to_owned()),
+            gafete: i64::from(ingreso.gafete().valor()),
+            entrada_en: ingreso.entrada().en,
+            entrada_operador: ingreso.entrada().operador.uuid(),
+            salida_en: salida.map(|marca| marca.en),
+            salida_operador: salida.map(|marca| marca.operador.uuid()),
+        }
+    }
+}
+
+impl TryFrom<IngresoProveedorLeido> for IngresoProveedor {
+    type Error = ErrorPersistencia;
+
+    fn try_from(leido: IngresoProveedorLeido) -> Result<Self, ErrorPersistencia> {
+        let tabla = TABLA_INGRESO_PROVEEDOR;
+        let corrupto = |detalle: String| dato_corrupto(tabla, detalle);
+        let visitante = Visitante::restaurar(
+            Cedula::normalizar(&leido.cedula).map_err(|e| corrupto(e.to_string()))?,
+            NombrePersona::nuevo(&leido.nombre).map_err(|e| corrupto(e.to_string()))?,
+        );
+        Ok(Self::restaurar(IngresoProveedorGuardado {
+            id: IngresoProveedorId::desde_uuid(uuid_de(&leido.id, tabla)?),
+            visitante,
+            empresa: EmpresaProveedoraId::desde_uuid(uuid_de(
+                &leido.empresa,
+                TABLA_EMPRESA_PROVEEDORA,
+            )?),
+            medio: medio_de(leido.placa, tabla)?,
+            gafete: numero_de(leido.gafete, tabla)?,
+            entrada: Marca {
+                en: leido.entrada_en,
+                operador: OperadorId::desde_uuid(leido.entrada_operador),
+            },
+            salida: salida_de(leido.salida_en, leido.salida_operador, tabla)?,
         }))
     }
 }

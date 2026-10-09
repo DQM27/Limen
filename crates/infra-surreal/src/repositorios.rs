@@ -4,14 +4,16 @@
 use chrono::{DateTime, Utc};
 use limen_aplicacion::puertos::{
     EntradaAuditoria, ErrorPersistencia, RegistroAuditoria, RepositorioContratistas,
-    RepositorioEmpresas, RepositorioGafetes, RepositorioIngresos, RepositorioPresencias,
-    RepositorioReloj,
+    RepositorioEmpresas, RepositorioEmpresasProveedoras, RepositorioGafetes, RepositorioIngresos,
+    RepositorioIngresosProveedor, RepositorioPresencias, RepositorioReloj,
 };
 use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::{Contratista, ContratistaId};
 use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
+use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
 use limen_dominio::gafete::{Gafete, NumeroGafete, TipoGafete};
 use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoId};
+use limen_dominio::ingreso_proveedor::{IngresoProveedor, IngresoProveedorId};
 use limen_dominio::presencia::Via;
 use surrealdb::Surreal;
 use surrealdb::engine::local::Db;
@@ -19,10 +21,11 @@ use surrealdb::types::{RecordId, SurrealValue, Value};
 
 use crate::error::{dato_corrupto, tecnica};
 use crate::registros::{
-    AuditoriaRegistro, ContratistaDatos, ContratistaLeido, EmpresaDatos, EmpresaLeida, GafeteDatos,
-    IngresoDatos, IngresoLeido, PresenciaDatos, PrestamoDatos, RelojDatos, TABLA_AUDITORIA,
-    TABLA_GAFETE, TABLA_PRESENCIA, id_contratista, id_empresa, id_gafete, id_ingreso, id_presencia,
-    id_prestamo, id_registro, id_reloj,
+    AuditoriaRegistro, ContratistaDatos, ContratistaLeido, EmpresaDatos, EmpresaLeida,
+    EmpresaProveedoraLeida, GafeteDatos, IngresoDatos, IngresoLeido, IngresoProveedorDatos,
+    IngresoProveedorLeido, PresenciaDatos, PrestamoDatos, RelojDatos, TABLA_AUDITORIA,
+    TABLA_GAFETE, TABLA_PRESENCIA, id_contratista, id_empresa, id_empresa_proveedora, id_gafete,
+    id_ingreso, id_ingreso_proveedor, id_presencia, id_prestamo, id_registro, id_reloj,
 };
 
 /// Una escritura anotada, pendiente de confirmar.
@@ -388,6 +391,130 @@ impl RepositorioIngresos for IngresosSurreal {
         self.pendientes.push(Escritura::guardar(
             id_ingreso(ingreso.id()),
             IngresoDatos::from(ingreso),
+        ));
+    }
+}
+
+// --- Empresas proveedoras ---
+
+#[derive(Debug)]
+pub struct EmpresasProveedorasSurreal {
+    db: Surreal<Db>,
+    pub(crate) pendientes: Vec<Escritura>,
+}
+
+impl EmpresasProveedorasSurreal {
+    pub(crate) const fn new(db: Surreal<Db>) -> Self {
+        Self {
+            db,
+            pendientes: Vec::new(),
+        }
+    }
+}
+
+impl RepositorioEmpresasProveedoras for EmpresasProveedorasSurreal {
+    async fn obtener(
+        &self,
+        id: EmpresaProveedoraId,
+    ) -> Result<Option<EmpresaProveedora>, ErrorPersistencia> {
+        let mut respuesta = self
+            .db
+            .query("SELECT * FROM ONLY $id")
+            .bind(("id", id_empresa_proveedora(id)))
+            .await
+            .map_err(tecnica)?;
+        let leida: Option<EmpresaProveedoraLeida> = respuesta.take(0).map_err(tecnica)?;
+        leida.map(EmpresaProveedora::try_from).transpose()
+    }
+
+    async fn existe(&self, id: EmpresaProveedoraId) -> Result<bool, ErrorPersistencia> {
+        existe_registro(&self.db, id_empresa_proveedora(id)).await
+    }
+
+    async fn nombre_en_uso(
+        &self,
+        nombre: &NombreEmpresa,
+        excepto: Option<EmpresaProveedoraId>,
+    ) -> Result<bool, ErrorPersistencia> {
+        let mut respuesta = self
+            .db
+            .query(
+                "SELECT VALUE id FROM empresa_proveedora \
+                 WHERE nombre = $nombre AND id != $excepto LIMIT 1",
+            )
+            .bind(("nombre", nombre.as_str().to_owned()))
+            .bind(("excepto", excepto.map(id_empresa_proveedora)))
+            .await
+            .map_err(tecnica)?;
+        let encontradas: Vec<RecordId> = respuesta.take(0).map_err(tecnica)?;
+        Ok(!encontradas.is_empty())
+    }
+
+    fn guardar(&mut self, empresa: &EmpresaProveedora) {
+        self.pendientes.push(Escritura::guardar(
+            id_empresa_proveedora(empresa.id()),
+            EmpresaDatos::from(empresa),
+        ));
+    }
+}
+
+// --- Ingresos de proveedores ---
+
+#[derive(Debug)]
+pub struct IngresosProveedorSurreal {
+    db: Surreal<Db>,
+    pub(crate) pendientes: Vec<Escritura>,
+}
+
+impl IngresosProveedorSurreal {
+    pub(crate) const fn new(db: Surreal<Db>) -> Self {
+        Self {
+            db,
+            pendientes: Vec::new(),
+        }
+    }
+}
+
+impl RepositorioIngresosProveedor for IngresosProveedorSurreal {
+    async fn obtener(
+        &self,
+        id: IngresoProveedorId,
+    ) -> Result<Option<IngresoProveedor>, ErrorPersistencia> {
+        let mut respuesta = self
+            .db
+            .query("SELECT * FROM ONLY $id")
+            .bind(("id", id_ingreso_proveedor(id)))
+            .await
+            .map_err(tecnica)?;
+        let leido: Option<IngresoProveedorLeido> = respuesta.take(0).map_err(tecnica)?;
+        leido.map(IngresoProveedor::try_from).transpose()
+    }
+
+    async fn abierto_con_gafete(
+        &self,
+        numero: NumeroGafete,
+    ) -> Result<Option<IngresoProveedor>, ErrorPersistencia> {
+        let mut respuesta = self
+            .db
+            .query(
+                "SELECT * FROM ingreso_proveedor \
+                 WHERE gafete = $gafete AND salida_en = NONE LIMIT 1",
+            )
+            .bind(("gafete", i64::from(numero.valor())))
+            .await
+            .map_err(tecnica)?;
+        let leidos: Vec<IngresoProveedorLeido> = respuesta.take(0).map_err(tecnica)?;
+        leidos
+            .into_iter()
+            .next()
+            .map(IngresoProveedor::try_from)
+            .transpose()
+    }
+
+    fn guardar(&mut self, ingreso: &IngresoProveedor) {
+        self.pendientes.push(Escritura::guardar(
+            id_ingreso_proveedor(ingreso.id()),
+            IngresoProveedorDatos::from(ingreso),
         ));
     }
 }

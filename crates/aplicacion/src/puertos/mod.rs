@@ -12,7 +12,8 @@ mod reloj;
 pub use auditoria::{AccionAuditada, EntradaAuditoria, RegistroAuditado, RegistroAuditoria};
 pub use persistencia::{
     ErrorPersistencia, FabricaUnidadDeTrabajo, RepositorioContratistas, RepositorioEmpresas,
-    RepositorioGafetes, RepositorioIngresos, RepositorioPresencias, RepositorioReloj, Restriccion,
+    RepositorioEmpresasProveedoras, RepositorioGafetes, RepositorioIngresos,
+    RepositorioIngresosProveedor, RepositorioPresencias, RepositorioReloj, Restriccion,
     UnidadDeTrabajo,
 };
 pub use reloj::{GeneradorIds, Reloj};
