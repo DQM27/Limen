@@ -57,7 +57,7 @@
         </button>
       </div>
 
-      <mat-menu #menuColumnas="matMenu" aria-label="Columnas visibles">
+      <mat-menu #menuColumnas="matMenu" class="menu-columnas" aria-label="Columnas visibles">
         @for (columna of columnasDelMenu(); track columna.clave) {
           <button
             mat-menu-item

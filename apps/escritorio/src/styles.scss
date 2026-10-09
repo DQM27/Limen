@@ -28,6 +28,34 @@ body {
   font: var(--mat-sys-body-large);
 }
 
+// Menú de "columnas visibles" de las tablas: fino, como la fila de
+// herramientas. El panel de un menú vive fuera del componente (en la capa
+// flotante), así que su estilo tiene que ser global.
+.menu-columnas.mat-mdc-menu-panel {
+  min-width: 0;
+
+  .mat-mdc-menu-content {
+    padding: 4px 0;
+  }
+
+  .mat-mdc-menu-item {
+    --mat-menu-item-label-text-size: 13px;
+    --mat-menu-item-label-text-line-height: 18px;
+    --mat-menu-item-spacing: 10px;
+    --mat-menu-item-leading-spacing: 12px;
+    --mat-menu-item-trailing-spacing: 16px;
+    --mat-menu-item-icon-size: 18px;
+    min-height: 30px;
+  }
+
+  .mat-mdc-menu-item .mat-icon {
+    width: 18px;
+    height: 18px;
+    margin-right: 8px;
+    font-size: 18px;
+  }
+}
+
 // Texto sólo para lectores de pantalla (el título de una pantalla de tabla no
 // se ve, pero sí se anuncia).
 .solo-lectores {
