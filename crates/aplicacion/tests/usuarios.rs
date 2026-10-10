@@ -5,8 +5,8 @@
 mod tests {
     use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
     use limen_aplicacion::casos_de_uso::usuarios::{
-        CambiarContrasena, CrearPrimerUsuario, EditarUsuario, HayUsuarios, IniciarSesion,
-        ListarUsuarios, RegistrarUsuario, RestablecerContrasena, SesionIniciada,
+        CambiarClave, CrearPrimerUsuario, EditarUsuario, HayUsuarios, IniciarSesion,
+        ListarUsuarios, RegistrarUsuario, RestablecerClave, SesionIniciada,
     };
     use limen_aplicacion::errores::ErrorCaso;
     use limen_aplicacion::puertos::{
@@ -15,7 +15,7 @@ mod tests {
     use limen_aplicacion::sesion::OperadorId;
     use limen_dominio::cedula::Cedula;
     use limen_dominio::usuario::{ErrorInicioSesion, ErrorUsuario};
-    use limen_infra_memoria::{AlmacenMemoria, ContrasenasFalsas, IdsSecuenciales, RelojFijo};
+    use limen_infra_memoria::{AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo};
 
     const AHORA: &str = "2026-10-10T08:00:00Z";
     const CEDULA_ANA: &str = "1-1111-1111";
@@ -35,21 +35,21 @@ mod tests {
 
     fn primer_usuario(
         almacen: &AlmacenMemoria,
-    ) -> CrearPrimerUsuario<AlmacenMemoria, RelojFijo, IdsSecuenciales, ContrasenasFalsas> {
-        CrearPrimerUsuario::new(almacen.clone(), reloj(), almacen.ids(), ContrasenasFalsas)
+    ) -> CrearPrimerUsuario<AlmacenMemoria, RelojFijo, IdsSecuenciales, ClavesFalsas> {
+        CrearPrimerUsuario::new(almacen.clone(), reloj(), almacen.ids(), ClavesFalsas)
     }
 
     fn registrar(
         almacen: &AlmacenMemoria,
-    ) -> RegistrarUsuario<AlmacenMemoria, RelojFijo, IdsSecuenciales, ContrasenasFalsas> {
-        RegistrarUsuario::new(almacen.clone(), reloj(), almacen.ids(), ContrasenasFalsas)
+    ) -> RegistrarUsuario<AlmacenMemoria, RelojFijo, IdsSecuenciales, ClavesFalsas> {
+        RegistrarUsuario::new(almacen.clone(), reloj(), almacen.ids(), ClavesFalsas)
     }
 
     fn iniciar_en(
         almacen: &AlmacenMemoria,
         ahora: DateTime<Utc>,
-    ) -> IniciarSesion<AlmacenMemoria, RelojFijo, ContrasenasFalsas> {
-        IniciarSesion::new(almacen.clone(), reloj_en(ahora), ContrasenasFalsas)
+    ) -> IniciarSesion<AlmacenMemoria, RelojFijo, ClavesFalsas> {
+        IniciarSesion::new(almacen.clone(), reloj_en(ahora), ClavesFalsas)
     }
 
     /// Un equipo con Ana como primer usuario, ya con su sesión.
@@ -78,7 +78,7 @@ mod tests {
             .unwrap();
         assert_eq!(ana.cedula, "111111111");
         assert_eq!(ana.nombre, "ANA MORA");
-        assert!(!ana.debe_cambiar_contrasena, "eligió su contraseña");
+        assert!(!ana.debe_cambiar_clave, "eligió su clave");
         assert!(hay.ejecutar().await.unwrap(), "ya hay usuarios");
 
         let auditoria = almacen.auditoria();
@@ -95,10 +95,8 @@ mod tests {
             "se dio de alta a sí mismo"
         );
         assert!(
-            alta.cambios
-                .iter()
-                .all(|cambio| cambio.campo != "contrasena"),
-            "la contraseña no va a la auditoría: {:?}",
+            alta.cambios.iter().all(|cambio| cambio.campo != "clave"),
+            "la clave no va a la auditoría: {:?}",
             alta.cambios
         );
 
@@ -112,17 +110,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn la_contrasena_se_guarda_cifrada() {
+    async fn la_clave_se_guarda_cifrada() {
         let (almacen, _) = con_ana().await;
         let usuarios = almacen.usuarios();
         let [ana] = usuarios.as_slice() else {
             panic!("un usuario: {usuarios:?}");
         };
-        assert_eq!(ana.contrasena(), &ContrasenasFalsas::hash_de(CLAVE_ANA));
+        assert_eq!(ana.clave(), &ClavesFalsas::hash_de(CLAVE_ANA));
     }
 
     #[tokio::test]
-    async fn inicia_sesion_con_cedula_y_contrasena() {
+    async fn inicia_sesion_con_cedula_y_clave() {
         let (almacen, ana) = con_ana().await;
         let iniciada = iniciar_en(&almacen, instante(AHORA))
             .ejecutar("111111111", CLAVE_ANA)
@@ -132,7 +130,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cedula_desconocida_y_contrasena_equivocada_dan_el_mismo_error() {
+    async fn cedula_desconocida_y_clave_equivocada_dan_el_mismo_error() {
         let (almacen, _) = con_ana().await;
         let iniciar = iniciar_en(&almacen, instante(AHORA));
         let esperado = Err(ErrorCaso::Negocio(ErrorInicioSesion::CredencialesInvalidas));
@@ -161,7 +159,7 @@ mod tests {
             Err(ErrorCaso::Negocio(ErrorInicioSesion::Bloqueado {
                 minutos: 5
             })),
-            "bloqueado aunque la contraseña sea la correcta"
+            "bloqueado aunque la clave sea la correcta"
         );
 
         let despues = iniciar_en(&almacen, ahora + TimeDelta::minutes(5));
@@ -196,7 +194,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn al_desactivado_se_le_avisa_solo_con_la_contrasena_correcta() {
+    async fn al_desactivado_se_le_avisa_solo_con_la_clave_correcta() {
         let (almacen, ana) = con_ana().await;
         let beto = registrar(&almacen)
             .ejecutar(&ana.sesion, "222222222", "beto solís", "temporal 123")
@@ -221,12 +219,12 @@ mod tests {
                 .intentos_inicio(&cedula("222222222"))
                 .map(|intentos| intentos.cantidad),
             Some(1),
-            "el desactivado con la contraseña correcta no suma intento"
+            "el desactivado con la clave correcta no suma intento"
         );
     }
 
     #[tokio::test]
-    async fn el_registrado_entra_con_una_contrasena_temporal() {
+    async fn el_registrado_entra_con_una_clave_temporal() {
         let (almacen, ana) = con_ana().await;
         registrar(&almacen)
             .ejecutar(&ana.sesion, "222222222", "beto solís", "temporal 123")
@@ -236,9 +234,9 @@ mod tests {
             .ejecutar("222222222", "temporal 123")
             .await
             .unwrap();
-        assert!(beto.debe_cambiar_contrasena, "la eligió otra persona");
+        assert!(beto.debe_cambiar_clave, "la eligió otra persona");
 
-        CambiarContrasena::new(almacen.clone(), reloj(), almacen.ids(), ContrasenasFalsas)
+        CambiarClave::new(almacen.clone(), reloj(), almacen.ids(), ClavesFalsas)
             .ejecutar(&beto.sesion, "temporal 123", "la mía de verdad")
             .await
             .unwrap();
@@ -246,7 +244,7 @@ mod tests {
             .ejecutar("222222222", "la mía de verdad")
             .await
             .unwrap();
-        assert!(!beto.debe_cambiar_contrasena, "ya la cambió");
+        assert!(!beto.debe_cambiar_clave, "ya la cambió");
     }
 
     #[tokio::test]
@@ -272,41 +270,40 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn la_contrasena_nueva_cumple_l3() {
+    async fn la_clave_nueva_cumple_l3() {
         let (almacen, ana) = con_ana().await;
         let registrar = registrar(&almacen);
         assert_eq!(
             registrar
                 .ejecutar(&ana.sesion, "222222222", "beto solís", "corta")
                 .await,
-            Err(ErrorCaso::Negocio(ErrorUsuario::ContrasenaCorta))
+            Err(ErrorCaso::Negocio(ErrorUsuario::ClaveCorta))
         );
         assert_eq!(
             registrar
                 .ejecutar(&ana.sesion, "222222222", "beto solís", "222222222")
                 .await,
-            Err(ErrorCaso::Negocio(ErrorUsuario::ContrasenaIgualALaCedula))
+            Err(ErrorCaso::Negocio(ErrorUsuario::ClaveIgualALaCedula))
         );
         assert_eq!(almacen.usuarios().len(), 1, "no se guardó nada");
     }
 
     #[tokio::test]
-    async fn cambiar_la_contrasena_pide_la_actual() {
+    async fn cambiar_la_clave_pide_la_actual() {
         let (almacen, ana) = con_ana().await;
-        let cambio =
-            CambiarContrasena::new(almacen.clone(), reloj(), almacen.ids(), ContrasenasFalsas)
-                .ejecutar(&ana.sesion, "no es la actual", "otra clave larga")
-                .await;
+        let cambio = CambiarClave::new(almacen.clone(), reloj(), almacen.ids(), ClavesFalsas)
+            .ejecutar(&ana.sesion, "no es la actual", "otra clave larga")
+            .await;
         assert_eq!(
             cambio,
-            Err(ErrorCaso::Negocio(ErrorUsuario::ContrasenaActualIncorrecta))
+            Err(ErrorCaso::Negocio(ErrorUsuario::ClaveActualIncorrecta))
         );
         assert!(
             iniciar_en(&almacen, instante(AHORA))
                 .ejecutar(CEDULA_ANA, CLAVE_ANA)
                 .await
                 .is_ok(),
-            "la contraseña sigue igual"
+            "la clave sigue igual"
         );
     }
 
@@ -317,7 +314,7 @@ mod tests {
             .ejecutar(&ana.sesion, "222222222", "beto solís", "temporal 123")
             .await
             .unwrap();
-        RestablecerContrasena::new(almacen.clone(), reloj(), almacen.ids(), ContrasenasFalsas)
+        RestablecerClave::new(almacen.clone(), reloj(), almacen.ids(), ClavesFalsas)
             .ejecutar(&ana.sesion, beto, "nueva temporal")
             .await
             .unwrap();
@@ -325,7 +322,7 @@ mod tests {
             .ejecutar("222222222", "nueva temporal")
             .await
             .unwrap();
-        assert!(iniciada.debe_cambiar_contrasena, "queda temporal");
+        assert!(iniciada.debe_cambiar_clave, "queda temporal");
 
         let auditoria = almacen.auditoria();
         let Some(ultima) = auditoria.last() else {
@@ -369,7 +366,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn la_lista_va_por_nombre_y_sin_contrasenas() {
+    async fn la_lista_va_por_nombre_y_sin_claves() {
         let (almacen, ana) = con_ana().await;
         registrar(&almacen)
             .ejecutar(&ana.sesion, "222222222", "abel rojas", "temporal 123")

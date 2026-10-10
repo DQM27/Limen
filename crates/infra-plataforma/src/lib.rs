@@ -1,7 +1,7 @@
 //! Adaptadores de plataforma: lo único del núcleo que lee la hora del
-//! sistema, genera IDs al azar y cifra contraseñas. El dominio y la
+//! sistema, genera IDs al azar y cifra claves. El dominio y la
 //! aplicación los reciben por los puertos `Reloj`, `GeneradorIds` y
-//! `Contrasenas`.
+//! `Claves`.
 
 mod reloj;
 mod sntp;
@@ -16,8 +16,8 @@ use std::sync::Arc;
 use argon2::Argon2;
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
-use limen_aplicacion::puertos::{Contrasenas, GeneradorIds, Reloj};
-use limen_dominio::usuario::{ContrasenaNueva, HashContrasena};
+use limen_aplicacion::puertos::{Claves, GeneradorIds, Reloj};
+use limen_dominio::usuario::{ClaveNueva, HashClave};
 use uuid::Uuid;
 
 /// Hora del reloj del equipo, tal cual (sin corregir: la app usa
@@ -68,19 +68,19 @@ impl GeneradorIds for IdsV7 {
     }
 }
 
-/// Contraseñas con Argon2id (parámetros recomendados por OWASP: 19 MiB,
+/// Claves con Argon2id (parámetros recomendados por OWASP: 19 MiB,
 /// 2 pasadas, 1 hilo) y sal aleatoria del sistema. El hash se guarda en
 /// formato PHC, que lleva la sal y los parámetros: si algún día se suben,
 /// los hashes viejos se siguen verificando con los suyos.
 #[derive(Debug, Clone)]
-pub struct ContrasenasArgon2 {
-    /// Hash de una contraseña al azar, para verificar contra él cuando la
+pub struct ClavesArgon2 {
+    /// Hash de una clave al azar, para verificar contra él cuando la
     /// cédula no existe y tardar lo mismo que con un usuario de verdad.
     ficticio: Arc<str>,
 }
 
-impl ContrasenasArgon2 {
-    /// Cifra una contraseña al azar para tener el hash ficticio: tarda lo
+impl ClavesArgon2 {
+    /// Cifra una clave al azar para tener el hash ficticio: tarda lo
     /// que una verificación, así que conviene crearlo una vez al arrancar.
     pub fn new() -> Result<Self, String> {
         let azar = SaltString::generate(&mut OsRng);
@@ -96,22 +96,22 @@ fn cifrar_texto(texto: &str) -> Result<String, String> {
     Argon2::default()
         .hash_password(texto.as_bytes(), &sal)
         .map(|hash| hash.to_string())
-        .map_err(|error| format!("no se pudo cifrar la contraseña: {error}"))
+        .map_err(|error| format!("no se pudo cifrar la clave: {error}"))
 }
 
-impl Contrasenas for ContrasenasArgon2 {
-    fn cifrar(&self, contrasena: &ContrasenaNueva) -> Result<HashContrasena, String> {
-        cifrar_texto(contrasena.as_str()).map(HashContrasena::desde_texto)
+impl Claves for ClavesArgon2 {
+    fn cifrar(&self, clave: &ClaveNueva) -> Result<HashClave, String> {
+        cifrar_texto(clave.as_str()).map(HashClave::desde_texto)
     }
 
-    fn verificar(&self, contrasena: &str, hash: Option<&HashContrasena>) -> bool {
-        let guardado = hash.map_or(&*self.ficticio, HashContrasena::as_str);
+    fn verificar(&self, clave: &str, hash: Option<&HashClave>) -> bool {
+        let guardado = hash.map_or(&*self.ficticio, HashClave::as_str);
         // Un hash ilegible (no debería pasar) no deja entrar a nadie.
         let Ok(analizado) = PasswordHash::new(guardado) else {
             return false;
         };
         let coincide = Argon2::default()
-            .verify_password(contrasena.as_bytes(), &analizado)
+            .verify_password(clave.as_bytes(), &analizado)
             .is_ok();
         coincide && hash.is_some()
     }
@@ -177,16 +177,16 @@ mod tests {
         );
     }
 
-    fn contrasena(texto: &str) -> ContrasenaNueva {
+    fn clave(texto: &str) -> ClaveNueva {
         let cedula = limen_dominio::cedula::Cedula::normalizar("111111111").unwrap();
-        ContrasenaNueva::nueva(texto, &cedula).unwrap()
+        ClaveNueva::nueva(texto, &cedula).unwrap()
     }
 
     #[test]
     fn argon2_cifra_con_sal_y_verifica() {
-        let contrasenas = ContrasenasArgon2::new().unwrap();
-        let primero = contrasenas.cifrar(&contrasena("portería segura")).unwrap();
-        let segundo = contrasenas.cifrar(&contrasena("portería segura")).unwrap();
+        let claves = ClavesArgon2::new().unwrap();
+        let primero = claves.cifrar(&clave("portería segura")).unwrap();
+        let segundo = claves.cifrar(&clave("portería segura")).unwrap();
         assert!(
             primero
                 .as_str()
@@ -197,18 +197,18 @@ mod tests {
         assert_ne!(primero, segundo, "cada hash lleva su propia sal");
         assert!(!primero.as_str().contains("portería"), "no guarda el texto");
 
-        assert!(contrasenas.verificar("portería segura", Some(&primero)));
-        assert!(contrasenas.verificar("portería segura", Some(&segundo)));
-        assert!(!contrasenas.verificar("porteria segura", Some(&primero)));
-        assert!(!contrasenas.verificar("", Some(&primero)));
+        assert!(claves.verificar("portería segura", Some(&primero)));
+        assert!(claves.verificar("portería segura", Some(&segundo)));
+        assert!(!claves.verificar("porteria segura", Some(&primero)));
+        assert!(!claves.verificar("", Some(&primero)));
     }
 
     #[test]
     fn sin_usuario_o_con_un_hash_danado_nunca_verifica() {
-        let contrasenas = ContrasenasArgon2::new().unwrap();
-        assert!(!contrasenas.verificar("lo que sea", None));
-        let danado = HashContrasena::desde_texto("no es un hash".to_owned());
-        assert!(!contrasenas.verificar("no es un hash", Some(&danado)));
+        let claves = ClavesArgon2::new().unwrap();
+        assert!(!claves.verificar("lo que sea", None));
+        let danado = HashClave::desde_texto("no es un hash".to_owned());
+        assert!(!claves.verificar("no es un hash", Some(&danado)));
     }
 
     #[test]

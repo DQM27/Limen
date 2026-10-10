@@ -11,11 +11,11 @@ mod tests {
         CambioGafeteEntrada, Comandos, ContratistaEntrada, EntradaCorreoEntrada,
         EntradaProveedorEntrada, ErrorJson, campos,
     };
-    use limen_infra_memoria::{AlmacenMemoria, ContrasenasFalsas, IdsSecuenciales, RelojFijo};
+    use limen_infra_memoria::{AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo};
     use serde_json::json;
     use uuid::Uuid;
 
-    type Prueba = Comandos<AlmacenMemoria, RelojFijo, IdsSecuenciales, ContrasenasFalsas>;
+    type Prueba = Comandos<AlmacenMemoria, RelojFijo, IdsSecuenciales, ClavesFalsas>;
 
     fn sesion() -> Sesion {
         Sesion::nueva(OperadorId::desde_uuid(Uuid::from_u128(900)))
@@ -32,7 +32,7 @@ mod tests {
             &almacen,
             &reloj,
             &almacen.ids(),
-            &ContrasenasFalsas,
+            &ClavesFalsas,
         ))
     }
 

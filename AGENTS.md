@@ -48,7 +48,7 @@ El **núcleo** (todo lo que funciona dentro de un equipo, sin pantalla ni nube) 
 completo y probado: dominio, aplicación, `infra-memoria`, `infra-surreal`, `infra-plataforma`
 y `composicion`. Cubre contratistas, empresas, gafetes, ingresos y salidas (contratista,
 proveedor y correo), personal KOF con su gafete provisional, el buscador, las consultas
-de lectura y los usuarios con su inicio de sesión (bloque L: cédula y contraseña,
+de lectura y los usuarios con su inicio de sesión (bloque L: cédula y clave,
 Argon2id, bloqueo tras 5 fallos; la app arranca sin sesión). El detalle está en [`docs/reglas.md`](docs/reglas.md) y en la hoja de ruta de
 `docs/arquitectura.md` (sección 13).
 

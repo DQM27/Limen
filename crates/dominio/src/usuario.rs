@@ -4,16 +4,16 @@
 //!   queda en cada hecho y en cada entrada de la auditoría.
 //! - L2: se desactivan, no se borran. Nadie se desactiva a sí mismo (así el
 //!   equipo nunca se queda sin quién entre).
-//! - L3: la contraseña tiene entre 8 y 128 caracteres y no puede ser la
+//! - L3: la clave tiene entre 8 y 128 caracteres y no puede ser la
 //!   propia cédula. El máximo evita que un texto enorme trabe al cifrador.
 //! - L6: tras 5 intentos fallidos seguidos con la misma cédula, se bloquea
 //!   el inicio de sesión de esa cédula por 5 minutos.
 //!
 //! El inicio de sesión no revela si una cédula existe: cédula desconocida o
-//! contraseña equivocada dan el mismo error, y "desactivado" sólo se dice a
-//! quien escribió la contraseña correcta.
+//! clave equivocada dan el mismo error, y "desactivado" sólo se dice a
+//! quien escribió la clave correcta.
 //!
-//! El dominio no cifra ni verifica contraseñas (eso necesita sal aleatoria y
+//! El dominio no cifra ni verifica claves (eso necesita sal aleatoria y
 //! es lento): recibe el hash ya hecho y el resultado de la verificación.
 
 use std::fmt;
@@ -25,8 +25,8 @@ use crate::cedula::Cedula;
 use crate::nombre::{NombreInvalido, NombrePersona};
 use crate::operador::OperadorId;
 
-pub const LARGO_MINIMO_CONTRASENA: usize = 8;
-pub const LARGO_MAXIMO_CONTRASENA: usize = 128;
+pub const LARGO_MINIMO_CLAVE: usize = 8;
+pub const LARGO_MAXIMO_CLAVE: usize = 128;
 /// Intentos fallidos seguidos que bloquean una cédula (L6).
 pub const INTENTOS_ANTES_DEL_BLOQUEO: u32 = 5;
 /// Cuánto dura el bloqueo, y también la ventana en que se cuentan los
@@ -45,14 +45,14 @@ pub enum ErrorUsuario {
     NombreInvalido,
     #[error("Ya existe un usuario con esa cédula")]
     CedulaRepetida,
-    #[error("La contraseña debe tener al menos 8 caracteres")]
-    ContrasenaCorta,
-    #[error("La contraseña admite hasta 128 caracteres")]
-    ContrasenaLarga,
-    #[error("La contraseña no puede ser la cédula")]
-    ContrasenaIgualALaCedula,
-    #[error("La contraseña actual no es correcta")]
-    ContrasenaActualIncorrecta,
+    #[error("La clave debe tener al menos 8 caracteres")]
+    ClaveCorta,
+    #[error("La clave admite hasta 128 caracteres")]
+    ClaveLarga,
+    #[error("La clave no puede ser la cédula")]
+    ClaveIgualALaCedula,
+    #[error("La clave actual no es correcta")]
+    ClaveActualIncorrecta,
     #[error("No puede desactivar su propio usuario")]
     NoSeDesactivaASiMismo,
     #[error("Ya hay usuarios: pídale a uno de ellos que lo registre")]
@@ -67,10 +67,10 @@ impl ErrorUsuario {
             Self::NombreVacio => "nombre_vacio",
             Self::NombreInvalido => "nombre_invalido",
             Self::CedulaRepetida => "usuario_cedula_repetida",
-            Self::ContrasenaCorta => "contrasena_corta",
-            Self::ContrasenaLarga => "contrasena_larga",
-            Self::ContrasenaIgualALaCedula => "contrasena_igual_a_la_cedula",
-            Self::ContrasenaActualIncorrecta => "contrasena_actual_incorrecta",
+            Self::ClaveCorta => "clave_corta",
+            Self::ClaveLarga => "clave_larga",
+            Self::ClaveIgualALaCedula => "clave_igual_a_la_cedula",
+            Self::ClaveActualIncorrecta => "clave_actual_incorrecta",
             Self::NoSeDesactivaASiMismo => "no_se_desactiva_a_si_mismo",
             Self::YaHayUsuarios => "ya_hay_usuarios",
         }
@@ -95,23 +95,23 @@ fn nombre_de(texto: &str) -> Result<NombrePersona, ErrorUsuario> {
     })
 }
 
-/// Una contraseña nueva que ya cumple L3, lista para cifrar. Nunca se
+/// Una clave nueva que ya cumple L3, lista para cifrar. Nunca se
 /// muestra ni se guarda: sólo su hash.
 #[derive(Clone, PartialEq, Eq)]
-pub struct ContrasenaNueva(String);
+pub struct ClaveNueva(String);
 
-impl ContrasenaNueva {
+impl ClaveNueva {
     pub fn nueva(texto: &str, cedula: &Cedula) -> Result<Self, ErrorUsuario> {
         let largo = texto.chars().count();
-        if largo < LARGO_MINIMO_CONTRASENA {
-            return Err(ErrorUsuario::ContrasenaCorta);
+        if largo < LARGO_MINIMO_CLAVE {
+            return Err(ErrorUsuario::ClaveCorta);
         }
-        if largo > LARGO_MAXIMO_CONTRASENA {
-            return Err(ErrorUsuario::ContrasenaLarga);
+        if largo > LARGO_MAXIMO_CLAVE {
+            return Err(ErrorUsuario::ClaveLarga);
         }
         let es_la_cedula = Cedula::normalizar(texto).is_ok_and(|escrita| &escrita == cedula);
         if es_la_cedula {
-            return Err(ErrorUsuario::ContrasenaIgualALaCedula);
+            return Err(ErrorUsuario::ClaveIgualALaCedula);
         }
         Ok(Self(texto.to_owned()))
     }
@@ -121,18 +121,18 @@ impl ContrasenaNueva {
     }
 }
 
-impl fmt::Debug for ContrasenaNueva {
+impl fmt::Debug for ClaveNueva {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("ContrasenaNueva(«oculta»)")
+        f.write_str("ClaveNueva(«oculta»)")
     }
 }
 
-/// El hash de una contraseña, tal como lo produce el cifrador (formato
+/// El hash de una clave, tal como lo produce el cifrador (formato
 /// PHC). Para el dominio es opaco: sólo lo guarda.
 #[derive(Clone, PartialEq, Eq)]
-pub struct HashContrasena(String);
+pub struct HashClave(String);
 
-impl HashContrasena {
+impl HashClave {
     pub const fn desde_texto(texto: String) -> Self {
         Self(texto)
     }
@@ -142,9 +142,9 @@ impl HashContrasena {
     }
 }
 
-impl fmt::Debug for HashContrasena {
+impl fmt::Debug for HashClave {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("HashContrasena(«oculto»)")
+        f.write_str("HashClave(«oculto»)")
     }
 }
 
@@ -160,8 +160,8 @@ pub struct Usuario {
     cedula: Cedula,
     nombre: NombrePersona,
     activo: bool,
-    contrasena: HashContrasena,
-    debe_cambiar_contrasena: bool,
+    clave: HashClave,
+    debe_cambiar_clave: bool,
 }
 
 /// Datos de un usuario guardado, para reconstruirlo.
@@ -171,18 +171,18 @@ pub struct UsuarioGuardado {
     pub cedula: Cedula,
     pub nombre: NombrePersona,
     pub activo: bool,
-    pub contrasena: HashContrasena,
-    pub debe_cambiar_contrasena: bool,
+    pub clave: HashClave,
+    pub debe_cambiar_clave: bool,
 }
 
 impl Usuario {
-    /// Da de alta a un usuario activo. `temporal`: la contraseña la eligió
+    /// Da de alta a un usuario activo. `temporal`: la clave la eligió
     /// otra persona, así que debe cambiarla al entrar.
     pub fn registrar(
         id: OperadorId,
         cedula: Cedula,
         nombre: &str,
-        contrasena: HashContrasena,
+        clave: HashClave,
         temporal: bool,
         hechos: HechosUsuario,
     ) -> Result<Self, ErrorUsuario> {
@@ -195,19 +195,19 @@ impl Usuario {
             cedula,
             nombre,
             activo: true,
-            contrasena,
-            debe_cambiar_contrasena: temporal,
+            clave,
+            debe_cambiar_clave: temporal,
         })
     }
 
     /// El primer usuario de un equipo recién instalado: lo crea quien
     /// instala, sin sesión, y sólo mientras no haya ningún otro. Su
-    /// contraseña la eligió él mismo, así que no es temporal.
+    /// clave la eligió él mismo, así que no es temporal.
     pub fn crear_primero(
         id: OperadorId,
         cedula: Cedula,
         nombre: &str,
-        contrasena: HashContrasena,
+        clave: HashClave,
         hay_usuarios: bool,
     ) -> Result<Self, ErrorUsuario> {
         if hay_usuarios {
@@ -217,7 +217,7 @@ impl Usuario {
             id,
             cedula,
             nombre,
-            contrasena,
+            clave,
             false,
             HechosUsuario {
                 cedula_en_uso: false,
@@ -243,32 +243,32 @@ impl Usuario {
         Ok(diferencias(antes, self.campos_auditables()))
     }
 
-    /// Cambia la propia contraseña: hay que saber la actual. Deja de ser
+    /// Cambia la propia clave: hay que saber la actual. Deja de ser
     /// temporal.
-    pub fn cambiar_contrasena(
+    pub fn cambiar_clave(
         &mut self,
         actual_correcta: bool,
-        nueva: HashContrasena,
+        nueva: HashClave,
     ) -> Result<Vec<CambioCampo>, ErrorUsuario> {
         if !actual_correcta {
-            return Err(ErrorUsuario::ContrasenaActualIncorrecta);
+            return Err(ErrorUsuario::ClaveActualIncorrecta);
         }
-        Ok(self.poner_contrasena(nueva, false))
+        Ok(self.poner_clave(nueva, false))
     }
 
-    /// Otra persona le pone una contraseña nueva: queda temporal y debe
+    /// Otra persona le pone una clave nueva: queda temporal y debe
     /// cambiarla al entrar.
-    pub fn restablecer_contrasena(&mut self, nueva: HashContrasena) -> Vec<CambioCampo> {
-        self.poner_contrasena(nueva, true)
+    pub fn restablecer_clave(&mut self, nueva: HashClave) -> Vec<CambioCampo> {
+        self.poner_clave(nueva, true)
     }
 
-    fn poner_contrasena(&mut self, nueva: HashContrasena, temporal: bool) -> Vec<CambioCampo> {
+    fn poner_clave(&mut self, nueva: HashClave, temporal: bool) -> Vec<CambioCampo> {
         let antes = self.campos_auditables();
-        self.contrasena = nueva;
-        self.debe_cambiar_contrasena = temporal;
-        // La contraseña nunca va a la auditoría: sólo que cambió.
+        self.clave = nueva;
+        self.debe_cambiar_clave = temporal;
+        // La clave nunca va a la auditoría: sólo que cambió.
         let mut cambios = vec![CambioCampo {
-            campo: "contrasena",
+            campo: "clave",
             antes: String::new(),
             despues: "cambiada".to_owned(),
         }];
@@ -276,7 +276,7 @@ impl Usuario {
         cambios
     }
 
-    /// Lo que la auditoría registra del alta (nunca la contraseña).
+    /// Lo que la auditoría registra del alta (nunca la clave).
     pub fn cambios_de_alta(&self) -> Vec<CambioCampo> {
         cambios_de_alta(self.campos_auditables())
     }
@@ -286,10 +286,7 @@ impl Usuario {
             ("cedula", self.cedula.to_string()),
             ("nombre", self.nombre.to_string()),
             ("activo", self.activo.to_string()),
-            (
-                "debe_cambiar_contrasena",
-                self.debe_cambiar_contrasena.to_string(),
-            ),
+            ("debe_cambiar_clave", self.debe_cambiar_clave.to_string()),
         ]
     }
 
@@ -299,8 +296,8 @@ impl Usuario {
             cedula: guardado.cedula,
             nombre: guardado.nombre,
             activo: guardado.activo,
-            contrasena: guardado.contrasena,
-            debe_cambiar_contrasena: guardado.debe_cambiar_contrasena,
+            clave: guardado.clave,
+            debe_cambiar_clave: guardado.debe_cambiar_clave,
         }
     }
 
@@ -320,12 +317,12 @@ impl Usuario {
         self.activo
     }
 
-    pub const fn contrasena(&self) -> &HashContrasena {
-        &self.contrasena
+    pub const fn clave(&self) -> &HashClave {
+        &self.clave
     }
 
-    pub const fn debe_cambiar_contrasena(&self) -> bool {
-        self.debe_cambiar_contrasena
+    pub const fn debe_cambiar_clave(&self) -> bool {
+        self.debe_cambiar_clave
     }
 }
 
@@ -333,17 +330,17 @@ impl Usuario {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum ErrorInicioSesion {
-    /// Cédula desconocida o contraseña equivocada: el mismo error, para no
+    /// Cédula desconocida o clave equivocada: el mismo error, para no
     /// revelar qué cédulas existen.
-    #[error("Cédula o contraseña incorrecta")]
+    #[error("Cédula o clave incorrecta")]
     CredencialesInvalidas,
     #[error("Demasiados intentos fallidos: espere {minutos} minuto(s) e intente de nuevo")]
     Bloqueado { minutos: i64 },
     #[error("Este usuario está desactivado")]
     Desactivado,
-    /// La contraseña la puso otra persona: hasta cambiarla no se opera.
-    #[error("Cambie su contraseña temporal antes de seguir")]
-    ContrasenaTemporal,
+    /// La clave la puso otra persona: hasta cambiarla no se opera.
+    #[error("Cambie su clave temporal antes de seguir")]
+    ClaveTemporal,
 }
 
 impl ErrorInicioSesion {
@@ -352,13 +349,13 @@ impl ErrorInicioSesion {
             Self::CredencialesInvalidas => "credenciales_invalidas",
             Self::Bloqueado { .. } => "inicio_bloqueado",
             Self::Desactivado => "usuario_desactivado",
-            Self::ContrasenaTemporal => "contrasena_temporal",
+            Self::ClaveTemporal => "clave_temporal",
         }
     }
 
     /// Si este rechazo cuenta como intento fallido para el bloqueo (L6):
-    /// sí la contraseña equivocada o la cédula desconocida; no el usuario
-    /// desactivado (sabía la contraseña) ni el que ya estaba bloqueado.
+    /// sí la clave equivocada o la cédula desconocida; no el usuario
+    /// desactivado (sabía la clave) ni el que ya estaba bloqueado.
     pub const fn suma_intento(self) -> bool {
         matches!(self, Self::CredencialesInvalidas)
     }
@@ -376,7 +373,7 @@ fn ventana() -> TimeDelta {
 }
 
 /// Si la cédula está bloqueada ahora. Se revisa antes de verificar la
-/// contraseña: mientras dure el bloqueo, ni se intenta.
+/// clave: mientras dure el bloqueo, ni se intenta.
 pub fn verificar_bloqueo(
     intentos: Option<IntentosFallidos>,
     ahora: DateTime<Utc>,
@@ -408,25 +405,25 @@ pub fn sumar_fallo(previos: Option<IntentosFallidos>, ahora: DateTime<Utc>) -> I
     }
 }
 
-/// Si quien tiene la sesión puede operar: con una contraseña temporal (la
+/// Si quien tiene la sesión puede operar: con una clave temporal (la
 /// eligió otra persona) sólo puede cambiarla o cerrar la sesión.
-pub const fn puede_operar(debe_cambiar_contrasena: bool) -> Result<(), ErrorInicioSesion> {
-    if debe_cambiar_contrasena {
-        Err(ErrorInicioSesion::ContrasenaTemporal)
+pub const fn puede_operar(debe_cambiar_clave: bool) -> Result<(), ErrorInicioSesion> {
+    if debe_cambiar_clave {
+        Err(ErrorInicioSesion::ClaveTemporal)
     } else {
         Ok(())
     }
 }
 
 /// Decide un inicio de sesión ya verificado: `usuario` es el de la cédula
-/// (si existe) y `contrasena_correcta`, lo que dijo el cifrador. Devuelve
+/// (si existe) y `clave_correcta`, lo que dijo el cifrador. Devuelve
 /// el usuario que entra.
 pub fn decidir_inicio(
     usuario: Option<&Usuario>,
-    contrasena_correcta: bool,
+    clave_correcta: bool,
 ) -> Result<&Usuario, ErrorInicioSesion> {
     match usuario {
-        Some(usuario) if contrasena_correcta => {
+        Some(usuario) if clave_correcta => {
             if usuario.activo() {
                 Ok(usuario)
             } else {
@@ -451,8 +448,8 @@ mod tests {
         OperadorId::desde_uuid(Uuid::from_u128(n))
     }
 
-    fn hash(texto: &str) -> HashContrasena {
-        HashContrasena::desde_texto(texto.to_owned())
+    fn hash(texto: &str) -> HashClave {
+        HashClave::desde_texto(texto.to_owned())
     }
 
     fn ana() -> Usuario {
@@ -488,37 +485,37 @@ mod tests {
     }
 
     #[test]
-    fn la_contrasena_cumple_l3() {
+    fn la_clave_cumple_l3() {
         assert_eq!(
-            ContrasenaNueva::nueva("corta", &cedula()),
-            Err(ErrorUsuario::ContrasenaCorta)
+            ClaveNueva::nueva("corta", &cedula()),
+            Err(ErrorUsuario::ClaveCorta)
         );
         assert_eq!(
-            ContrasenaNueva::nueva(&"x".repeat(129), &cedula()),
-            Err(ErrorUsuario::ContrasenaLarga)
+            ClaveNueva::nueva(&"x".repeat(129), &cedula()),
+            Err(ErrorUsuario::ClaveLarga)
         );
         assert_eq!(
-            ContrasenaNueva::nueva("1-1111-1111", &cedula()),
-            Err(ErrorUsuario::ContrasenaIgualALaCedula),
+            ClaveNueva::nueva("1-1111-1111", &cedula()),
+            Err(ErrorUsuario::ClaveIgualALaCedula),
             "la cédula, escrita como sea"
         );
-        let buena = ContrasenaNueva::nueva("ñandú y más", &cedula()).unwrap();
+        let buena = ClaveNueva::nueva("ñandú y más", &cedula()).unwrap();
         assert_eq!(
             buena.as_str(),
             "ñandú y más",
             "se cuentan caracteres, no bytes"
         );
         assert!(
-            ContrasenaNueva::nueva(&"á".repeat(128), &cedula()).is_ok(),
+            ClaveNueva::nueva(&"á".repeat(128), &cedula()).is_ok(),
             "128 caracteres con tilde caben"
         );
     }
 
     #[test]
-    fn ni_la_contrasena_ni_su_hash_se_muestran() {
+    fn ni_la_clave_ni_su_hash_se_muestran() {
         let texto = format!(
             "{:?} {:?}",
-            ContrasenaNueva::nueva("secreto-123", &cedula()).unwrap(),
+            ClaveNueva::nueva("secreto-123", &cedula()).unwrap(),
             ana()
         );
         assert!(!texto.contains("secreto"), "{texto}");
@@ -553,10 +550,7 @@ mod tests {
         assert!(usuario.activo(), "nace activo");
         assert_eq!(usuario.nombre().as_str(), "ANA MORA");
         let alta: Vec<&str> = usuario.cambios_de_alta().iter().map(|c| c.campo).collect();
-        assert_eq!(
-            alta,
-            ["cedula", "nombre", "activo", "debe_cambiar_contrasena"]
-        );
+        assert_eq!(alta, ["cedula", "nombre", "activo", "debe_cambiar_clave"]);
     }
 
     #[test]
@@ -564,7 +558,7 @@ mod tests {
         let primero =
             Usuario::crear_primero(id(1), cedula(), "ana mora", hash("h"), false).unwrap();
         assert!(primero.activo(), "entra activo");
-        assert!(!primero.debe_cambiar_contrasena(), "eligió su contraseña");
+        assert!(!primero.debe_cambiar_clave(), "eligió su clave");
         assert_eq!(
             Usuario::crear_primero(id(2), cedula(), "ana mora", hash("h"), true),
             Err(ErrorUsuario::YaHayUsuarios)
@@ -585,22 +579,22 @@ mod tests {
     }
 
     #[test]
-    fn cambiar_la_contrasena_pide_la_actual_y_restablecerla_la_deja_temporal() {
+    fn cambiar_la_clave_pide_la_actual_y_restablecerla_la_deja_temporal() {
         let mut usuario = ana();
         assert_eq!(
-            usuario.cambiar_contrasena(false, hash("h2")),
-            Err(ErrorUsuario::ContrasenaActualIncorrecta)
+            usuario.cambiar_clave(false, hash("h2")),
+            Err(ErrorUsuario::ClaveActualIncorrecta)
         );
-        assert_eq!(usuario.contrasena(), &hash("h1"), "no cambió");
+        assert_eq!(usuario.clave(), &hash("h1"), "no cambió");
 
-        let restablecida = usuario.restablecer_contrasena(hash("h2"));
-        assert!(usuario.debe_cambiar_contrasena(), "queda temporal");
-        assert_eq!(restablecida[0].campo, "contrasena");
-        assert_eq!(restablecida[0].despues, "cambiada", "nunca la contraseña");
+        let restablecida = usuario.restablecer_clave(hash("h2"));
+        assert!(usuario.debe_cambiar_clave(), "queda temporal");
+        assert_eq!(restablecida[0].campo, "clave");
+        assert_eq!(restablecida[0].despues, "cambiada", "nunca la clave");
 
-        usuario.cambiar_contrasena(true, hash("h3")).unwrap();
-        assert!(!usuario.debe_cambiar_contrasena(), "ya no es temporal");
-        assert_eq!(usuario.contrasena(), &hash("h3"));
+        usuario.cambiar_clave(true, hash("h3")).unwrap();
+        assert!(!usuario.debe_cambiar_clave(), "ya no es temporal");
+        assert_eq!(usuario.clave(), &hash("h3"));
     }
 
     #[test]
@@ -616,12 +610,12 @@ mod tests {
         assert_eq!(
             decidir_inicio(None, false),
             Err(ErrorInicioSesion::CredencialesInvalidas),
-            "igual que una contraseña equivocada"
+            "igual que una clave equivocada"
         );
         assert_eq!(
             decidir_inicio(Some(&desactivado), false),
             Err(ErrorInicioSesion::CredencialesInvalidas),
-            "a quien no sabe la contraseña no se le dice que está desactivado"
+            "a quien no sabe la clave no se le dice que está desactivado"
         );
         assert_eq!(
             decidir_inicio(Some(&desactivado), true),
@@ -630,20 +624,17 @@ mod tests {
     }
 
     #[test]
-    fn solo_la_contrasena_equivocada_suma_intento() {
+    fn solo_la_clave_equivocada_suma_intento() {
         assert!(ErrorInicioSesion::CredencialesInvalidas.suma_intento());
         assert!(!ErrorInicioSesion::Desactivado.suma_intento());
         assert!(!ErrorInicioSesion::Bloqueado { minutos: 1 }.suma_intento());
-        assert!(!ErrorInicioSesion::ContrasenaTemporal.suma_intento());
+        assert!(!ErrorInicioSesion::ClaveTemporal.suma_intento());
     }
 
     #[test]
-    fn con_contrasena_temporal_no_se_opera() {
+    fn con_clave_temporal_no_se_opera() {
         assert_eq!(puede_operar(false), Ok(()));
-        assert_eq!(
-            puede_operar(true),
-            Err(ErrorInicioSesion::ContrasenaTemporal)
-        );
+        assert_eq!(puede_operar(true), Err(ErrorInicioSesion::ClaveTemporal));
     }
 
     #[test]
@@ -704,7 +695,7 @@ mod tests {
         );
         assert_eq!(
             ErrorInicioSesion::CredencialesInvalidas.to_string(),
-            "Cédula o contraseña incorrecta"
+            "Cédula o clave incorrecta"
         );
     }
 }

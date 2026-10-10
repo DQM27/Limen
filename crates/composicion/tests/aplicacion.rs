@@ -24,8 +24,8 @@ mod tests {
     use limen_dominio::personal_kof::PersonalKofId;
     use limen_dominio::tipo_ingreso::TipoIngreso;
     use limen_dominio::usuario::ErrorInicioSesion;
-    use limen_infra_memoria::{AlmacenMemoria, ContrasenasFalsas, IdsSecuenciales, RelojFijo};
-    use limen_infra_plataforma::{ContrasenasArgon2, IdsV7, RelojConfiable};
+    use limen_infra_memoria::{AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo};
+    use limen_infra_plataforma::{ClavesArgon2, IdsV7, RelojConfiable};
     use limen_infra_surreal::AlmacenSurreal;
     use uuid::Uuid;
 
@@ -40,8 +40,7 @@ mod tests {
     #[test]
     fn la_aplicacion_se_puede_compartir_entre_hilos() {
         es_send_y_sync::<AplicacionLimen>();
-        es_send_y_sync::<Aplicacion<AlmacenMemoria, RelojFijo, IdsSecuenciales, ContrasenasFalsas>>(
-        );
+        es_send_y_sync::<Aplicacion<AlmacenMemoria, RelojFijo, IdsSecuenciales, ClavesFalsas>>();
     }
 
     /// Lo que se crea al preparar el día y se necesita después.
@@ -340,7 +339,7 @@ mod tests {
             &almacen,
             &RelojConfiable::new(None),
             &IdsV7,
-            &ContrasenasArgon2::new().unwrap(),
+            &ClavesArgon2::new().unwrap(),
         );
         un_dia_en_la_porteria(&app).await;
     }
@@ -352,7 +351,7 @@ mod tests {
             &almacen,
             &RelojConfiable::new(None),
             &IdsV7,
-            &ContrasenasArgon2::new().unwrap(),
+            &ClavesArgon2::new().unwrap(),
         );
         let usuarios = &app.usuarios;
         assert!(
@@ -379,7 +378,7 @@ mod tests {
                 .para_interfaz()
                 .codigo,
             ErrorInicioSesion::CredencialesInvalidas.codigo(),
-            "la contraseña equivocada no entra"
+            "la clave equivocada no entra"
         );
     }
 
@@ -390,7 +389,7 @@ mod tests {
             "2026-10-09T14:00:00Z".parse().unwrap(),
             NaiveDate::from_ymd_opt(2026, 10, 9).unwrap(),
         );
-        let app = Aplicacion::nueva(&almacen, &reloj, &almacen.ids(), &ContrasenasFalsas);
+        let app = Aplicacion::nueva(&almacen, &reloj, &almacen.ids(), &ClavesFalsas);
         un_dia_en_la_porteria(&app).await;
     }
 
@@ -470,7 +469,7 @@ mod tests {
         let almacen = AlmacenMemoria::new();
         let hoy = NaiveDate::from_ymd_opt(2026, 10, 9).unwrap();
         let reloj = RelojFijo::new("2026-10-09T14:00:00Z".parse().unwrap(), hoy);
-        let app = Aplicacion::nueva(&almacen, &reloj, &almacen.ids(), &ContrasenasFalsas);
+        let app = Aplicacion::nueva(&almacen, &reloj, &almacen.ids(), &ClavesFalsas);
         let sesion = sesion();
         let acme = app
             .empresas

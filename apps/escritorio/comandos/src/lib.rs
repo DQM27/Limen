@@ -16,9 +16,7 @@ mod usuarios;
 
 use std::fmt;
 
-use limen_aplicacion::puertos::{
-    Consultas, Contrasenas, FabricaUnidadDeTrabajo, GeneradorIds, Reloj,
-};
+use limen_aplicacion::puertos::{Claves, Consultas, FabricaUnidadDeTrabajo, GeneradorIds, Reloj};
 use limen_aplicacion::sesion::Sesion;
 use limen_composicion::Aplicacion;
 use limen_dominio::contratista::ContratistaId;
@@ -37,7 +35,7 @@ pub use dto::{
     EntradaCorreoEntrada, EntradaProveedorEntrada, EntradaRegistradaDto, FilaContratistaDto,
     GafeteDto, MotivoDto, PersonaAdentroDto, PersonalKofDto, UsuarioDto, UsuarioEntrada,
 };
-pub use dto::{AtajoFechaDto, HistorialDto, MovimientoDto};
+pub use dto::{AtajoFechaDto, HistorialDto, MovimientoDto, OperadorDto};
 pub use error::{ErrorEntrada, ErrorJson, TipoErrorJson};
 pub use sesion::{SesionDelEquipo, UsuarioActual};
 
@@ -66,7 +64,7 @@ where
     F: FabricaUnidadDeTrabajo + Consultas + Clone,
     R: Reloj + Clone,
     G: GeneradorIds + Clone,
-    C: Contrasenas + Clone,
+    C: Claves + Clone,
 {
     /// Arranca sin sesión: hay que entrar (o crear el primer usuario).
     pub fn new(app: Aplicacion<F, R, G, C>) -> Self {
@@ -77,7 +75,7 @@ where
     }
 
     /// La sesión con la que se registra todo: sin ella (o con una
-    /// contraseña temporal sin cambiar) ningún comando hace nada.
+    /// clave temporal sin cambiar) ningún comando hace nada.
     pub fn sesion(&self) -> Result<Sesion, ErrorJson> {
         self.sesion.sesion()
     }

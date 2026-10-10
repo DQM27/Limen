@@ -181,7 +181,17 @@ export interface PersonaAdentro {
   gafete: number | null;
   /** Entró sin gafete (S/G): se muestra «S/G». */
   sin_gafete: boolean;
-  desde: string;
+  /** Cuándo entró: fecha y hora juntas (RFC 3339, UTC). */
+  entrada: string;
+  /** Quién registró la entrada. */
+  entrada_por: Operador;
+}
+
+/** Quién registró una marca (entrada o salida). */
+export interface Operador {
+  id: string;
+  /** `null` si ese usuario no está en este equipo. */
+  nombre: string | null;
 }
 
 // --- Usuarios e inicio de sesión (bloque L) ---
@@ -191,28 +201,28 @@ export interface UsuarioActual {
   id: string;
   cedula: string;
   nombre: string;
-  /** Contraseña temporal: hay que cambiarla antes de hacer cualquier otra cosa. */
-  debe_cambiar_contrasena: boolean;
+  /** Clave temporal: hay que cambiarla antes de hacer cualquier otra cosa. */
+  debe_cambiar_clave: boolean;
 }
 
-/** Un usuario en la lista de usuarios (nunca trae la contraseña). */
+/** Un usuario en la lista de usuarios (nunca trae la clave). */
 export interface Usuario {
   id: string;
   cedula: string;
   nombre: string;
   /** Se desactiva, no se borra. */
   activo: boolean;
-  debe_cambiar_contrasena: boolean;
+  debe_cambiar_clave: boolean;
 }
 
 /**
  * El formulario de alta de un usuario. Para el primer usuario del equipo la
- * contraseña es la suya; para los demás, una temporal.
+ * clave es la suya; para los demás, una temporal.
  */
 export interface UsuarioEntrada {
   cedula: string;
   nombre: string;
-  contrasena: string;
+  clave: string;
 }
 
 // --- Historial de ingresos ---
@@ -230,10 +240,14 @@ export interface Movimiento {
   gafete: number | null;
   /** Entró sin gafete: se muestra «S/G». */
   sin_gafete: boolean;
-  /** RFC 3339, UTC. */
+  /** Fecha y hora juntas (RFC 3339, UTC). */
   entrada: string;
+  /** Quién registró la entrada. */
+  entrada_por: Operador;
   /** `null` mientras siga adentro. */
   salida: string | null;
+  /** Quién registró la salida; puede ser otro operador que el de la entrada. */
+  salida_por: Operador | null;
 }
 
 /** El historial de un rango de fechas. */

@@ -1,6 +1,6 @@
 [package]
 name = "limen-infra-plataforma"
-description = "Adaptadores de plataforma de Limen: reloj confiable (NTP), generador de IDs y cifrado de contraseñas"
+description = "Adaptadores de plataforma de Limen: reloj confiable (NTP), generador de IDs y cifrado de claves"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

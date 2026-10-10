@@ -6,10 +6,10 @@ mod tests {
     use chrono::NaiveDate;
     use limen_composicion::Aplicacion;
     use limen_escritorio_comandos::{Comandos, ErrorJson, UsuarioEntrada, campos};
-    use limen_infra_memoria::{AlmacenMemoria, ContrasenasFalsas, IdsSecuenciales, RelojFijo};
+    use limen_infra_memoria::{AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo};
     use serde_json::json;
 
-    type Prueba = Comandos<AlmacenMemoria, RelojFijo, IdsSecuenciales, ContrasenasFalsas>;
+    type Prueba = Comandos<AlmacenMemoria, RelojFijo, IdsSecuenciales, ClavesFalsas>;
 
     /// Comandos sobre un equipo recién instalado: sin usuarios ni sesión.
     fn comandos() -> Prueba {
@@ -22,15 +22,15 @@ mod tests {
             &almacen,
             &reloj,
             &almacen.ids(),
-            &ContrasenasFalsas,
+            &ClavesFalsas,
         ))
     }
 
-    fn formulario(cedula: &str, nombre: &str, contrasena: &str) -> UsuarioEntrada {
+    fn formulario(cedula: &str, nombre: &str, clave: &str) -> UsuarioEntrada {
         UsuarioEntrada {
             cedula: cedula.into(),
             nombre: nombre.into(),
-            contrasena: contrasena.into(),
+            clave: clave.into(),
         }
     }
 
@@ -55,7 +55,7 @@ mod tests {
         assert_eq!(comandos.usuario_actual(), None);
         assert_eq!(comandos.sesion(), Err(ErrorJson::sin_sesion()));
         assert_eq!(
-            comandos.cambiar_contrasena("x", "y").await,
+            comandos.cambiar_clave("x", "y").await,
             Err(ErrorJson::sin_sesion())
         );
     }
@@ -74,7 +74,7 @@ mod tests {
                 "id": ana.id,
                 "cedula": "111111111",
                 "nombre": "ANA MORA",
-                "debe_cambiar_contrasena": false,
+                "debe_cambiar_clave": false,
             }),
             "la forma exacta del JSON"
         );
@@ -114,26 +114,23 @@ mod tests {
     async fn el_error_al_entrar_no_dice_que_estaba_mal() {
         let comandos = con_ana().await;
         comandos.cerrar_sesion();
-        for (cedula, contrasena) in [
+        for (cedula, clave) in [
             ("111111111", "equivocada"),
             ("999999999", "portería segura"),
         ] {
-            let error = comandos
-                .iniciar_sesion(cedula, contrasena)
-                .await
-                .unwrap_err();
+            let error = comandos.iniciar_sesion(cedula, clave).await.unwrap_err();
             assert_eq!(
                 codigo_y_campo(&error),
                 ("credenciales_invalidas", None),
                 "sin campo: no revela cuál falló"
             );
-            assert_eq!(error.mensaje, "Cédula o contraseña incorrecta");
+            assert_eq!(error.mensaje, "Cédula o clave incorrecta");
         }
         assert_eq!(comandos.usuario_actual(), None, "no abrió sesión");
     }
 
     #[tokio::test]
-    async fn con_contrasena_temporal_solo_se_puede_cambiarla() {
+    async fn con_clave_temporal_solo_se_puede_cambiarla() {
         let comandos = con_ana().await;
         let sesion_ana = comandos.sesion().unwrap();
         comandos
@@ -149,33 +146,30 @@ mod tests {
             .iniciar_sesion("222222222", "temporal 123")
             .await
             .unwrap();
-        assert!(beto.debe_cambiar_contrasena, "la eligió Ana");
+        assert!(beto.debe_cambiar_clave, "la eligió Ana");
         assert_eq!(
             comandos.sesion().map_err(|error| codigo_y_campo(&error)),
-            Err(("contrasena_temporal", None)),
+            Err(("clave_temporal", None)),
             "no opera hasta cambiarla"
         );
 
         let error = comandos
-            .cambiar_contrasena("no es", "la mía de verdad")
+            .cambiar_clave("no es", "la mía de verdad")
             .await
             .unwrap_err();
         assert_eq!(
             codigo_y_campo(&error),
-            (
-                "contrasena_actual_incorrecta",
-                Some(campos::CONTRASENA_ACTUAL)
-            )
+            ("clave_actual_incorrecta", Some(campos::CLAVE_ACTUAL))
         );
         comandos
-            .cambiar_contrasena("temporal 123", "la mía de verdad")
+            .cambiar_clave("temporal 123", "la mía de verdad")
             .await
             .unwrap();
         assert!(comandos.sesion().is_ok(), "ya puede operar");
         assert_eq!(
             comandos
                 .usuario_actual()
-                .map(|usuario| usuario.debe_cambiar_contrasena),
+                .map(|usuario| usuario.debe_cambiar_clave),
             Some(false)
         );
     }
@@ -200,11 +194,11 @@ mod tests {
             ),
             (
                 formulario("222222222", "beto solís", "corta"),
-                ("contrasena_corta", campos::CONTRASENA),
+                ("clave_corta", campos::CLAVE),
             ),
             (
                 formulario("222222222", "beto solís", "222222222"),
-                ("contrasena_igual_a_la_cedula", campos::CONTRASENA),
+                ("clave_igual_a_la_cedula", campos::CLAVE),
             ),
         ];
         for (entrada, (codigo, campo)) in casos {
@@ -231,17 +225,17 @@ mod tests {
                     "cedula": "111111111",
                     "nombre": "ANA MORA",
                     "activo": true,
-                    "debe_cambiar_contrasena": false,
+                    "debe_cambiar_clave": false,
                 },
                 {
                     "id": beto,
                     "cedula": "222222222",
                     "nombre": "BETO SOLIS",
                     "activo": true,
-                    "debe_cambiar_contrasena": true,
+                    "debe_cambiar_clave": true,
                 },
             ]),
-            "por nombre y nunca con la contraseña"
+            "por nombre y nunca con la clave"
         );
 
         let cambios = comandos
@@ -261,11 +255,11 @@ mod tests {
         );
 
         comandos
-            .restablecer_contrasena(&sesion, &beto, "nueva temporal")
+            .restablecer_clave(&sesion, &beto, "nueva temporal")
             .await
             .unwrap();
         let error = comandos
-            .restablecer_contrasena(&sesion, "no-es-un-id", "nueva temporal")
+            .restablecer_clave(&sesion, "no-es-un-id", "nueva temporal")
             .await
             .unwrap_err();
         assert_eq!(

@@ -49,9 +49,9 @@ pub async fn crear_primer_usuario(
 pub async fn iniciar_sesion(
     estado: State<'_, Estado>,
     cedula: String,
-    contrasena: String,
+    clave: String,
 ) -> Resultado<UsuarioActual> {
-    estado.comandos().iniciar_sesion(&cedula, &contrasena).await
+    estado.comandos().iniciar_sesion(&cedula, &clave).await
 }
 
 #[tauri::command]
@@ -65,17 +65,14 @@ pub fn usuario_actual(estado: State<'_, Estado>) -> Option<UsuarioActual> {
     estado.comandos().usuario_actual()
 }
 
-/// Cambia la contraseña propia; es lo único permitido con una temporal.
+/// Cambia la clave propia; es lo único permitido con una temporal.
 #[tauri::command]
-pub async fn cambiar_contrasena(
+pub async fn cambiar_clave(
     estado: State<'_, Estado>,
-    contrasena_actual: String,
-    contrasena: String,
+    clave_actual: String,
+    clave: String,
 ) -> Resultado<()> {
-    estado
-        .comandos()
-        .cambiar_contrasena(&contrasena_actual, &contrasena)
-        .await
+    estado.comandos().cambiar_clave(&clave_actual, &clave).await
 }
 
 // --- Usuarios (TEMPORAL: se administran en el equipo hasta el panel de la nube) ---
@@ -110,15 +107,15 @@ pub async fn editar_usuario(
 }
 
 #[tauri::command]
-pub async fn restablecer_contrasena(
+pub async fn restablecer_clave(
     estado: State<'_, Estado>,
     id: String,
-    contrasena: String,
+    clave: String,
 ) -> Resultado<()> {
     let sesion = estado.comandos().sesion()?;
     estado
         .comandos()
-        .restablecer_contrasena(&sesion, &id, &contrasena)
+        .restablecer_clave(&sesion, &id, &clave)
         .await
 }
 

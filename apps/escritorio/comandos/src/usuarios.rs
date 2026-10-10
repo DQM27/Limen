@@ -4,9 +4,7 @@
 //! administran desde el equipo, con cualquier sesión abierta (L1: hay un
 //! solo rol).
 
-use limen_aplicacion::puertos::{
-    Consultas, Contrasenas, FabricaUnidadDeTrabajo, GeneradorIds, Reloj,
-};
+use limen_aplicacion::puertos::{Claves, Consultas, FabricaUnidadDeTrabajo, GeneradorIds, Reloj};
 use limen_aplicacion::sesion::{OperadorId, Sesion};
 
 use crate::Comandos;
@@ -20,7 +18,7 @@ where
     F: FabricaUnidadDeTrabajo + Consultas + Clone,
     R: Reloj + Clone,
     G: GeneradorIds + Clone,
-    C: Contrasenas + Clone,
+    C: Claves + Clone,
 {
     // --- Sesión ---
 
@@ -40,24 +38,24 @@ where
             .app
             .usuarios
             .crear_primero
-            .ejecutar(&entrada.cedula, &entrada.nombre, &entrada.contrasena)
+            .ejecutar(&entrada.cedula, &entrada.nombre, &entrada.clave)
             .await
             .map_err(con_campo)?;
         Ok(self.sesion.abrir(&iniciada))
     }
 
-    /// Entra con cédula y contraseña. El error nunca dice cuál de las dos
+    /// Entra con cédula y clave. El error nunca dice cuál de las dos
     /// estaba mal, ni trae campo.
     pub async fn iniciar_sesion(
         &self,
         cedula: &str,
-        contrasena: &str,
+        clave: &str,
     ) -> Result<UsuarioActual, ErrorJson> {
         let iniciada = self
             .app
             .usuarios
             .iniciar_sesion
-            .ejecutar(cedula, contrasena)
+            .ejecutar(cedula, clave)
             .await?;
         Ok(self.sesion.abrir(&iniciada))
     }
@@ -71,21 +69,17 @@ where
         self.sesion.actual()
     }
 
-    /// Cambia la contraseña de quien tiene la sesión. Es lo único que se
-    /// puede hacer con una contraseña temporal.
-    pub async fn cambiar_contrasena(
-        &self,
-        contrasena_actual: &str,
-        contrasena: &str,
-    ) -> Result<(), ErrorJson> {
-        let sesion = self.sesion.sesion_para_cambiar_contrasena()?;
+    /// Cambia la clave de quien tiene la sesión. Es lo único que se
+    /// puede hacer con una clave temporal.
+    pub async fn cambiar_clave(&self, clave_actual: &str, clave: &str) -> Result<(), ErrorJson> {
+        let sesion = self.sesion.sesion_para_cambiar_clave()?;
         self.app
             .usuarios
-            .cambiar_contrasena
-            .ejecutar(&sesion, contrasena_actual, contrasena)
+            .cambiar_clave
+            .ejecutar(&sesion, clave_actual, clave)
             .await
             .map_err(con_campo)?;
-        self.sesion.contrasena_cambiada();
+        self.sesion.clave_cambiada();
         Ok(())
     }
 
@@ -97,7 +91,7 @@ where
         Ok(filas.iter().map(UsuarioDto::from).collect())
     }
 
-    /// Registra un usuario con una contraseña temporal y devuelve su ID.
+    /// Registra un usuario con una clave temporal y devuelve su ID.
     pub async fn registrar_usuario(
         &self,
         sesion: &Sesion,
@@ -107,12 +101,7 @@ where
             .app
             .usuarios
             .registrar
-            .ejecutar(
-                sesion,
-                &entrada.cedula,
-                &entrada.nombre,
-                &entrada.contrasena,
-            )
+            .ejecutar(sesion, &entrada.cedula, &entrada.nombre, &entrada.clave)
             .await
             .map_err(con_campo)?;
         Ok(id.uuid().to_string())
@@ -138,19 +127,19 @@ where
         Ok(cambios.iter().map(CambioDto::from).collect())
     }
 
-    /// Le pone una contraseña temporal a otro usuario (por ejemplo, si
+    /// Le pone una clave temporal a otro usuario (por ejemplo, si
     /// olvidó la suya). Deberá cambiarla al entrar.
-    pub async fn restablecer_contrasena(
+    pub async fn restablecer_clave(
         &self,
         sesion: &Sesion,
         id: &str,
-        contrasena: &str,
+        clave: &str,
     ) -> Result<(), ErrorJson> {
         let id = OperadorId::desde_uuid(leer_uuid(id)?);
         self.app
             .usuarios
-            .restablecer_contrasena
-            .ejecutar(sesion, id, contrasena)
+            .restablecer_clave
+            .ejecutar(sesion, id, clave)
             .await
             .map_err(con_campo)
     }

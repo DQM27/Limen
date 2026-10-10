@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import {
-  cambiarContrasena,
+  cambiarClave,
   cerrarSesion,
   crearPrimerUsuario,
   iniciarSesion,
@@ -27,8 +27,8 @@ export class SesionServicio {
     this._usuario.set(await usuarioActual());
   }
 
-  async iniciar(cedula: string, contrasena: string): Promise<UsuarioActual> {
-    const usuario = await iniciarSesion(cedula, contrasena);
+  async iniciar(cedula: string, clave: string): Promise<UsuarioActual> {
+    const usuario = await iniciarSesion(cedula, clave);
     this._usuario.set(usuario);
     return usuario;
   }
@@ -39,10 +39,10 @@ export class SesionServicio {
     return usuario;
   }
 
-  async cambiarContrasena(contrasenaActual: string, contrasena: string): Promise<void> {
-    await cambiarContrasena(contrasenaActual, contrasena);
+  async cambiarClave(claveActual: string, clave: string): Promise<void> {
+    await cambiarClave(claveActual, clave);
     this._usuario.update((usuario) =>
-      usuario ? { ...usuario, debe_cambiar_contrasena: false } : usuario,
+      usuario ? { ...usuario, debe_cambiar_clave: false } : usuario,
     );
   }
 

@@ -23,10 +23,10 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use chrono::{DateTime, NaiveDate, NaiveTime, TimeDelta, TimeZone, Utc};
 use limen_aplicacion::puertos::{
-    CambioHistorial, Consultas, Contrasenas, EntradaAuditoria, EntradaHistorial, ErrorPersistencia,
-    FabricaUnidadDeTrabajo, FilaContratista, GeneradorIds, IngresoAbierto, MovimientoHistorial,
-    PersonaAdentro, RegistroAuditado, RegistroAuditoria, RegistroHechos, Reloj,
-    RepositorioContratistas, RepositorioEmpresas, RepositorioEmpresasProveedoras,
+    CambioHistorial, Claves, Consultas, EntradaAuditoria, EntradaHistorial, ErrorPersistencia,
+    FabricaUnidadDeTrabajo, FilaContratista, GeneradorIds, IngresoAbierto, MarcaVista,
+    MovimientoHistorial, PersonaAdentro, RegistroAuditado, RegistroAuditoria, RegistroHechos,
+    Reloj, RepositorioContratistas, RepositorioEmpresas, RepositorioEmpresasProveedoras,
     RepositorioGafetes, RepositorioIngresos, RepositorioIngresosCorreo,
     RepositorioIngresosProveedor, RepositorioIntentosInicio, RepositorioPersonalKof,
     RepositorioPresencias, RepositorioPrestamosKof, RepositorioReloj, RepositorioUsuarios,
@@ -42,12 +42,13 @@ use limen_dominio::hecho::{Hecho, HechoId};
 use limen_dominio::ingreso_contratista::{EntregaGafete, IngresoContratista, IngresoId};
 use limen_dominio::ingreso_correo::{IngresoCorreo, IngresoCorreoId};
 use limen_dominio::ingreso_proveedor::{IngresoProveedor, IngresoProveedorId};
+use limen_dominio::movimiento::Marca;
 use limen_dominio::operador::OperadorId;
 use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
 use limen_dominio::presencia::{Identidad, Via};
 use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofId};
 use limen_dominio::reloj::LecturaReloj;
-use limen_dominio::usuario::{ContrasenaNueva, HashContrasena, IntentosFallidos, Usuario};
+use limen_dominio::usuario::{ClaveNueva, HashClave, IntentosFallidos, Usuario};
 use uuid::Uuid;
 
 type ClaveGafete = (TipoGafete, NumeroGafete);
@@ -74,6 +75,20 @@ struct Contenido {
     intentos_inicio: BTreeMap<String, IntentosFallidos>,
     auditoria: Vec<EntradaAuditoria>,
     hechos: BTreeMap<HechoId, Hecho>,
+}
+
+impl Contenido {
+    /// Una marca con el nombre del usuario que la registró.
+    fn vista(&self, marca: Marca) -> MarcaVista {
+        MarcaVista {
+            en: marca.en,
+            operador: marca.operador,
+            nombre_operador: self
+                .usuarios
+                .get(&marca.operador)
+                .map(|usuario| usuario.nombre().clone()),
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -282,7 +297,7 @@ impl Consultas for AlmacenMemoria {
                     medio: Some(ingreso.medio().clone()),
                     gafete: ingreso.gafete(),
                     sin_gafete: ingreso.entrega_gafete() == EntregaGafete::SinGafete,
-                    desde: ingreso.entrada().en,
+                    entrada: c.vista(ingreso.entrada()),
                 });
             }
             for ingreso in c.ingresos_proveedor.values().filter(|i| i.esta_abierto()) {
@@ -298,7 +313,7 @@ impl Consultas for AlmacenMemoria {
                     medio: Some(ingreso.medio().clone()),
                     gafete: Some(ingreso.gafete()),
                     sin_gafete: false,
-                    desde: ingreso.entrada().en,
+                    entrada: c.vista(ingreso.entrada()),
                 });
             }
             for ingreso in c.ingresos_correo.values().filter(|i| i.esta_abierto()) {
@@ -310,7 +325,7 @@ impl Consultas for AlmacenMemoria {
                     medio: Some(ingreso.medio().clone()),
                     gafete: Some(ingreso.gafete()),
                     sin_gafete: false,
-                    desde: ingreso.entrada().en,
+                    entrada: c.vista(ingreso.entrada()),
                 });
             }
             for prestamo in c.prestamos_kof.values().filter(|p| p.esta_abierto()) {
@@ -322,12 +337,13 @@ impl Consultas for AlmacenMemoria {
                     medio: None,
                     gafete: Some(prestamo.gafete()),
                     sin_gafete: false,
-                    desde: prestamo.entrega().en,
+                    entrada: c.vista(prestamo.entrega()),
                 });
             }
             adentro.sort_by(|a, b| {
-                b.desde
-                    .cmp(&a.desde)
+                b.entrada
+                    .en
+                    .cmp(&a.entrada.en)
                     .then_with(|| a.identidad.to_string().cmp(&b.identidad.to_string()))
             });
             adentro
@@ -464,8 +480,8 @@ impl Consultas for AlmacenMemoria {
                     medio: Some(ingreso.medio().clone()),
                     gafete: ingreso.gafete(),
                     sin_gafete: ingreso.entrega_gafete() == EntregaGafete::SinGafete,
-                    entrada: ingreso.entrada().en,
-                    salida: ingreso.salida().map(|marca| marca.en),
+                    entrada: c.vista(ingreso.entrada()),
+                    salida: ingreso.salida().map(|marca| c.vista(marca)),
                 });
             }
             for ingreso in c
@@ -485,8 +501,8 @@ impl Consultas for AlmacenMemoria {
                     medio: Some(ingreso.medio().clone()),
                     gafete: Some(ingreso.gafete()),
                     sin_gafete: false,
-                    entrada: ingreso.entrada().en,
-                    salida: ingreso.salida().map(|marca| marca.en),
+                    entrada: c.vista(ingreso.entrada()),
+                    salida: ingreso.salida().map(|marca| c.vista(marca)),
                 });
             }
             for ingreso in c
@@ -502,8 +518,8 @@ impl Consultas for AlmacenMemoria {
                     medio: Some(ingreso.medio().clone()),
                     gafete: Some(ingreso.gafete()),
                     sin_gafete: false,
-                    entrada: ingreso.entrada().en,
-                    salida: ingreso.salida().map(|marca| marca.en),
+                    entrada: c.vista(ingreso.entrada()),
+                    salida: ingreso.salida().map(|marca| c.vista(marca)),
                 });
             }
             for prestamo in c
@@ -519,13 +535,14 @@ impl Consultas for AlmacenMemoria {
                     medio: None,
                     gafete: Some(prestamo.gafete()),
                     sin_gafete: false,
-                    entrada: prestamo.entrega().en,
-                    salida: prestamo.devolucion().map(|marca| marca.en),
+                    entrada: c.vista(prestamo.entrega()),
+                    salida: prestamo.devolucion().map(|marca| c.vista(marca)),
                 });
             }
             movimientos.sort_by(|a, b| {
                 b.entrada
-                    .cmp(&a.entrada)
+                    .en
+                    .cmp(&a.entrada.en)
                     .then_with(|| a.identidad.to_string().cmp(&b.identidad.to_string()))
             });
             movimientos.truncate(limite);
@@ -1364,22 +1381,22 @@ impl RepositorioIntentosInicio for IntentosInicioMemoria {
 /// Cifrador de mentira para las pruebas: instantáneo y predecible. El de
 /// verdad (Argon2id) está en `infra-plataforma`.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct ContrasenasFalsas;
+pub struct ClavesFalsas;
 
-impl ContrasenasFalsas {
+impl ClavesFalsas {
     /// El "hash" que este cifrador le da a `texto`.
-    pub fn hash_de(texto: &str) -> HashContrasena {
-        HashContrasena::desde_texto(format!("falso:{texto}"))
+    pub fn hash_de(texto: &str) -> HashClave {
+        HashClave::desde_texto(format!("falso:{texto}"))
     }
 }
 
-impl Contrasenas for ContrasenasFalsas {
-    fn cifrar(&self, contrasena: &ContrasenaNueva) -> Result<HashContrasena, String> {
-        Ok(Self::hash_de(contrasena.as_str()))
+impl Claves for ClavesFalsas {
+    fn cifrar(&self, clave: &ClaveNueva) -> Result<HashClave, String> {
+        Ok(Self::hash_de(clave.as_str()))
     }
 
-    fn verificar(&self, contrasena: &str, hash: Option<&HashContrasena>) -> bool {
-        hash.is_some_and(|hash| hash == &Self::hash_de(contrasena))
+    fn verificar(&self, clave: &str, hash: Option<&HashClave>) -> bool {
+        hash.is_some_and(|hash| hash == &Self::hash_de(clave))
     }
 }
 

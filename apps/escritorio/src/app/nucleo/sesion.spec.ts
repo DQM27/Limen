@@ -12,7 +12,7 @@ const ana: UsuarioActual = {
   id: 'abc',
   cedula: '111111111',
   nombre: 'ANA MORA',
-  debe_cambiar_contrasena: true,
+  debe_cambiar_clave: true,
 };
 
 describe('SesionServicio', () => {
@@ -50,7 +50,7 @@ describe('SesionServicio', () => {
     await sesion.iniciar('111111111', 'portería segura');
     expect(invoke).toHaveBeenCalledWith('iniciar_sesion', {
       cedula: '111111111',
-      contrasena: 'portería segura',
+      clave: 'portería segura',
     });
     expect(sesion.usuario()).toEqual(ana);
 
@@ -64,7 +64,7 @@ describe('SesionServicio', () => {
     vi.mocked(invoke).mockRejectedValue({
       tipo: 'negocio',
       codigo: 'credenciales_invalidas',
-      mensaje: 'Cédula o contraseña incorrecta',
+      mensaje: 'Cédula o clave incorrecta',
       campo: null,
     });
     const sesion = TestBed.inject(SesionServicio);
@@ -76,9 +76,9 @@ describe('SesionServicio', () => {
   });
 
   it('crear el primer usuario abre su sesión', async () => {
-    vi.mocked(invoke).mockResolvedValue({ ...ana, debe_cambiar_contrasena: false });
+    vi.mocked(invoke).mockResolvedValue({ ...ana, debe_cambiar_clave: false });
     const sesion = TestBed.inject(SesionServicio);
-    const entrada = { cedula: '1-1111-1111', nombre: 'ana mora', contrasena: 'portería segura' };
+    const entrada = { cedula: '1-1111-1111', nombre: 'ana mora', clave: 'portería segura' };
 
     await sesion.crearPrimerUsuario(entrada);
 
@@ -86,18 +86,18 @@ describe('SesionServicio', () => {
     expect(sesion.usuario()?.nombre).toBe('ANA MORA');
   });
 
-  it('cambiar la contraseña temporal deja de pedirla', async () => {
+  it('cambiar la clave temporal deja de pedirla', async () => {
     vi.mocked(invoke).mockResolvedValue(ana);
     const sesion = TestBed.inject(SesionServicio);
     await sesion.iniciar('111111111', 'temporal 123');
 
     vi.mocked(invoke).mockResolvedValue(undefined);
-    await sesion.cambiarContrasena('temporal 123', 'la mía de verdad');
+    await sesion.cambiarClave('temporal 123', 'la mía de verdad');
 
-    expect(invoke).toHaveBeenCalledWith('cambiar_contrasena', {
-      contrasenaActual: 'temporal 123',
-      contrasena: 'la mía de verdad',
+    expect(invoke).toHaveBeenCalledWith('cambiar_clave', {
+      claveActual: 'temporal 123',
+      clave: 'la mía de verdad',
     });
-    expect(sesion.usuario()?.debe_cambiar_contrasena).toBe(false);
+    expect(sesion.usuario()?.debe_cambiar_clave).toBe(false);
   });
 });

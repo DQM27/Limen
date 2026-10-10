@@ -13,7 +13,7 @@ crates/
   aplicacion/        casos de uso, puertos (traits) y modelo de errores
   infra-memoria/     implementación en memoria de los puertos, para pruebas
   infra-surreal/     SurrealDB embebido (SurrealKV en disco, kv-mem en pruebas)
-  infra-plataforma/  reloj confiable (NTP), IDs UUID v7 y contraseñas con Argon2id
+  infra-plataforma/  reloj confiable (NTP), IDs UUID v7 y claves con Argon2id
   composicion/       raíz de composición: arma la aplicación con sus adaptadores
   pruebas-contrato/  batería que corre contra todos los adaptadores
 apps/

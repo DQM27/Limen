@@ -2,7 +2,7 @@
 //!
 //! Vive sólo en memoria: al cerrar la app se cierra la sesión y hay que
 //! volver a entrar. Sin sesión ningún comando registra ni lee nada (regla
-//! E6: todo queda a nombre de quien lo hizo); con una contraseña temporal
+//! E6: todo queda a nombre de quien lo hizo); con una clave temporal
 //! sólo se puede cambiarla o salir (lo decide el dominio,
 //! `usuario::puede_operar`).
 
@@ -22,9 +22,9 @@ pub struct UsuarioActual {
     pub id: String,
     pub cedula: String,
     pub nombre: String,
-    /// La contraseña es temporal: la interfaz pide cambiarla antes de
+    /// La clave es temporal: la interfaz pide cambiarla antes de
     /// seguir (y los comandos no dejan hacer otra cosa).
-    pub debe_cambiar_contrasena: bool,
+    pub debe_cambiar_clave: bool,
 }
 
 impl From<&SesionIniciada> for UsuarioActual {
@@ -33,7 +33,7 @@ impl From<&SesionIniciada> for UsuarioActual {
             id: iniciada.sesion.operador().uuid().to_string(),
             cedula: iniciada.cedula.clone(),
             nombre: iniciada.nombre.clone(),
-            debe_cambiar_contrasena: iniciada.debe_cambiar_contrasena,
+            debe_cambiar_clave: iniciada.debe_cambiar_clave,
         }
     }
 }
@@ -68,15 +68,15 @@ impl SesionDelEquipo {
     }
 
     /// La sesión con la que se registra todo. Sin sesión, o con una
-    /// contraseña temporal sin cambiar, no se hace nada.
+    /// clave temporal sin cambiar, no se hace nada.
     pub fn sesion(&self) -> Result<Sesion, ErrorJson> {
         let abierta = self.abierta()?;
-        puede_operar(abierta.usuario.debe_cambiar_contrasena).map_err(ErrorCaso::Negocio)?;
+        puede_operar(abierta.usuario.debe_cambiar_clave).map_err(ErrorCaso::Negocio)?;
         Ok(abierta.sesion)
     }
 
-    /// La sesión aunque la contraseña sea temporal: sólo para cambiarla.
-    pub(crate) fn sesion_para_cambiar_contrasena(&self) -> Result<Sesion, ErrorJson> {
+    /// La sesión aunque la clave sea temporal: sólo para cambiarla.
+    pub(crate) fn sesion_para_cambiar_clave(&self) -> Result<Sesion, ErrorJson> {
         self.abierta().map(|abierta| abierta.sesion)
     }
 
@@ -89,10 +89,10 @@ impl SesionDelEquipo {
         usuario
     }
 
-    /// La contraseña ya no es temporal.
-    pub(crate) fn contrasena_cambiada(&self) {
+    /// La clave ya no es temporal.
+    pub(crate) fn clave_cambiada(&self) {
         if let Some(abierta) = self.guardada().as_mut() {
-            abierta.usuario.debe_cambiar_contrasena = false;
+            abierta.usuario.debe_cambiar_clave = false;
         }
     }
 

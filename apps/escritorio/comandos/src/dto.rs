@@ -22,7 +22,7 @@ use limen_aplicacion::casos_de_uso::ingresos::{
 use limen_aplicacion::casos_de_uso::proveedores::ComandoEntradaProveedor;
 use limen_aplicacion::casos_de_uso::usuarios::FilaUsuario;
 use limen_aplicacion::puertos::{
-    IngresoAbierto, MovimientoHistorial, PersonaAdentro, ResumenGafete,
+    IngresoAbierto, MarcaVista, MovimientoHistorial, PersonaAdentro, ResumenGafete,
 };
 use limen_dominio::acceso::ResultadoAcceso;
 use limen_dominio::auditoria::CambioCampo;
@@ -82,8 +82,31 @@ pub struct PersonaAdentroDto {
     /// Entró sin gafete (S/G) aunque le correspondía uno: la pantalla
     /// muestra "S/G".
     pub sin_gafete: bool,
-    /// Desde cuándo está adentro (RFC 3339, UTC).
-    pub desde: String,
+    /// Cuándo entró: fecha y hora juntas (RFC 3339, UTC). La pantalla las
+    /// muestra por separado, en la hora de Costa Rica.
+    pub entrada: String,
+    /// Quién registró la entrada.
+    pub entrada_por: OperadorDto,
+}
+
+/// Quién registró una marca (entrada o salida).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct OperadorDto {
+    pub id: String,
+    /// `None` si ese usuario no está en este equipo.
+    pub nombre: Option<String>,
+}
+
+impl From<&MarcaVista> for OperadorDto {
+    fn from(marca: &MarcaVista) -> Self {
+        Self {
+            id: marca.operador.uuid().to_string(),
+            nombre: marca
+                .nombre_operador
+                .as_ref()
+                .map(|nombre| nombre.as_str().to_owned()),
+        }
+    }
 }
 
 /// El ID del registro de un ingreso, sea de la vía que sea.
@@ -123,7 +146,8 @@ impl From<&PersonaAdentro> for PersonaAdentroDto {
             placa,
             gafete: persona.gafete.map(NumeroGafete::valor),
             sin_gafete: persona.sin_gafete,
-            desde: instante(persona.desde),
+            entrada: instante(persona.entrada.en),
+            entrada_por: OperadorDto::from(&persona.entrada),
         }
     }
 }
@@ -620,7 +644,7 @@ impl From<&CandidatoIngreso> for CandidatoIngresoDto {
     }
 }
 
-/// Un usuario en la lista de usuarios: nunca lleva la contraseña.
+/// Un usuario en la lista de usuarios: nunca lleva la clave.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct UsuarioDto {
     pub id: String,
@@ -628,8 +652,8 @@ pub struct UsuarioDto {
     pub nombre: String,
     /// Se desactiva, no se borra (L2).
     pub activo: bool,
-    /// Tiene una contraseña temporal que todavía no cambió.
-    pub debe_cambiar_contrasena: bool,
+    /// Tiene una clave temporal que todavía no cambió.
+    pub debe_cambiar_clave: bool,
 }
 
 impl From<&FilaUsuario> for UsuarioDto {
@@ -639,19 +663,19 @@ impl From<&FilaUsuario> for UsuarioDto {
             cedula: fila.cedula.clone(),
             nombre: fila.nombre.clone(),
             activo: fila.activo,
-            debe_cambiar_contrasena: fila.debe_cambiar_contrasena,
+            debe_cambiar_clave: fila.debe_cambiar_clave,
         }
     }
 }
 
 /// El formulario de alta de un usuario. Para el primer usuario del equipo
-/// la contraseña es la suya; para los demás, una temporal que deberán
+/// la clave es la suya; para los demás, una temporal que deberán
 /// cambiar al entrar.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct UsuarioEntrada {
     pub cedula: String,
     pub nombre: String,
-    pub contrasena: String,
+    pub clave: String,
 }
 
 // --- Historial de ingresos ---
@@ -672,10 +696,14 @@ pub struct MovimientoDto {
     pub gafete: Option<u32>,
     /// Entró sin gafete (S/G): la pantalla muestra "S/G".
     pub sin_gafete: bool,
-    /// RFC 3339, UTC.
+    /// Fecha y hora juntas (RFC 3339, UTC).
     pub entrada: String,
+    /// Quién registró la entrada.
+    pub entrada_por: OperadorDto,
     /// `None` mientras siga adentro.
     pub salida: Option<String>,
+    /// Quién registró la salida; puede ser otro operador que el de la entrada.
+    pub salida_por: Option<OperadorDto>,
 }
 
 impl From<&MovimientoHistorial> for MovimientoDto {
@@ -691,8 +719,10 @@ impl From<&MovimientoHistorial> for MovimientoDto {
             placa,
             gafete: movimiento.gafete.map(NumeroGafete::valor),
             sin_gafete: movimiento.sin_gafete,
-            entrada: instante(movimiento.entrada),
-            salida: movimiento.salida.map(instante),
+            entrada: instante(movimiento.entrada.en),
+            entrada_por: OperadorDto::from(&movimiento.entrada),
+            salida: movimiento.salida.as_ref().map(|salida| instante(salida.en)),
+            salida_por: movimiento.salida.as_ref().map(OperadorDto::from),
         }
     }
 }

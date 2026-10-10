@@ -6,18 +6,18 @@
 //! puede escribir `async fn` igual.
 
 mod auditoria;
+mod claves;
 mod consultas;
-mod contrasenas;
 mod hechos;
 mod persistencia;
 mod reloj;
 
 pub use auditoria::{AccionAuditada, EntradaAuditoria, RegistroAuditado, RegistroAuditoria};
+pub use claves::Claves;
 pub use consultas::{
-    CambioHistorial, Consultas, EntradaHistorial, FilaContratista, IngresoAbierto,
+    CambioHistorial, Consultas, EntradaHistorial, FilaContratista, IngresoAbierto, MarcaVista,
     MovimientoHistorial, PersonaAdentro, ResumenGafete,
 };
-pub use contrasenas::Contrasenas;
 pub use hechos::RegistroHechos;
 pub use persistencia::{
     ErrorPersistencia, FabricaUnidadDeTrabajo, RepositorioContratistas, RepositorioEmpresas,

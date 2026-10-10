@@ -9,13 +9,13 @@ use std::convert::Infallible;
 use limen_dominio::auditoria::CambioCampo;
 use limen_dominio::cedula::Cedula;
 use limen_dominio::usuario::{
-    ContrasenaNueva, ErrorInicioSesion, ErrorUsuario, HashContrasena, HechosUsuario, Usuario,
+    ClaveNueva, ErrorInicioSesion, ErrorUsuario, HashClave, HechosUsuario, Usuario,
     cedula_de_usuario, decidir_inicio, sumar_fallo, verificar_bloqueo,
 };
 
 use crate::errores::ErrorCaso;
 use crate::puertos::{
-    AccionAuditada, Contrasenas, EntradaAuditoria, FabricaUnidadDeTrabajo, GeneradorIds,
+    AccionAuditada, Claves, EntradaAuditoria, FabricaUnidadDeTrabajo, GeneradorIds,
     RegistroAuditado, RegistroAuditoria, Reloj, RepositorioIntentosInicio, RepositorioUsuarios,
     Restriccion, UnidadDeTrabajo,
 };
@@ -29,14 +29,10 @@ fn conflicto_de_cedula(restriccion: Restriccion) -> Option<ErrorUsuario> {
     (restriccion == Restriccion::CedulaUsuario).then_some(ErrorUsuario::CedulaRepetida)
 }
 
-/// Valida la contraseña nueva (L3) y la cifra.
-fn cifrar(
-    contrasenas: &impl Contrasenas,
-    texto: &str,
-    cedula: &Cedula,
-) -> Result<HashContrasena, ErrorUsuarios> {
-    let nueva = ContrasenaNueva::nueva(texto, cedula).map_err(ErrorCaso::Negocio)?;
-    contrasenas.cifrar(&nueva).map_err(ErrorCaso::Tecnico)
+/// Valida la clave nueva (L3) y la cifra.
+fn cifrar(claves: &impl Claves, texto: &str, cedula: &Cedula) -> Result<HashClave, ErrorUsuarios> {
+    let nueva = ClaveNueva::nueva(texto, cedula).map_err(ErrorCaso::Negocio)?;
+    claves.cifrar(&nueva).map_err(ErrorCaso::Tecnico)
 }
 
 /// Quién acaba de entrar.
@@ -45,9 +41,9 @@ pub struct SesionIniciada {
     pub sesion: Sesion,
     pub cedula: String,
     pub nombre: String,
-    /// La contraseña la puso otra persona: la interfaz pide cambiarla antes
+    /// La clave la puso otra persona: la interfaz pide cambiarla antes
     /// de seguir.
-    pub debe_cambiar_contrasena: bool,
+    pub debe_cambiar_clave: bool,
 }
 
 impl SesionIniciada {
@@ -56,19 +52,19 @@ impl SesionIniciada {
             sesion: Sesion::nueva(usuario.id()),
             cedula: usuario.cedula().to_string(),
             nombre: usuario.nombre().to_string(),
-            debe_cambiar_contrasena: usuario.debe_cambiar_contrasena(),
+            debe_cambiar_clave: usuario.debe_cambiar_clave(),
         }
     }
 }
 
-/// Un usuario en la lista. Nunca lleva la contraseña ni su hash.
+/// Un usuario en la lista. Nunca lleva la clave ni su hash.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FilaUsuario {
     pub id: OperadorId,
     pub cedula: String,
     pub nombre: String,
     pub activo: bool,
-    pub debe_cambiar_contrasena: bool,
+    pub debe_cambiar_clave: bool,
 }
 
 // --- Inicio de sesión ---
@@ -77,27 +73,23 @@ pub struct FilaUsuario {
 pub struct IniciarSesion<F, R, C> {
     fabrica: F,
     reloj: R,
-    contrasenas: C,
+    claves: C,
 }
 
-impl<F: FabricaUnidadDeTrabajo, R: Reloj, C: Contrasenas> IniciarSesion<F, R, C> {
-    pub const fn new(fabrica: F, reloj: R, contrasenas: C) -> Self {
+impl<F: FabricaUnidadDeTrabajo, R: Reloj, C: Claves> IniciarSesion<F, R, C> {
+    pub const fn new(fabrica: F, reloj: R, claves: C) -> Self {
         Self {
             fabrica,
             reloj,
-            contrasenas,
+            claves,
         }
     }
 
-    pub async fn ejecutar(
-        &self,
-        cedula: &str,
-        contrasena: &str,
-    ) -> Result<SesionIniciada, ErrorInicio> {
+    pub async fn ejecutar(&self, cedula: &str, clave: &str) -> Result<SesionIniciada, ErrorInicio> {
         let Ok(cedula) = cedula_de_usuario(cedula) else {
             // Una cédula mal escrita no puede ser de nadie, pero se tarda lo
             // mismo en contestar.
-            self.contrasenas.verificar(contrasena, None);
+            self.claves.verificar(clave, None);
             return Err(ErrorCaso::Negocio(ErrorInicioSesion::CredencialesInvalidas));
         };
         let ahora = self.reloj.ahora();
@@ -106,8 +98,8 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, C: Contrasenas> IniciarSesion<F, R, C>
         verificar_bloqueo(intentos, ahora).map_err(ErrorCaso::Negocio)?;
         let usuario = uow.usuarios().obtener_por_cedula(&cedula).await?;
         let correcta = self
-            .contrasenas
-            .verificar(contrasena, usuario.as_ref().map(Usuario::contrasena));
+            .claves
+            .verificar(clave, usuario.as_ref().map(Usuario::clave));
 
         match decidir_inicio(usuario.as_ref(), correcta) {
             Ok(usuario) => {
@@ -156,18 +148,18 @@ pub struct CrearPrimerUsuario<F, R, G, C> {
     fabrica: F,
     reloj: R,
     ids: G,
-    contrasenas: C,
+    claves: C,
 }
 
-impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds, C: Contrasenas>
+impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds, C: Claves>
     CrearPrimerUsuario<F, R, G, C>
 {
-    pub const fn new(fabrica: F, reloj: R, ids: G, contrasenas: C) -> Self {
+    pub const fn new(fabrica: F, reloj: R, ids: G, claves: C) -> Self {
         Self {
             fabrica,
             reloj,
             ids,
-            contrasenas,
+            claves,
         }
     }
 
@@ -175,12 +167,12 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds, C: Contrasenas>
         &self,
         cedula: &str,
         nombre: &str,
-        contrasena: &str,
+        clave: &str,
     ) -> Result<SesionIniciada, ErrorUsuarios> {
         let cedula = cedula_de_usuario(cedula).map_err(ErrorCaso::Negocio)?;
         let mut uow = self.fabrica.nueva();
         let hay_usuarios = uow.usuarios().hay_usuarios().await?;
-        let hash = cifrar(&self.contrasenas, contrasena, &cedula)?;
+        let hash = cifrar(&self.claves, clave, &cedula)?;
         let id = OperadorId::desde_uuid(self.ids.nuevo());
         let usuario = Usuario::crear_primero(id, cedula, nombre, hash, hay_usuarios)
             .map_err(ErrorCaso::Negocio)?;
@@ -204,25 +196,23 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds, C: Contrasenas>
 
 // --- Administración ---
 
-/// Registra un usuario con una contraseña temporal: deberá cambiarla al
+/// Registra un usuario con una clave temporal: deberá cambiarla al
 /// entrar.
 #[derive(Debug)]
 pub struct RegistrarUsuario<F, R, G, C> {
     fabrica: F,
     reloj: R,
     ids: G,
-    contrasenas: C,
+    claves: C,
 }
 
-impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds, C: Contrasenas>
-    RegistrarUsuario<F, R, G, C>
-{
-    pub const fn new(fabrica: F, reloj: R, ids: G, contrasenas: C) -> Self {
+impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds, C: Claves> RegistrarUsuario<F, R, G, C> {
+    pub const fn new(fabrica: F, reloj: R, ids: G, claves: C) -> Self {
         Self {
             fabrica,
             reloj,
             ids,
-            contrasenas,
+            claves,
         }
     }
 
@@ -231,14 +221,14 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds, C: Contrasenas>
         sesion: &Sesion,
         cedula: &str,
         nombre: &str,
-        contrasena_temporal: &str,
+        clave_temporal: &str,
     ) -> Result<OperadorId, ErrorUsuarios> {
         let cedula = cedula_de_usuario(cedula).map_err(ErrorCaso::Negocio)?;
         let mut uow = self.fabrica.nueva();
         let hechos = HechosUsuario {
             cedula_en_uso: uow.usuarios().cedula_en_uso(&cedula).await?,
         };
-        let hash = cifrar(&self.contrasenas, contrasena_temporal, &cedula)?;
+        let hash = cifrar(&self.claves, clave_temporal, &cedula)?;
         let id = OperadorId::desde_uuid(self.ids.nuevo());
         let usuario = Usuario::registrar(id, cedula, nombre, hash, true, hechos)
             .map_err(ErrorCaso::Negocio)?;
@@ -329,24 +319,22 @@ fn anotar_edicion(
     ));
 }
 
-/// El operador cambia su propia contraseña: debe saber la actual.
+/// El operador cambia su propia clave: debe saber la actual.
 #[derive(Debug)]
-pub struct CambiarContrasena<F, R, G, C> {
+pub struct CambiarClave<F, R, G, C> {
     fabrica: F,
     reloj: R,
     ids: G,
-    contrasenas: C,
+    claves: C,
 }
 
-impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds, C: Contrasenas>
-    CambiarContrasena<F, R, G, C>
-{
-    pub const fn new(fabrica: F, reloj: R, ids: G, contrasenas: C) -> Self {
+impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds, C: Claves> CambiarClave<F, R, G, C> {
+    pub const fn new(fabrica: F, reloj: R, ids: G, claves: C) -> Self {
         Self {
             fabrica,
             reloj,
             ids,
-            contrasenas,
+            claves,
         }
     }
 
@@ -363,12 +351,10 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds, C: Contrasenas>
             .obtener(id)
             .await?
             .ok_or(ErrorCaso::NoEncontrado)?;
-        let hash = cifrar(&self.contrasenas, nueva, usuario.cedula())?;
-        let actual_correcta = self
-            .contrasenas
-            .verificar(actual, Some(usuario.contrasena()));
+        let hash = cifrar(&self.claves, nueva, usuario.cedula())?;
+        let actual_correcta = self.claves.verificar(actual, Some(usuario.clave()));
         let cambios = usuario
-            .cambiar_contrasena(actual_correcta, hash)
+            .cambiar_clave(actual_correcta, hash)
             .map_err(ErrorCaso::Negocio)?;
         uow.usuarios().guardar(&usuario);
         anotar_edicion(&mut uow, &self.ids, &self.reloj, sesion, id, cambios);
@@ -376,25 +362,23 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds, C: Contrasenas>
     }
 }
 
-/// Otro operador le pone una contraseña temporal a un usuario (por
+/// Otro operador le pone una clave temporal a un usuario (por
 /// ejemplo, si la olvidó).
 #[derive(Debug)]
-pub struct RestablecerContrasena<F, R, G, C> {
+pub struct RestablecerClave<F, R, G, C> {
     fabrica: F,
     reloj: R,
     ids: G,
-    contrasenas: C,
+    claves: C,
 }
 
-impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds, C: Contrasenas>
-    RestablecerContrasena<F, R, G, C>
-{
-    pub const fn new(fabrica: F, reloj: R, ids: G, contrasenas: C) -> Self {
+impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds, C: Claves> RestablecerClave<F, R, G, C> {
+    pub const fn new(fabrica: F, reloj: R, ids: G, claves: C) -> Self {
         Self {
             fabrica,
             reloj,
             ids,
-            contrasenas,
+            claves,
         }
     }
 
@@ -410,8 +394,8 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds, C: Contrasenas>
             .obtener(id)
             .await?
             .ok_or(ErrorCaso::NoEncontrado)?;
-        let hash = cifrar(&self.contrasenas, temporal, usuario.cedula())?;
-        let cambios = usuario.restablecer_contrasena(hash);
+        let hash = cifrar(&self.claves, temporal, usuario.cedula())?;
+        let cambios = usuario.restablecer_clave(hash);
         uow.usuarios().guardar(&usuario);
         anotar_edicion(&mut uow, &self.ids, &self.reloj, sesion, id, cambios);
         uow.confirmar().await.map_err(ErrorCaso::from)
@@ -439,7 +423,7 @@ impl<F: FabricaUnidadDeTrabajo> ListarUsuarios<F> {
                 cedula: usuario.cedula().to_string(),
                 nombre: usuario.nombre().to_string(),
                 activo: usuario.activo(),
-                debe_cambiar_contrasena: usuario.debe_cambiar_contrasena(),
+                debe_cambiar_clave: usuario.debe_cambiar_clave(),
             })
             .collect())
     }

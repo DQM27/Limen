@@ -141,14 +141,14 @@ DEFINE FIELD OVERWRITE desde ON personal_kof_con_prestamo TYPE datetime;
 DEFINE TABLE OVERWRITE reloj SCHEMAFULL;
 DEFINE FIELD OVERWRITE en ON reloj TYPE datetime;
 
--- Usuarios (bloque L). La contraseña nunca se guarda: sólo su hash
+-- Usuarios (bloque L). La clave nunca se guarda: sólo su hash
 -- Argon2id en formato PHC (lleva la sal y los parámetros).
 DEFINE TABLE OVERWRITE usuario SCHEMAFULL;
 DEFINE FIELD OVERWRITE cedula ON usuario TYPE string ASSERT string::len($value) > 0;
 DEFINE FIELD OVERWRITE nombre ON usuario TYPE string ASSERT string::len($value) > 0;
 DEFINE FIELD OVERWRITE activo ON usuario TYPE bool;
-DEFINE FIELD OVERWRITE contrasena ON usuario TYPE string ASSERT string::len($value) > 0;
-DEFINE FIELD OVERWRITE debe_cambiar_contrasena ON usuario TYPE bool;
+DEFINE FIELD OVERWRITE clave ON usuario TYPE string ASSERT string::len($value) > 0;
+DEFINE FIELD OVERWRITE debe_cambiar_clave ON usuario TYPE bool;
 DEFINE INDEX OVERWRITE usuario_cedula_unica ON usuario FIELDS cedula UNIQUE;
 
 -- Intentos fallidos de inicio de sesión (regla L6). Clave:

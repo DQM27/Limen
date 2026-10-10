@@ -23,7 +23,7 @@ chrono = { version = "0.4", default-features = false, features = ["std"] }
 thiserror = "2"
 uuid = { version = "1", features = ["v7"] }
 chrono-tz = { version = "0.10", default-features = false, features = ["std"] }
-# Argon2id para las contraseñas (bloque L). Ya entraba con SurrealDB.
+# Argon2id para las claves (bloque L). Ya entraba con SurrealDB.
 argon2 = "0.5"
 # `getrandom`: la sal sale del generador del sistema operativo.
 password-hash = { version = "0.5", features = ["getrandom"] }
@@ -152,7 +152,7 @@ if_then_some_else_none = "deny"
 missing_assert_message = "deny"
 tests_outside_test_module = "deny"
 
-# Argon2 sin optimizar tarda casi un segundo por contraseña: en desarrollo y
+# Argon2 sin optimizar tarda casi un segundo por clave: en desarrollo y
 # en las pruebas se compila optimizado (sólo él y su función de resumen).
 [profile.dev.package.argon2]
 opt-level = 3

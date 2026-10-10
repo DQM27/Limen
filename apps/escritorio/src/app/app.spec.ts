@@ -14,7 +14,7 @@ async function crear(dentroDeLaApp: boolean) {
   vi.mocked(invoke).mockImplementation((comando: string) =>
     Promise.resolve(
       comando === 'usuario_actual'
-        ? { id: 'abc', cedula: '111111111', nombre: 'ANA MORA', debe_cambiar_contrasena: false }
+        ? { id: 'abc', cedula: '111111111', nombre: 'ANA MORA', debe_cambiar_clave: false }
         : [],
     ),
   );
