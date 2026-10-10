@@ -25,3 +25,12 @@ jobs:
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           comment-summary-in-pr: on-failure
+          # Avisos permitidos, cada uno con su motivo. Se revisan en cada
+          # subida de la dependencia que los trae; si ya no aparecen, se
+          # borran de aquí.
+          #
+          # GHSA-wrw7-89jp-8q8g (RUSTSEC-2024-0429): `glib` 0.18, unsoundness
+          # en `VariantStrIter`. Lo trae Tauri sólo en Linux (GTK 3 vía wry);
+          # en Windows, donde corren los equipos, Tauri usa WebView2 y `glib`
+          # no se compila. Tauri 2 no tiene versión con `glib` corregido.
+          allow-ghsas: GHSA-wrw7-89jp-8q8g
