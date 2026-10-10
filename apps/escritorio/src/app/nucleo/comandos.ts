@@ -16,9 +16,7 @@ import type {
   PersonaAdentro,
   PersonalKof,
   TipoGafete,
-  Usuario,
   UsuarioActual,
-  UsuarioEntrada,
   Via,
 } from './tipos';
 import { invocar } from './tauri';
@@ -170,16 +168,7 @@ export function registrarSalidaPorGafete(via: Via, numero: number): Promise<void
 }
 
 // --- Sesión (bloque L) ---
-
-/** Si el equipo ya tiene usuarios; sin ninguno se ofrece crear el primero. */
-export function hayUsuarios(): Promise<boolean> {
-  return invocar<boolean>('hay_usuarios');
-}
-
-/** Crea el primer usuario del equipo (sólo si no hay ninguno) y abre su sesión. */
-export function crearPrimerUsuario(usuario: UsuarioEntrada): Promise<UsuarioActual> {
-  return invocar<UsuarioActual>('crear_primer_usuario', { usuario });
-}
+// Los usuarios vienen de la nube: el equipo no los crea ni los administra.
 
 /**
  * Entra con cédula y clave. Si falla, el error nunca dice cuál de las
@@ -202,27 +191,6 @@ export function usuarioActual(): Promise<UsuarioActual | null> {
 /** Cambia la clave propia: lo único permitido con una temporal. */
 export function cambiarClave(claveActual: string, clave: string): Promise<void> {
   return invocar<void>('cambiar_clave', { claveActual, clave });
-}
-
-// --- Usuarios (se administran en el equipo hasta que exista el panel de la nube) ---
-
-export function listarUsuarios(): Promise<Usuario[]> {
-  return invocar<Usuario[]>('listar_usuarios');
-}
-
-/** Registra un usuario con una clave temporal y devuelve su identificador. */
-export function registrarUsuario(usuario: UsuarioEntrada): Promise<string> {
-  return invocar<string>('registrar_usuario', { usuario });
-}
-
-/** Edita el nombre y si está activo (se desactiva, no se borra). */
-export function editarUsuario(id: string, nombre: string, activo: boolean): Promise<Cambio[]> {
-  return invocar<Cambio[]>('editar_usuario', { id, nombre, activo });
-}
-
-/** Le pone una clave temporal a otro usuario (por ejemplo, si la olvidó). */
-export function restablecerClave(id: string, clave: string): Promise<void> {
-  return invocar<void>('restablecer_clave', { id, clave });
 }
 
 // --- Historial de ingresos ---

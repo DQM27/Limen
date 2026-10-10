@@ -20,7 +20,8 @@ const CARPETA_BASE: &str = "base";
 const ARCHIVO_DESFASE_RELOJ: &str = "reloj-desfase.txt";
 /// Abre la base. Si falla no hay app que mostrar: el error sube a `setup`,
 /// que detiene el arranque con el motivo escrito. La app arranca sin
-/// sesión: la interfaz pide entrar (o crear el primer usuario).
+/// sesión: la interfaz pide entrar. Al desarrollar, la base se siembra con
+/// usuarios de prueba (`limen_composicion::semilla`).
 fn preparar_estado(app: &tauri::App) -> Result<Estado, Box<dyn std::error::Error>> {
     let datos = app.path().app_data_dir()?;
     std::fs::create_dir_all(&datos)?;
@@ -61,16 +62,10 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            comandos::hay_usuarios,
-            comandos::crear_primer_usuario,
             comandos::iniciar_sesion,
             comandos::cerrar_sesion,
             comandos::usuario_actual,
             comandos::cambiar_clave,
-            comandos::listar_usuarios,
-            comandos::registrar_usuario,
-            comandos::editar_usuario,
-            comandos::restablecer_clave,
             comandos::dentro,
             comandos::listar_contratistas,
             comandos::listar_historial,

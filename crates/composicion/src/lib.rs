@@ -15,6 +15,9 @@
 //! un `Arc`): cada caso de uso crea su propia Unit of Work en cada llamada y
 //! la concurrencia la maneja la base de datos.
 
+#[cfg(debug_assertions)]
+pub mod semilla;
+
 use std::fmt;
 use std::path::PathBuf;
 
@@ -39,10 +42,7 @@ use limen_aplicacion::casos_de_uso::proveedores::{
     RegistrarEmpresaProveedora, RegistrarEntradaProveedor, RegistrarSalidaProveedor,
     RenombrarEmpresaProveedora,
 };
-use limen_aplicacion::casos_de_uso::usuarios::{
-    CambiarClave, CrearPrimerUsuario, EditarUsuario, HayUsuarios, IniciarSesion, ListarUsuarios,
-    RegistrarUsuario, RestablecerClave,
-};
+use limen_aplicacion::casos_de_uso::usuarios::{CambiarClave, IniciarSesion};
 use limen_aplicacion::puertos::{
     Claves, Consultas, ErrorPersistencia, FabricaUnidadDeTrabajo, GeneradorIds, Reloj,
 };
@@ -63,6 +63,9 @@ pub enum ErrorArranque {
     Base(#[from] ErrorPersistencia),
     #[error("No se pudo preparar el cifrado de claves: {0}")]
     Claves(String),
+    /// Sólo al desarrollar (ver [`semilla`]).
+    #[error("No se pudo sembrar la base de desarrollo: {0}")]
+    Semilla(String),
 }
 
 macro_rules! grupo {
@@ -150,17 +153,12 @@ grupo! {
     }
 }
 
-/// Usuarios e inicio de sesión (bloque L). Es el único grupo que cifra
-/// claves, por eso lleva además el cifrador `C`.
+/// Inicio de sesión y cambio de la propia clave (bloque L). Es el único
+/// grupo que cifra claves, por eso lleva además el cifrador `C`. Los
+/// usuarios no se crean ni se administran en el equipo: vienen de la nube.
 pub struct Usuarios<F, R, G, C> {
-    pub hay_usuarios: HayUsuarios<F>,
-    pub crear_primero: CrearPrimerUsuario<F, R, G, C>,
     pub iniciar_sesion: IniciarSesion<F, R, C>,
-    pub registrar: RegistrarUsuario<F, R, G, C>,
-    pub editar: EditarUsuario<F, R, G>,
     pub cambiar_clave: CambiarClave<F, R, G, C>,
-    pub restablecer_clave: RestablecerClave<F, R, G, C>,
-    pub listar: ListarUsuarios<F>,
 }
 
 impl<F, R, G, C> fmt::Debug for Usuarios<F, R, G, C> {
@@ -254,14 +252,8 @@ where
                 devolver_gafete: DevolverGafeteKof::new(a(), r(), i()),
             },
             usuarios: Usuarios {
-                hay_usuarios: HayUsuarios::new(a()),
-                crear_primero: CrearPrimerUsuario::new(a(), r(), i(), c()),
                 iniciar_sesion: IniciarSesion::new(a(), r(), c()),
-                registrar: RegistrarUsuario::new(a(), r(), i(), c()),
-                editar: EditarUsuario::new(a(), r(), i()),
                 cambiar_clave: CambiarClave::new(a(), r(), i(), c()),
-                restablecer_clave: RestablecerClave::new(a(), r(), i(), c()),
-                listar: ListarUsuarios::new(a()),
             },
             quienes_estan_adentro: QuienesEstanAdentro::new(a()),
             historial: HistorialDeCambios::new(a()),
@@ -281,6 +273,11 @@ impl AplicacionLimen {
     pub async fn abrir(config: &Config, reloj: &RelojConfiable) -> Result<Self, ErrorArranque> {
         let almacen = AlmacenSurreal::en_disco(&config.ruta_base).await?;
         let claves = ClavesArgon2::new().map_err(ErrorArranque::Claves)?;
+        // Sólo al desarrollar: la versión para producción no trae la semilla.
+        #[cfg(debug_assertions)]
+        semilla::sembrar_usuarios(&almacen, &claves)
+            .await
+            .map_err(ErrorArranque::Semilla)?;
         Ok(Self::nueva(&almacen, reloj, &IdsV7, &claves))
     }
 }

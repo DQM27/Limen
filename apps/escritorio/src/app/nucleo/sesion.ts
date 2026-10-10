@@ -1,13 +1,7 @@
 import { Injectable, signal } from '@angular/core';
-import {
-  cambiarClave,
-  cerrarSesion,
-  crearPrimerUsuario,
-  iniciarSesion,
-  usuarioActual,
-} from './comandos';
+import { cambiarClave, cerrarSesion, iniciarSesion, usuarioActual } from './comandos';
 import { enTauri } from './tauri';
-import type { UsuarioActual, UsuarioEntrada } from './tipos';
+import type { UsuarioActual } from './tipos';
 
 /**
  * La sesión de este equipo, como señal para la interfaz. Quién puede hacer
@@ -29,12 +23,6 @@ export class SesionServicio {
 
   async iniciar(cedula: string, clave: string): Promise<UsuarioActual> {
     const usuario = await iniciarSesion(cedula, clave);
-    this._usuario.set(usuario);
-    return usuario;
-  }
-
-  async crearPrimerUsuario(entrada: UsuarioEntrada): Promise<UsuarioActual> {
-    const usuario = await crearPrimerUsuario(entrada);
     this._usuario.set(usuario);
     return usuario;
   }

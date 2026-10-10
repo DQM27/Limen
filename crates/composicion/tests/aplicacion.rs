@@ -344,35 +344,40 @@ mod tests {
         un_dia_en_la_porteria(&app).await;
     }
 
+    /// La semilla de desarrollo sólo existe en depuración.
+    #[cfg(debug_assertions)]
     #[tokio::test]
-    async fn el_primer_usuario_entra_con_argon2_y_surreal() {
+    async fn la_semilla_de_desarrollo_deja_entrar_con_argon2_y_surreal() {
+        use limen_composicion::semilla;
+
         let almacen = AlmacenSurreal::en_memoria().await.unwrap();
-        let app = AplicacionLimen::nueva(
-            &almacen,
-            &RelojConfiable::new(None),
-            &IdsV7,
-            &ClavesArgon2::new().unwrap(),
+        let claves = ClavesArgon2::new().unwrap();
+        let app = AplicacionLimen::nueva(&almacen, &RelojConfiable::new(None), &IdsV7, &claves);
+        assert!(
+            semilla::sembrar_usuarios(&almacen, &claves).await.unwrap(),
+            "la base vacía se siembra"
+        );
+        assert!(
+            !semilla::sembrar_usuarios(&almacen, &claves).await.unwrap(),
+            "con usuarios ya no se siembra otra vez"
         );
         let usuarios = &app.usuarios;
-        assert!(
-            !usuarios.hay_usuarios.ejecutar().await.unwrap(),
-            "base recién creada"
-        );
-        let creado = usuarios
-            .crear_primero
-            .ejecutar("1-1111-1111", "ana mora", "portería segura")
-            .await
-            .unwrap();
-        let iniciada = usuarios
-            .iniciar_sesion
-            .ejecutar("111111111", "portería segura")
-            .await
-            .unwrap();
-        assert_eq!(iniciada, creado, "entra el mismo usuario");
+        for (n, cedula, nombre) in semilla::USUARIOS {
+            let iniciada = usuarios
+                .iniciar_sesion
+                .ejecutar(cedula, semilla::CLAVE)
+                .await
+                .unwrap();
+            assert_eq!(
+                (iniciada.sesion.operador(), iniciada.nombre.as_str()),
+                (semilla::id(n), nombre),
+                "entra cada usuario de desarrollo"
+            );
+        }
         assert_eq!(
             usuarios
                 .iniciar_sesion
-                .ejecutar("111111111", "otra cosa")
+                .ejecutar("100000001", "otra cosa")
                 .await
                 .unwrap_err()
                 .para_interfaz()

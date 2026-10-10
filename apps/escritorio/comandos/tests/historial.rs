@@ -6,15 +6,21 @@ mod tests {
     use chrono::NaiveDate;
     use limen_aplicacion::sesion::{OperadorId, Sesion};
     use limen_composicion::Aplicacion;
+    use limen_dominio::cedula::Cedula;
     use limen_dominio::gafete::TipoGafete;
+    use limen_dominio::nombre::NombrePersona;
+    use limen_dominio::usuario::{Usuario, UsuarioGuardado};
     use limen_escritorio_comandos::{
-        Comandos, ContratistaEntrada, EntradaContratistaEntrada, UsuarioEntrada, campos,
+        Comandos, ContratistaEntrada, EntradaContratistaEntrada, campos,
     };
     use limen_infra_memoria::{AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo};
     use serde_json::json;
     use uuid::Uuid;
 
     type Prueba = Comandos<AlmacenMemoria, RelojFijo, IdsSecuenciales, ClavesFalsas>;
+
+    /// Un usuario del equipo (vino de la nube).
+    const MARTA: OperadorId = OperadorId::desde_uuid(Uuid::from_u128(901));
 
     fn sesion() -> Sesion {
         Sesion::nueva(OperadorId::desde_uuid(Uuid::from_u128(900)))
@@ -24,6 +30,14 @@ mod tests {
     /// de Costa Rica, y los gafetes de contratista 1 a 5.
     async fn comandos() -> Prueba {
         let almacen = AlmacenMemoria::new();
+        almacen.sembrar_usuario(Usuario::restaurar(UsuarioGuardado {
+            id: MARTA,
+            cedula: Cedula::normalizar("222222222").unwrap(),
+            nombre: NombrePersona::nuevo("marta solano").unwrap(),
+            activo: true,
+            clave: ClavesFalsas::hash_de("clave larga"),
+            debe_cambiar_clave: false,
+        }));
         let reloj = RelojFijo::new(
             "2026-10-09T14:00:00Z".parse().unwrap(),
             NaiveDate::from_ymd_opt(2026, 10, 9).unwrap(),
@@ -37,10 +51,10 @@ mod tests {
         Comandos::new(app)
     }
 
-    /// Un contratista entra con el gafete 3 (lo registra el operador 900) y
-    /// sale (lo registra MARTA SOLANO, un usuario del equipo). Devuelve el
-    /// ingreso y el ID de MARTA.
-    async fn entra_y_sale(comandos: &Prueba) -> (String, String) {
+    /// Un contratista entra con el gafete 3 (lo registra el operador 900, que
+    /// no está en el equipo) y sale (lo registra MARTA SOLANO). Devuelve el
+    /// ingreso.
+    async fn entra_y_sale(comandos: &Prueba) -> String {
         let empresa = comandos
             .registrar_empresa(&sesion(), "acme s.a.")
             .await
@@ -72,26 +86,18 @@ mod tests {
             )
             .await
             .unwrap();
-        let marta = comandos
-            .crear_primer_usuario(&UsuarioEntrada {
-                cedula: "2-2222-2222".into(),
-                nombre: "marta solano".into(),
-                clave: "clave-larga".into(),
-            })
-            .await
-            .unwrap();
-        let de_marta = Sesion::nueva(OperadorId::desde_uuid(marta.id.parse().unwrap()));
+        let de_marta = Sesion::nueva(MARTA);
         comandos
             .registrar_salida(&de_marta, "CONTRATISTA", &registrada.ingreso_id)
             .await
             .unwrap();
-        (registrada.ingreso_id, marta.id)
+        registrada.ingreso_id
     }
 
     #[tokio::test]
     async fn el_historial_trae_cada_fila_con_su_entrada_y_salida_y_quien_las_registro() {
         let comandos = comandos().await;
-        let (ingreso, marta) = entra_y_sale(&comandos).await;
+        let ingreso = entra_y_sale(&comandos).await;
 
         let historial = comandos
             .listar_historial(Some("2026-10-09"), Some("2026-10-09"))
@@ -118,7 +124,10 @@ mod tests {
                         "nombre": null,
                     },
                     "salida": "2026-10-09T14:00:00Z",
-                    "salida_por": { "id": marta, "nombre": "MARTA SOLANO" },
+                    "salida_por": {
+                        "id": "00000000-0000-0000-0000-000000000385",
+                        "nombre": "MARTA SOLANO",
+                    },
                 }],
                 "truncado": false,
                 "maximo": 20_000,

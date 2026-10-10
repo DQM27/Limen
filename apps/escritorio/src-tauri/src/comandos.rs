@@ -20,7 +20,6 @@ use limen_escritorio_comandos::{
     ContratistaEntrada, EmpresaDto, EmpresaProveedoraDto, EntradaContratistaEntrada,
     EntradaCorreoEntrada, EntradaProveedorEntrada, EntradaRegistradaDto, ErrorJson,
     FilaContratistaDto, GafeteDto, HistorialDto, PersonaAdentroDto, PersonalKofDto, UsuarioActual,
-    UsuarioDto, UsuarioEntrada,
 };
 use tauri::State;
 
@@ -29,21 +28,6 @@ use crate::estado::Estado;
 type Resultado<T> = Result<T, ErrorJson>;
 
 // --- Sesión (bloque L) ---
-
-/// Si el equipo ya tiene usuarios; sin ninguno, la interfaz ofrece crear
-/// el primero. No pide sesión.
-#[tauri::command]
-pub async fn hay_usuarios(estado: State<'_, Estado>) -> Resultado<bool> {
-    estado.comandos().hay_usuarios().await
-}
-
-#[tauri::command]
-pub async fn crear_primer_usuario(
-    estado: State<'_, Estado>,
-    usuario: UsuarioEntrada,
-) -> Resultado<UsuarioActual> {
-    estado.comandos().crear_primer_usuario(&usuario).await
-}
 
 #[tauri::command]
 pub async fn iniciar_sesion(
@@ -73,50 +57,6 @@ pub async fn cambiar_clave(
     clave: String,
 ) -> Resultado<()> {
     estado.comandos().cambiar_clave(&clave_actual, &clave).await
-}
-
-// --- Usuarios (TEMPORAL: se administran en el equipo hasta el panel de la nube) ---
-
-#[tauri::command]
-pub async fn listar_usuarios(estado: State<'_, Estado>) -> Resultado<Vec<UsuarioDto>> {
-    estado.comandos().sesion()?;
-    estado.comandos().listar_usuarios().await
-}
-
-#[tauri::command]
-pub async fn registrar_usuario(
-    estado: State<'_, Estado>,
-    usuario: UsuarioEntrada,
-) -> Resultado<String> {
-    let sesion = estado.comandos().sesion()?;
-    estado.comandos().registrar_usuario(&sesion, &usuario).await
-}
-
-#[tauri::command]
-pub async fn editar_usuario(
-    estado: State<'_, Estado>,
-    id: String,
-    nombre: String,
-    activo: bool,
-) -> Resultado<Vec<CambioDto>> {
-    let sesion = estado.comandos().sesion()?;
-    estado
-        .comandos()
-        .editar_usuario(&sesion, &id, &nombre, activo)
-        .await
-}
-
-#[tauri::command]
-pub async fn restablecer_clave(
-    estado: State<'_, Estado>,
-    id: String,
-    clave: String,
-) -> Resultado<()> {
-    let sesion = estado.comandos().sesion()?;
-    estado
-        .comandos()
-        .restablecer_clave(&sesion, &id, &clave)
-        .await
 }
 
 // --- Lecturas ---

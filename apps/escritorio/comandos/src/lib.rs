@@ -33,7 +33,7 @@ pub use dto::{
     AccesoDto, CambioDto, CambioGafeteEntrada, CandidatoIngresoDto, ContratistaDto,
     ContratistaEntrada, EmpresaDto, EmpresaProveedoraDto, EntradaContratistaEntrada,
     EntradaCorreoEntrada, EntradaProveedorEntrada, EntradaRegistradaDto, FilaContratistaDto,
-    GafeteDto, MotivoDto, PersonaAdentroDto, PersonalKofDto, UsuarioDto, UsuarioEntrada,
+    GafeteDto, MotivoDto, PersonaAdentroDto, PersonalKofDto,
 };
 pub use dto::{AtajoFechaDto, HistorialDto, MovimientoDto, OperadorDto};
 pub use error::{ErrorEntrada, ErrorJson, TipoErrorJson};

@@ -20,7 +20,6 @@ use limen_aplicacion::casos_de_uso::ingresos::{
     CandidatoIngreso, ComandoEntrada, EntradaContratista, GafeteElegido,
 };
 use limen_aplicacion::casos_de_uso::proveedores::ComandoEntradaProveedor;
-use limen_aplicacion::casos_de_uso::usuarios::FilaUsuario;
 use limen_aplicacion::puertos::{
     IngresoAbierto, MarcaVista, MovimientoHistorial, PersonaAdentro, ResumenGafete,
 };
@@ -642,40 +641,6 @@ impl From<&CandidatoIngreso> for CandidatoIngresoDto {
                 .collect(),
         }
     }
-}
-
-/// Un usuario en la lista de usuarios: nunca lleva la clave.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct UsuarioDto {
-    pub id: String,
-    pub cedula: String,
-    pub nombre: String,
-    /// Se desactiva, no se borra (L2).
-    pub activo: bool,
-    /// Tiene una clave temporal que todavía no cambió.
-    pub debe_cambiar_clave: bool,
-}
-
-impl From<&FilaUsuario> for UsuarioDto {
-    fn from(fila: &FilaUsuario) -> Self {
-        Self {
-            id: fila.id.uuid().to_string(),
-            cedula: fila.cedula.clone(),
-            nombre: fila.nombre.clone(),
-            activo: fila.activo,
-            debe_cambiar_clave: fila.debe_cambiar_clave,
-        }
-    }
-}
-
-/// El formulario de alta de un usuario. Para el primer usuario del equipo
-/// la clave es la suya; para los demás, una temporal que deberán
-/// cambiar al entrar.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct UsuarioEntrada {
-    pub cedula: String,
-    pub nombre: String,
-    pub clave: String,
 }
 
 // --- Historial de ingresos ---
