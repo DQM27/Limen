@@ -3,6 +3,7 @@
 
 use limen_dominio::auditoria::CambioCampo;
 use limen_dominio::gafete::{ErrorPrestamoGafete, NumeroGafete, TipoGafete};
+use limen_dominio::hecho::{Hecho, HechoId};
 use limen_dominio::movimiento::Marca;
 use limen_dominio::personal_kof::{
     CodigoEmpleado, ErrorPersonalKof, HechosPersonalKof, PersonalKof, PersonalKofId,
@@ -16,8 +17,8 @@ use super::gafetes::situacion_para_prestar;
 use crate::errores::ErrorCaso;
 use crate::puertos::{
     AccionAuditada, EntradaAuditoria, FabricaUnidadDeTrabajo, GeneradorIds, RegistroAuditado,
-    RegistroAuditoria, Reloj, RepositorioGafetes, RepositorioPersonalKof, RepositorioPresencias,
-    RepositorioPrestamosKof, RepositorioReloj, Restriccion, UnidadDeTrabajo,
+    RegistroAuditoria, RegistroHechos, Reloj, RepositorioGafetes, RepositorioPersonalKof,
+    RepositorioPresencias, RepositorioPrestamosKof, RepositorioReloj, Restriccion, UnidadDeTrabajo,
 };
 use crate::sesion::Sesion;
 
@@ -207,6 +208,10 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> EntregarGafeteKof<F, 
 
         // Entregar el gafete es la entrada: queda adentro, por la vía KOF.
         uow.prestamos_kof().anotar_entrega(&prestamo);
+        uow.hechos().anotar(Hecho::entrega_kof(
+            HechoId::desde_uuid(self.ids.nuevo()),
+            &prestamo,
+        ));
         uow.presencias()
             .anotar_entrada(&prestamo.identidad(), Via::Kof, marca.en);
         uow.gafetes()
@@ -222,14 +227,19 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> EntregarGafeteKof<F, 
 /// Registra la devolución de un provisional: por el préstamo o por el
 /// número del gafete que devuelve la persona.
 #[derive(Debug)]
-pub struct DevolverGafeteKof<F, R> {
+pub struct DevolverGafeteKof<F, R, G> {
     fabrica: F,
     reloj: R,
+    ids: G,
 }
 
-impl<F: FabricaUnidadDeTrabajo, R: Reloj> DevolverGafeteKof<F, R> {
-    pub const fn new(fabrica: F, reloj: R) -> Self {
-        Self { fabrica, reloj }
+impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> DevolverGafeteKof<F, R, G> {
+    pub const fn new(fabrica: F, reloj: R, ids: G) -> Self {
+        Self {
+            fabrica,
+            reloj,
+            ids,
+        }
     }
 
     pub async fn ejecutar(
@@ -275,6 +285,10 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj> DevolverGafeteKof<F, R> {
 
         // Devolver el gafete es la salida.
         uow.prestamos_kof().anotar_devolucion(&prestamo);
+        if let Some(hecho) = Hecho::devolucion_kof(HechoId::desde_uuid(self.ids.nuevo()), &prestamo)
+        {
+            uow.hechos().anotar(hecho);
+        }
         uow.presencias().anotar_salida(&prestamo.identidad());
         uow.gafetes()
             .anotar_devolucion(TipoGafete::ProvisionalKof, prestamo.gafete());

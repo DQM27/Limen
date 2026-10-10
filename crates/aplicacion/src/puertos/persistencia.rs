@@ -25,6 +25,7 @@ use limen_dominio::presencia::{Identidad, Via};
 use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofId};
 
 use super::auditoria::RegistroAuditoria;
+use super::hechos::RegistroHechos;
 
 /// Restricciones de unicidad que también hace cumplir la base. Si dos
 /// equipos guardan lo mismo a la vez, la regla del dominio no alcanza a
@@ -77,6 +78,7 @@ pub trait UnidadDeTrabajo: Send {
     type PrestamosKof: RepositorioPrestamosKof;
     type Reloj: RepositorioReloj;
     type Auditoria: RegistroAuditoria;
+    type Hechos: RegistroHechos;
 
     fn contratistas(&mut self) -> &mut Self::Contratistas;
     fn empresas(&mut self) -> &mut Self::Empresas;
@@ -90,6 +92,7 @@ pub trait UnidadDeTrabajo: Send {
     fn prestamos_kof(&mut self) -> &mut Self::PrestamosKof;
     fn reloj(&mut self) -> &mut Self::Reloj;
     fn auditoria(&mut self) -> &mut Self::Auditoria;
+    fn hechos(&mut self) -> &mut Self::Hechos;
 
     /// Aplica todas las escrituras anotadas en una sola transacción: todas o
     /// ninguna.

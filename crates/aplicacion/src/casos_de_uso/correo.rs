@@ -2,6 +2,7 @@
 //! autorizada por correo.
 
 use limen_dominio::gafete::{ErrorPrestamoGafete, NumeroGafete, TipoGafete};
+use limen_dominio::hecho::{Hecho, HechoId};
 use limen_dominio::ingreso_correo::{
     DatosEntradaCorreo, ErrorIngresoCorreo, HechosEntradaCorreo, IngresoCorreo, IngresoCorreoId,
     Motivo,
@@ -15,8 +16,9 @@ use super::gafetes::situacion_para_prestar;
 use super::veto::cedula_vetada;
 use crate::errores::ErrorCaso;
 use crate::puertos::{
-    FabricaUnidadDeTrabajo, GeneradorIds, Reloj, RepositorioGafetes, RepositorioIngresosCorreo,
-    RepositorioPresencias, RepositorioReloj, Restriccion, UnidadDeTrabajo,
+    FabricaUnidadDeTrabajo, GeneradorIds, RegistroHechos, Reloj, RepositorioGafetes,
+    RepositorioIngresosCorreo, RepositorioPresencias, RepositorioReloj, Restriccion,
+    UnidadDeTrabajo,
 };
 use crate::sesion::Sesion;
 
@@ -114,6 +116,10 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarEntradaCorre
         .map_err(ErrorCaso::Negocio)?;
 
         uow.ingresos_correo().guardar(&ingreso);
+        uow.hechos().anotar(Hecho::entrada_correo(
+            HechoId::desde_uuid(self.ids.nuevo()),
+            &ingreso,
+        ));
         uow.presencias()
             .anotar_entrada(&Identidad::from(ingreso.cedula()), Via::Correo, marca.en);
         uow.gafetes()
@@ -129,14 +135,19 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarEntradaCorre
 /// Registra la salida de una visita por correo: por el ingreso o por el
 /// número del gafete de visita que devuelve.
 #[derive(Debug)]
-pub struct RegistrarSalidaCorreo<F, R> {
+pub struct RegistrarSalidaCorreo<F, R, G> {
     fabrica: F,
     reloj: R,
+    ids: G,
 }
 
-impl<F: FabricaUnidadDeTrabajo, R: Reloj> RegistrarSalidaCorreo<F, R> {
-    pub const fn new(fabrica: F, reloj: R) -> Self {
-        Self { fabrica, reloj }
+impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarSalidaCorreo<F, R, G> {
+    pub const fn new(fabrica: F, reloj: R, ids: G) -> Self {
+        Self {
+            fabrica,
+            reloj,
+            ids,
+        }
     }
 
     pub async fn ejecutar(
@@ -181,6 +192,9 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj> RegistrarSalidaCorreo<F, R> {
             .map_err(ErrorCaso::Negocio)?;
 
         uow.ingresos_correo().guardar(&ingreso);
+        if let Some(hecho) = Hecho::salida_correo(HechoId::desde_uuid(self.ids.nuevo()), &ingreso) {
+            uow.hechos().anotar(hecho);
+        }
         uow.presencias()
             .anotar_salida(&Identidad::from(ingreso.cedula()));
         uow.gafetes()

@@ -22,6 +22,7 @@ mod tests {
         Deudor, ErrorGafete, ErrorPrestamoGafete, EstadoGafete, NumeroGafete, Resolucion,
         TipoGafete,
     };
+    use limen_dominio::hecho::Suceso;
     use limen_dominio::ingreso_contratista::ErrorIngreso;
     use limen_dominio::medio::{ErrorMedio, TipoMedio};
     use limen_dominio::movimiento::ErrorSalida;
@@ -62,8 +63,10 @@ mod tests {
         RegistrarEntrada::new(almacen.clone(), reloj_a(ENTRADA), almacen.ids())
     }
 
-    fn salida(almacen: &AlmacenMemoria) -> RegistrarSalida<AlmacenMemoria, RelojFijo> {
-        RegistrarSalida::new(almacen.clone(), reloj_a(SALIDA))
+    fn salida(
+        almacen: &AlmacenMemoria,
+    ) -> RegistrarSalida<AlmacenMemoria, RelojFijo, IdsSecuenciales> {
+        RegistrarSalida::new(almacen.clone(), reloj_a(SALIDA), almacen.ids())
     }
 
     fn gafetes(
@@ -471,7 +474,11 @@ mod tests {
             .await
             .unwrap()
             .ingreso;
-        let reloj_atrasado = RegistrarSalida::new(almacen.clone(), reloj_a("2026-10-09T13:00:00Z"));
+        let reloj_atrasado = RegistrarSalida::new(
+            almacen.clone(),
+            reloj_a("2026-10-09T13:00:00Z"),
+            almacen.ids(),
+        );
         assert_eq!(
             reloj_atrasado.ejecutar(&sesion(), ingreso).await,
             Err(ErrorCaso::Negocio(ErrorSalida::Reloj(RelojAtrasado)))
@@ -659,6 +666,87 @@ mod tests {
                 )
                 .await,
             Err(ErrorCaso::Negocio(ErrorGafete::NumeroInvalido))
+        );
+    }
+
+    // --- Hechos ---
+
+    /// Los hechos guardados son exactamente la entrada y la salida de
+    /// `registro`, en ese orden, por la vía indicada.
+    fn entrada_y_salida(almacen: &AlmacenMemoria, via: Via, registro: Uuid) {
+        let hechos = almacen.hechos();
+        let [entro, salio] = hechos.as_slice() else {
+            panic!("se esperaban dos hechos: {hechos:?}");
+        };
+        for hecho in [entro, salio] {
+            assert_eq!(hecho.via(), via, "la vía del hecho");
+            assert_eq!(hecho.registro(), registro, "el registro del hecho");
+            assert_eq!(hecho.marca().operador, sesion().operador(), "quién");
+        }
+        assert!(entro.es_entrada(), "primero la entrada");
+        assert!(!salio.es_entrada(), "después la salida");
+        assert!(entro.id() < salio.id(), "el ID ordena los hechos");
+    }
+
+    #[tokio::test]
+    async fn la_entrada_y_la_salida_dejan_cada_una_su_hecho() {
+        let almacen = preparado().await;
+        let id = praind(&almacen, "111111111").await;
+        let ingreso = entrada(&almacen)
+            .ejecutar(&sesion(), &a_pie(id, Some(25)))
+            .await
+            .unwrap()
+            .ingreso;
+        assert_eq!(almacen.hechos().len(), 1, "la entrada deja su hecho");
+        let hecho = &almacen.hechos()[0];
+        assert!(
+            matches!(hecho.suceso(), Suceso::EntradaContratista(guardado)
+                if guardado == &almacen.ingresos()[0]),
+            "el hecho guarda el ingreso tal como se abrió: {hecho:?}"
+        );
+        assert_eq!(hecho.marca().en, instante(ENTRADA));
+
+        salida(&almacen).ejecutar(&sesion(), ingreso).await.unwrap();
+        entrada_y_salida(&almacen, Via::Contratista, ingreso.uuid());
+        assert_eq!(almacen.hechos()[1].marca().en, instante(SALIDA));
+    }
+
+    #[tokio::test]
+    async fn lo_rechazado_no_deja_hecho() {
+        let almacen = preparado().await;
+        let sin_acceso = con_contratista(
+            &almacen,
+            "222222222",
+            TipoIngreso::Praind,
+            "2027-01-01",
+            false,
+        )
+        .await;
+        let resultado = entrada(&almacen)
+            .ejecutar(&sesion(), &a_pie(sin_acceso, None))
+            .await;
+        assert!(resultado.is_err(), "acceso denegado");
+        assert_eq!(
+            almacen.hechos(),
+            Vec::new(),
+            "una entrada rechazada no deja hecho"
+        );
+
+        let id = praind(&almacen, "111111111").await;
+        let ingreso = entrada(&almacen)
+            .ejecutar(&sesion(), &a_pie(id, None))
+            .await
+            .unwrap()
+            .ingreso;
+        salida(&almacen).ejecutar(&sesion(), ingreso).await.unwrap();
+        assert!(
+            salida(&almacen).ejecutar(&sesion(), ingreso).await.is_err(),
+            "no sale dos veces"
+        );
+        assert_eq!(
+            almacen.hechos().len(),
+            2,
+            "la salida rechazada no deja hecho"
         );
     }
 }

@@ -24,11 +24,11 @@ use chrono::{DateTime, NaiveDate, NaiveTime, TimeDelta, TimeZone, Utc};
 use limen_aplicacion::puertos::{
     CambioHistorial, Consultas, EntradaAuditoria, EntradaHistorial, ErrorPersistencia,
     FabricaUnidadDeTrabajo, FilaContratista, GeneradorIds, IngresoAbierto, MovimientoHistorial,
-    PersonaAdentro, RegistroAuditado, RegistroAuditoria, Reloj, RepositorioContratistas,
-    RepositorioEmpresas, RepositorioEmpresasProveedoras, RepositorioGafetes, RepositorioIngresos,
-    RepositorioIngresosCorreo, RepositorioIngresosProveedor, RepositorioPersonalKof,
-    RepositorioPresencias, RepositorioPrestamosKof, RepositorioReloj, Restriccion, ResumenGafete,
-    UnidadDeTrabajo,
+    PersonaAdentro, RegistroAuditado, RegistroAuditoria, RegistroHechos, Reloj,
+    RepositorioContratistas, RepositorioEmpresas, RepositorioEmpresasProveedoras,
+    RepositorioGafetes, RepositorioIngresos, RepositorioIngresosCorreo,
+    RepositorioIngresosProveedor, RepositorioPersonalKof, RepositorioPresencias,
+    RepositorioPrestamosKof, RepositorioReloj, Restriccion, ResumenGafete, UnidadDeTrabajo,
 };
 use limen_dominio::busqueda::{Criterio, relevantes};
 use limen_dominio::cedula::Cedula;
@@ -36,6 +36,7 @@ use limen_dominio::contratista::{Contratista, ContratistaId};
 use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
 use limen_dominio::gafete::{Gafete, NumeroGafete, TipoGafete};
+use limen_dominio::hecho::{Hecho, HechoId};
 use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoId};
 use limen_dominio::ingreso_correo::{IngresoCorreo, IngresoCorreoId};
 use limen_dominio::ingreso_proveedor::{IngresoProveedor, IngresoProveedorId};
@@ -64,6 +65,7 @@ struct Contenido {
     kof_con_prestamo: BTreeSet<PersonalKofId>,
     ultimo_movimiento: Option<DateTime<Utc>>,
     auditoria: Vec<EntradaAuditoria>,
+    hechos: BTreeMap<HechoId, Hecho>,
 }
 
 #[derive(Debug, Default)]
@@ -224,6 +226,11 @@ impl AlmacenMemoria {
         self.mirar(|c| c.auditoria.clone())
     }
 
+    /// Todos los hechos guardados, en el orden en que ocurrieron.
+    pub fn hechos(&self) -> Vec<Hecho> {
+        self.mirar(|c| c.hechos.values().cloned().collect())
+    }
+
     /// Cuántas veces se confirmó con éxito una Unit of Work.
     pub fn confirmaciones(&self) -> usize {
         self.bloquear().confirmaciones
@@ -368,6 +375,20 @@ impl Consultas for AlmacenMemoria {
                     operador: entrada.operador,
                     en: entrada.en,
                 })
+                .collect()
+        }))
+    }
+
+    fn hechos_de(
+        &self,
+        registro: Uuid,
+    ) -> impl Future<Output = Result<Vec<Hecho>, ErrorPersistencia>> + Send {
+        // El mapa ya está ordenado por el ID del hecho, como en la base.
+        std::future::ready(self.leer(|c| {
+            c.hechos
+                .values()
+                .filter(|hecho| hecho.registro() == registro)
+                .cloned()
                 .collect()
         }))
     }
@@ -591,6 +612,9 @@ impl FabricaUnidadDeTrabajo for AlmacenMemoria {
             auditoria: AuditoriaMemoria {
                 pendientes: Vec::new(),
             },
+            hechos: HechosMemoria {
+                pendientes: Vec::new(),
+            },
         }
     }
 }
@@ -610,6 +634,7 @@ pub struct UowMemoria {
     prestamos_kof: PrestamosKofMemoria,
     reloj: RelojMemoria,
     auditoria: AuditoriaMemoria,
+    hechos: HechosMemoria,
 }
 
 impl UowMemoria {
@@ -684,6 +709,16 @@ impl UowMemoria {
             nuevo.ultimo_movimiento = Some(en);
         }
         nuevo.auditoria.extend(self.auditoria.pendientes);
+        for hecho in self.hechos.pendientes {
+            // Como `CREATE` en la base: un hecho nunca se reemplaza.
+            if nuevo.hechos.contains_key(&hecho.id()) {
+                return Err(ErrorPersistencia::Tecnica(format!(
+                    "el hecho {} ya existe",
+                    hecho.id()
+                )));
+            }
+            nuevo.hechos.insert(hecho.id(), hecho);
+        }
 
         datos.contenido = nuevo;
         datos.confirmaciones += 1;
@@ -793,6 +828,7 @@ impl UnidadDeTrabajo for UowMemoria {
     type PrestamosKof = PrestamosKofMemoria;
     type Reloj = RelojMemoria;
     type Auditoria = AuditoriaMemoria;
+    type Hechos = HechosMemoria;
 
     fn contratistas(&mut self) -> &mut ContratistasMemoria {
         &mut self.contratistas
@@ -840,6 +876,10 @@ impl UnidadDeTrabajo for UowMemoria {
 
     fn auditoria(&mut self) -> &mut AuditoriaMemoria {
         &mut self.auditoria
+    }
+
+    fn hechos(&mut self) -> &mut HechosMemoria {
+        &mut self.hechos
     }
 
     fn confirmar(self) -> impl Future<Output = Result<(), ErrorPersistencia>> + Send {
@@ -1263,6 +1303,17 @@ pub struct AuditoriaMemoria {
 impl RegistroAuditoria for AuditoriaMemoria {
     fn anotar(&mut self, entrada: EntradaAuditoria) {
         self.pendientes.push(entrada);
+    }
+}
+
+#[derive(Debug)]
+pub struct HechosMemoria {
+    pendientes: Vec<Hecho>,
+}
+
+impl RegistroHechos for HechosMemoria {
+    fn anotar(&mut self, hecho: Hecho) {
+        self.pendientes.push(hecho);
     }
 }
 

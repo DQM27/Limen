@@ -9,6 +9,10 @@ falta el detalle, [`arquitectura.md`](arquitectura.md), [`reglas.md`](reglas.md)
 - **Núcleo** terminado: dominio, aplicación, persistencia (memoria y SurrealDB),
   composición, buscador y consultas de lectura. Además, el historial de ingresos por
   rango de fechas y los accesos rápidos de fecha (`dominio/rango_fechas.rs`).
+- **Hechos inmutables** (regla E11, sección 9.1 de `arquitectura.md`): cada entrada y
+  salida, por las cuatro vías, queda en la tabla `hecho` en la misma transacción que el
+  estado. La base no deja editar ni borrar `hecho` ni `auditoria` (`READONLY` y un
+  `DEFINE EVENT`). Es la base de la sincronización.
 - **App de escritorio** (Tauri 2 + Angular 22 + Angular Material + AG Grid Community):
   - `apps/escritorio/comandos`: la lógica de los comandos (JSON, un solo error para la
     interfaz, operador provisional). Se prueba con la base en memoria.
@@ -23,10 +27,15 @@ falta el detalle, [`arquitectura.md`](arquitectura.md), [`reglas.md`](reglas.md)
 ## Ramas y PR (nada va a `main` sin PR y CI en verde)
 
 Las ramas están apiladas, en este orden: `fix/pruebas-en-windows` (PR #1) →
-`ci/endurecer` (PR #2) → `feat/app-escritorio` → `feat/contratistas-grilla` (la de
-trabajo actual). `feat/importador-lattis` sale de `feat/app-escritorio`. **Primero hay
-que fusionar #1 y #2** (el dueño hace el merge); después se rebasa el resto sobre `main`
-y se abren sus PR. Falta proteger `main` en GitHub (exigir PR y el resultado `CI verde`).
+`ci/endurecer` (PR #2) → `feat/app-escritorio` → `feat/contratistas-grilla` →
+`feat/hechos` (la de trabajo actual: hechos inmutables). `feat/importador-lattis` sale
+de `feat/app-escritorio`.
+
+**Ojo:** el PR #1 ya está en `main`, pero el #2 se fusionó en `fix/pruebas-en-windows`
+*después* de que esa rama entrara a `main`, así que el endurecimiento de la CI **no llegó
+a `main`**: hay que abrir un PR nuevo de `ci/endurecer` contra `main` (el dueño hace el
+merge). Después se rebasa el resto sobre `main` y se abren sus PR. Falta proteger `main`
+en GitHub (exigir PR y el resultado `CI verde`).
 
 ## Lo que sigue
 

@@ -16,6 +16,7 @@ use limen_dominio::contratista::Contratista;
 use limen_dominio::empresa::{Empresa, NombreEmpresa};
 use limen_dominio::empresa_proveedora::EmpresaProveedora;
 use limen_dominio::gafete::{Gafete, TipoGafete};
+use limen_dominio::hecho::Hecho;
 use limen_dominio::ingreso_contratista::IngresoId;
 use limen_dominio::ingreso_correo::IngresoCorreoId;
 use limen_dominio::ingreso_proveedor::IngresoProveedorId;
@@ -31,9 +32,9 @@ use crate::almacen::AlmacenSurreal;
 use crate::error::{dato_corrupto, tecnica};
 use crate::registros::clave_gafete;
 use crate::registros::{
-    ContratistaLeido, EmpresaLeida, EmpresaProveedoraLeida, GafeteDatos, PersonalKofLeido,
-    TABLA_AUDITORIA, TABLA_INGRESO_CONTRATISTA, TABLA_INGRESO_CORREO, TABLA_INGRESO_PROVEEDOR,
-    TABLA_PRESTAMO_KOF, medio_de, numero_de, uuid_de,
+    ContratistaLeido, EmpresaLeida, EmpresaProveedoraLeida, GafeteDatos, HechoLeido,
+    PersonalKofLeido, TABLA_AUDITORIA, TABLA_INGRESO_CONTRATISTA, TABLA_INGRESO_CORREO,
+    TABLA_INGRESO_PROVEEDOR, TABLA_PRESTAMO_KOF, medio_de, numero_de, uuid_de,
 };
 
 /// Sólo el nombre plegado de una fila: lo que necesita la búsqueda
@@ -498,6 +499,19 @@ impl Consultas for AlmacenSurreal {
             |fila: EmpresaProveedoraLeida| EmpresaProveedora::try_from(fila),
         )
         .await
+    }
+
+    async fn hechos_de(&self, registro: uuid::Uuid) -> Result<Vec<Hecho>, ErrorPersistencia> {
+        // El ID de cada hecho es un UUID v7: ordenar por él es ordenar por
+        // cuándo ocurrió, sin empates.
+        let mut respuesta = self
+            .db()
+            .query("SELECT * FROM hecho WHERE registro = $registro ORDER BY id")
+            .bind(("registro", registro))
+            .await
+            .map_err(tecnica)?;
+        let filas: Vec<HechoLeido> = respuesta.take(0).map_err(tecnica)?;
+        filas.into_iter().map(Hecho::try_from).collect()
     }
 
     async fn historial_de(

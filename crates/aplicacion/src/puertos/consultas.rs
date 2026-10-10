@@ -13,6 +13,7 @@ use limen_dominio::contratista::Contratista;
 use limen_dominio::empresa::{Empresa, NombreEmpresa};
 use limen_dominio::empresa_proveedora::EmpresaProveedora;
 use limen_dominio::gafete::{Gafete, NumeroGafete, TipoGafete};
+use limen_dominio::hecho::Hecho;
 use limen_dominio::ingreso_contratista::IngresoId;
 use limen_dominio::ingreso_correo::IngresoCorreoId;
 use limen_dominio::ingreso_proveedor::IngresoProveedorId;
@@ -22,6 +23,7 @@ use limen_dominio::operador::OperadorId;
 use limen_dominio::personal_kof::PersonalKof;
 use limen_dominio::presencia::{Identidad, Via};
 use limen_dominio::prestamo_kof::PrestamoKofId;
+use uuid::Uuid;
 
 use super::auditoria::{AccionAuditada, RegistroAuditado};
 use super::persistencia::ErrorPersistencia;
@@ -179,6 +181,14 @@ pub trait Consultas: Send + Sync {
         &self,
         registro: RegistroAuditado,
     ) -> impl Future<Output = Result<Vec<EntradaHistorial>, ErrorPersistencia>> + Send;
+
+    /// Los hechos de un ingreso o de un préstamo KOF (`registro` es su
+    /// UUID), en el orden en que ocurrieron: la entrada y, si ya salió, la
+    /// salida.
+    fn hechos_de(
+        &self,
+        registro: Uuid,
+    ) -> impl Future<Output = Result<Vec<Hecho>, ErrorPersistencia>> + Send;
 
     /// Los gafetes de un tipo, por número, con su estado y si están
     /// prestados.

@@ -76,3 +76,149 @@ impl AlmacenSurreal {
         &self.db
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::{DateTime, Utc};
+    use limen_aplicacion::puertos::{
+        AccionAuditada, Consultas, EntradaAuditoria, FabricaUnidadDeTrabajo, RegistroAuditoria,
+        RegistroHechos, UnidadDeTrabajo,
+    };
+    use limen_dominio::auditoria::CambioCampo;
+    use limen_dominio::empresa::EmpresaId;
+    use limen_dominio::hecho::{Hecho, HechoId, Salida, Suceso};
+    use limen_dominio::movimiento::Marca;
+    use limen_dominio::operador::OperadorId;
+    use limen_dominio::presencia::Via;
+    use uuid::Uuid;
+
+    use super::*;
+
+    fn en() -> DateTime<Utc> {
+        "2026-10-09T17:00:00Z".parse().unwrap()
+    }
+
+    /// Un almacén con un hecho (`hecho:…01`) y una entrada de auditoría
+    /// (`auditoria:…02`).
+    async fn con_un_hecho_y_una_auditoria() -> AlmacenSurreal {
+        let almacen = AlmacenSurreal::en_memoria().await.unwrap();
+        let operador = OperadorId::desde_uuid(Uuid::from_u128(9));
+        let mut uow = almacen.nueva();
+        uow.hechos().anotar(Hecho::restaurar(
+            HechoId::desde_uuid(Uuid::from_u128(1)),
+            Suceso::Salida(Salida {
+                via: Via::Contratista,
+                registro: Uuid::from_u128(5),
+                marca: Marca { en: en(), operador },
+            }),
+        ));
+        uow.auditoria().anotar(EntradaAuditoria {
+            id_entrada: Uuid::from_u128(2),
+            registro: RegistroAuditado::Empresa(EmpresaId::desde_uuid(Uuid::from_u128(3))),
+            accion: AccionAuditada::Alta,
+            cambios: vec![CambioCampo {
+                campo: "nombre",
+                antes: String::new(),
+                despues: "ACME".to_owned(),
+            }],
+            operador,
+            en: en(),
+        });
+        uow.confirmar().await.unwrap();
+        almacen
+    }
+
+    /// Ejecuta una sentencia y devuelve sus errores como texto.
+    async fn errores_de(almacen: &AlmacenSurreal, sentencia: &str) -> Vec<String> {
+        let mut respuesta = almacen.db().query(sentencia).await.unwrap();
+        respuesta
+            .take_errors()
+            .into_values()
+            .map(|error| error.to_string())
+            .collect()
+    }
+
+    async fn cuantos(almacen: &AlmacenSurreal, tabla: &str) -> usize {
+        let mut respuesta = almacen
+            .db()
+            .query(format!("SELECT VALUE id FROM {tabla}"))
+            .await
+            .unwrap();
+        let ids: Vec<surrealdb::types::RecordId> = respuesta.take(0).unwrap();
+        ids.len()
+    }
+
+    #[tokio::test]
+    async fn la_base_no_deja_editar_ni_borrar_un_hecho() {
+        let almacen = con_un_hecho_y_una_auditoria().await;
+        let hecho = "hecho:u'00000000-0000-0000-0000-000000000001'";
+        for sentencia in [
+            format!("UPDATE {hecho} SET via = 'PROVEEDOR';"),
+            // Un reemplazo completo y válido: lo frena el evento, no el tipo.
+            format!(
+                "UPSERT {hecho} CONTENT {{ tipo: 'SALIDA', via: 'PROVEEDOR', \
+                 registro: u'00000000-0000-0000-0000-000000000005', \
+                 en: d'2026-10-09T17:00:00Z', \
+                 operador: u'00000000-0000-0000-0000-000000000009' }};"
+            ),
+            format!("DELETE {hecho};"),
+            "DELETE hecho;".to_owned(),
+        ] {
+            let errores = errores_de(&almacen, &sentencia).await;
+            assert!(
+                errores
+                    .iter()
+                    .any(|e| e.contains("no se editan ni se borran") || e.contains("is readonly")),
+                "la base rechaza {sentencia}: {errores:?}"
+            );
+        }
+        let hechos = almacen.hechos_de(Uuid::from_u128(5)).await.unwrap();
+        assert_eq!(hechos.len(), 1, "el hecho sigue ahí");
+        assert_eq!(
+            hechos.first().map(Hecho::via),
+            Some(Via::Contratista),
+            "y sin cambios"
+        );
+    }
+
+    #[tokio::test]
+    async fn la_base_no_deja_editar_ni_borrar_la_auditoria() {
+        let almacen = con_un_hecho_y_una_auditoria().await;
+        let entrada = "auditoria:u'00000000-0000-0000-0000-000000000002'";
+        for sentencia in [
+            format!("UPDATE {entrada} SET accion = 'edicion';"),
+            format!("DELETE {entrada};"),
+            "DELETE auditoria;".to_owned(),
+        ] {
+            let errores = errores_de(&almacen, &sentencia).await;
+            assert!(
+                errores
+                    .iter()
+                    .any(|e| e.contains("no se edita ni se borra")),
+                "la base rechaza {sentencia}: {errores:?}"
+            );
+        }
+        assert_eq!(
+            cuantos(&almacen, "auditoria").await,
+            1,
+            "la entrada sigue ahí"
+        );
+    }
+
+    #[tokio::test]
+    async fn las_demas_tablas_si_se_pueden_borrar() {
+        // El evento es sólo de `hecho` y `auditoria`: el estado derivado
+        // (presencias, préstamos) se crea y se borra con normalidad.
+        let almacen = con_un_hecho_y_una_auditoria().await;
+        let errores = errores_de(
+            &almacen,
+            "CREATE presencia:x CONTENT { via: 'CONTRATISTA', desde: d'2026-10-09T08:00:00Z' }; DELETE presencia:x;",
+        )
+        .await;
+        assert_eq!(
+            errores,
+            Vec::<String>::new(),
+            "la presencia se borra sin problema"
+        );
+    }
+}

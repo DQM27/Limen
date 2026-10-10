@@ -3,16 +3,18 @@
 
 use chrono::{DateTime, Utc};
 use limen_aplicacion::puertos::{
-    EntradaAuditoria, ErrorPersistencia, RegistroAuditoria, RepositorioContratistas,
-    RepositorioEmpresas, RepositorioEmpresasProveedoras, RepositorioGafetes, RepositorioIngresos,
-    RepositorioIngresosCorreo, RepositorioIngresosProveedor, RepositorioPersonalKof,
-    RepositorioPresencias, RepositorioPrestamosKof, RepositorioReloj,
+    EntradaAuditoria, ErrorPersistencia, RegistroAuditoria, RegistroHechos,
+    RepositorioContratistas, RepositorioEmpresas, RepositorioEmpresasProveedoras,
+    RepositorioGafetes, RepositorioIngresos, RepositorioIngresosCorreo,
+    RepositorioIngresosProveedor, RepositorioPersonalKof, RepositorioPresencias,
+    RepositorioPrestamosKof, RepositorioReloj,
 };
 use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::{Contratista, ContratistaId};
 use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
 use limen_dominio::gafete::{Gafete, NumeroGafete, TipoGafete};
+use limen_dominio::hecho::Hecho;
 use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoId};
 use limen_dominio::ingreso_correo::{IngresoCorreo, IngresoCorreoId};
 use limen_dominio::ingreso_proveedor::{IngresoProveedor, IngresoProveedorId};
@@ -26,12 +28,13 @@ use surrealdb::types::{RecordId, SurrealValue, Value};
 use crate::error::{dato_corrupto, tecnica};
 use crate::registros::{
     AuditoriaRegistro, ContratistaDatos, ContratistaLeido, EmpresaDatos, EmpresaLeida,
-    EmpresaProveedoraLeida, GafeteDatos, IngresoCorreoDatos, IngresoCorreoLeido, IngresoDatos,
-    IngresoLeido, IngresoProveedorDatos, IngresoProveedorLeido, PersonalKofDatos, PersonalKofLeido,
-    PresenciaDatos, PrestamoDatos, PrestamoKofDatos, PrestamoKofLeido, RelojDatos, TABLA_AUDITORIA,
-    TABLA_GAFETE, TABLA_PRESENCIA, id_contratista, id_empresa, id_empresa_proveedora, id_gafete,
-    id_ingreso, id_ingreso_correo, id_ingreso_proveedor, id_kof_con_prestamo, id_personal_kof,
-    id_presencia, id_prestamo, id_prestamo_kof, id_registro, id_reloj,
+    EmpresaProveedoraLeida, GafeteDatos, HechoDatos, IngresoCorreoDatos, IngresoCorreoLeido,
+    IngresoDatos, IngresoLeido, IngresoProveedorDatos, IngresoProveedorLeido, PersonalKofDatos,
+    PersonalKofLeido, PresenciaDatos, PrestamoDatos, PrestamoKofDatos, PrestamoKofLeido,
+    RelojDatos, TABLA_AUDITORIA, TABLA_GAFETE, TABLA_HECHO, TABLA_PRESENCIA, id_contratista,
+    id_empresa, id_empresa_proveedora, id_gafete, id_ingreso, id_ingreso_correo,
+    id_ingreso_proveedor, id_kof_con_prestamo, id_personal_kof, id_presencia, id_prestamo,
+    id_prestamo_kof, id_registro, id_reloj,
 };
 
 /// Una escritura anotada, pendiente de confirmar.
@@ -767,6 +770,22 @@ impl RegistroAuditoria for AuditoriaSurreal {
         self.pendientes.push(Escritura::crear(
             id_registro(TABLA_AUDITORIA, entrada.id_entrada),
             AuditoriaRegistro::from(&entrada),
+        ));
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct HechosSurreal {
+    pub(crate) pendientes: Vec<Escritura>,
+}
+
+impl RegistroHechos for HechosSurreal {
+    fn anotar(&mut self, hecho: Hecho) {
+        // `CREATE`: un hecho nunca reemplaza a otro (y el esquema impide
+        // editarlo o borrarlo).
+        self.pendientes.push(Escritura::crear(
+            id_registro(TABLA_HECHO, hecho.id().uuid()),
+            HechoDatos::from(&hecho),
         ));
     }
 }

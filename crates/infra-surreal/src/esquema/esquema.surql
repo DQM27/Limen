@@ -136,7 +136,9 @@ DEFINE FIELD OVERWRITE desde ON personal_kof_con_prestamo TYPE datetime;
 DEFINE TABLE OVERWRITE reloj SCHEMAFULL;
 DEFINE FIELD OVERWRITE en ON reloj TYPE datetime;
 
--- Auditoría (regla B11): sólo se agrega, nunca se edita ni se borra.
+-- Auditoría (regla B11): sólo se agrega, nunca se edita ni se borra. El
+-- evento lo hace cumplir la base, también para la conexión embebida (que
+-- entra como root y no pasa por PERMISSIONS).
 DEFINE TABLE OVERWRITE auditoria SCHEMAFULL;
 DEFINE FIELD OVERWRITE entidad ON auditoria TYPE 'contratista' | 'empresa' | 'empresa_proveedora' | 'gafete' | 'personal_kof';
 DEFINE FIELD OVERWRITE registro ON auditoria TYPE string;
@@ -148,3 +150,34 @@ DEFINE FIELD OVERWRITE cambios.*.despues ON auditoria TYPE string;
 DEFINE FIELD OVERWRITE operador ON auditoria TYPE uuid;
 DEFINE FIELD OVERWRITE en ON auditoria TYPE datetime;
 DEFINE INDEX OVERWRITE auditoria_por_registro ON auditoria FIELDS entidad, registro;
+DEFINE EVENT OVERWRITE auditoria_inmutable ON auditoria WHEN $event != "CREATE" THEN {
+    THROW "la auditoría no se edita ni se borra";
+};
+
+-- Hechos: cada entrada y salida, por las cuatro vías, tal como ocurrió
+-- (ver docs/arquitectura.md, sección 9). Los ingresos, la presencia y los
+-- préstamos son el estado que se deriva de ellos; los hechos son lo que
+-- pasó y lo que se enviará a los demás equipos.
+--
+-- Nunca se editan ni se borran: los campos son READONLY y el evento
+-- rechaza cualquier UPDATE, UPSERT o DELETE. Lo que quedó mal se corrige
+-- con otro hecho. La clave es el UUID v7 del hecho: un reintento con el
+-- mismo ID no lo duplica.
+--
+-- Una entrada lleva el registro que abrió en el campo de su vía (el mismo
+-- formato que su tabla), para que otro equipo pueda reconstruirlo; una
+-- salida no lleva ninguno.
+DEFINE TABLE OVERWRITE hecho SCHEMAFULL;
+DEFINE FIELD OVERWRITE tipo ON hecho TYPE 'ENTRADA' | 'SALIDA' READONLY;
+DEFINE FIELD OVERWRITE via ON hecho TYPE 'CONTRATISTA' | 'PROVEEDOR' | 'CORREO' | 'KOF' READONLY;
+DEFINE FIELD OVERWRITE registro ON hecho TYPE uuid READONLY;
+DEFINE FIELD OVERWRITE en ON hecho TYPE datetime READONLY;
+DEFINE FIELD OVERWRITE operador ON hecho TYPE uuid READONLY;
+DEFINE FIELD OVERWRITE ingreso_contratista ON hecho TYPE option<object> FLEXIBLE READONLY;
+DEFINE FIELD OVERWRITE ingreso_proveedor ON hecho TYPE option<object> FLEXIBLE READONLY;
+DEFINE FIELD OVERWRITE ingreso_correo ON hecho TYPE option<object> FLEXIBLE READONLY;
+DEFINE FIELD OVERWRITE prestamo_kof ON hecho TYPE option<object> FLEXIBLE READONLY;
+DEFINE INDEX OVERWRITE hecho_por_registro ON hecho FIELDS registro;
+DEFINE EVENT OVERWRITE hecho_inmutable ON hecho WHEN $event != "CREATE" THEN {
+    THROW "los hechos no se editan ni se borran";
+};

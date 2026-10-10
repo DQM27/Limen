@@ -180,7 +180,9 @@ llegó a este equipo. Para no confiar en datos demasiado viejos:
 ## 6. Dónde cae en la hoja de ruta
 
 Nada de esto cambia el núcleo actual, que ya decide con datos locales y no consulta a
-nadie. Se construye junto con la sincronización (paso 7):
+nadie. Los hechos inmutables ya existen (regla E11, sección 9.1 de `arquitectura.md`):
+cada entrada y salida queda en la tabla `hecho`, que la base no deja editar ni borrar.
+Lo demás se construye junto con la sincronización (paso 7):
 
 1. Estado de sincronización en cada hecho (pendiente, confirmado) y el indicador de
    incidente (tipo, registro con el que chocó, revisión) en ingresos y préstamos.

@@ -49,7 +49,8 @@ Restricciones que guían las decisiones:
    orquestan, no deciden.
 3. **El dominio es puro:** sin base de datos, red, reloj del sistema ni aleatoriedad.
 4. **Los hechos no se editan, se agregan.** Lo que ocurre en el punto de acceso es
-   inmutable; lo que se muestra se deriva de ello.
+   inmutable (sección 9.1); el estado que se muestra se actualiza en la misma
+   transacción.
 5. **Sin ORM.** Las consultas se escriben a la vista, en SurrealQL.
 6. **Sin magia:** nada de frameworks de inyección de dependencias, buses ni mediadores.
    Las dependencias se pasan por constructor.
@@ -435,14 +436,38 @@ nada automáticamente.
 
 ### 9.1 Hechos
 
-Lo que ocurre en el punto de acceso (`IngresoRegistrado`, `SalidaRegistrada`,
-`GafetePrestado`…) se guarda como un **hecho inmutable** en la tabla `hecho`, con:
+Cada **entrada y salida**, por las cuatro vías, se guarda como un **hecho inmutable**
+en la tabla `hecho` (`dominio/hecho.rs`). Entregar el gafete provisional KOF cuenta como
+entrada y devolverlo, como salida.
 
-- ID **UUID v7** generado en el equipo: un reintento con el mismo ID no duplica nada.
-- Sitio, equipo, sesión y marca de tiempo.
-- Permisos que prohíben `UPDATE` y `DELETE` sobre `hecho`.
+- **ID UUID v7** generado en el equipo (`HechoId`): ordena los hechos sin empates, y un
+  reintento con el mismo ID no duplica nada (`CREATE` falla si ya existe).
+- **Qué guarda:** el tipo (entrada o salida), la vía, el registro al que se refiere (el
+  ingreso o el préstamo KOF), cuándo y quién. Una entrada lleva además el registro
+  completo tal como se abrió, para que otro equipo pueda reconstruirlo; una salida sólo
+  dice qué registro se cerró.
+- **Nunca se edita ni se borra, y lo hace cumplir la base:** los campos son `READONLY` y
+  un `DEFINE EVENT` rechaza cualquier `UPDATE`, `UPSERT` o `DELETE`. No alcanza con
+  `PERMISSIONS`: la conexión embebida entra como root y no pasa por ellos. La tabla
+  `auditoria` tiene el mismo evento. Lo que quedó mal se corrige con otro hecho.
+- **Misma transacción que el estado:** el caso de uso anota el hecho en la Unit of Work
+  junto con el ingreso, la presencia, el préstamo del gafete y el reloj. Se guardan
+  todos o ninguno; un intento rechazado no deja hecho.
 
-Lo que las pantallas muestran (Activos, Historial) se **deriva** de los hechos.
+**Hechos y estado derivado.** Las tablas `ingreso_*`, `presencia`, `prestamo_gafete` y
+`prestamo_kof` son el estado actual que leen las pantallas y las reglas locales (quién
+está adentro, qué gafete está prestado); se actualizan y se borran con normalidad. Los
+hechos son el registro de lo que pasó y la unidad que se enviará a la nube: al recibir
+el hecho de otro equipo, se guarda y se aplica a ese estado. Las pantallas siguen
+leyendo el estado, no recorren los hechos.
+
+Pendiente para cuando exista lo que lo necesita:
+
+- **Sitio y equipo** de cada hecho: con el bloque M (equipos).
+- **`CHANGEFEED`** sobre `hecho`, el **estado de sincronización** (pendiente o
+  confirmado) y el **indicador de incidente**: con la sincronización (paso 7).
+- Los cambios de catálogo (contratistas, empresas, gafetes) no son hechos: quedan en la
+  auditoría (B11), que tampoco se edita ni se borra.
 
 ### 9.2 Sincronización
 
@@ -590,6 +615,7 @@ Se avanza por capas, completando cada una para un módulo antes de pasar al sigu
    número de gafete) usa una clave natural en la base (`presencia:⟨cédula⟩`,
    `prestamo_gafete:⟨TIPO-NÚMERO⟩`, `gafete:⟨TIPO-NÚMERO⟩`): si dos equipos lo
    registran a la vez, el segundo `CREATE` falla y la transacción entera se descarta.
+   ✅ Cada entrada y salida deja además un **hecho inmutable** (sección 9.1).
 7. **Nube:** instancia de SurrealDB Cloud, sincronización, Worker de Cloudflare.
 8. **Móvil.**
 9. Migración de datos desde Lattis y corte.
@@ -602,8 +628,8 @@ abierto para registrar la salida; el personal KOF cuenta mientras tenga el gafet
 provisional), los buscadores, el **historial de cambios** de un
 registro (regla B11), el **listado de gafetes** de un tipo con su estado y si están
 prestados, y los contratistas con el **PRAIND por vencer** (vencidos y los de los
-próximos 30 días). Cada una se prueba con la misma batería de contrato en memoria y en
-`SurrealDB`.
+próximos 30 días), y los **hechos** de un ingreso o préstamo (`hechos_de`). Cada una se
+prueba con la misma batería de contrato en memoria y en `SurrealDB`.
 
 ### 13.1 El buscador
 

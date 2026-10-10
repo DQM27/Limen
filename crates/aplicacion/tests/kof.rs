@@ -54,8 +54,10 @@ mod tests {
         EntregarGafeteKof::new(almacen.clone(), reloj_a(ENTREGA), almacen.ids())
     }
 
-    fn devolver(almacen: &AlmacenMemoria) -> DevolverGafeteKof<AlmacenMemoria, RelojFijo> {
-        DevolverGafeteKof::new(almacen.clone(), reloj_a(DEVOLUCION))
+    fn devolver(
+        almacen: &AlmacenMemoria,
+    ) -> DevolverGafeteKof<AlmacenMemoria, RelojFijo, IdsSecuenciales> {
+        DevolverGafeteKof::new(almacen.clone(), reloj_a(DEVOLUCION), almacen.ids())
     }
 
     /// Almacén con los gafetes provisionales KOF 1 a 5 y dos personas.
@@ -440,9 +442,13 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(
-            DevolverGafeteKof::new(almacen.clone(), reloj_a("2026-10-09T07:00:00Z"))
-                .ejecutar(&sesion(), id)
-                .await,
+            DevolverGafeteKof::new(
+                almacen.clone(),
+                reloj_a("2026-10-09T07:00:00Z"),
+                almacen.ids()
+            )
+            .ejecutar(&sesion(), id)
+            .await,
             Err(ErrorCaso::Negocio(ErrorDevolucionKof::Reloj(RelojAtrasado))),
             "devolver antes de la entrega es devolver con el reloj atrasado"
         );
@@ -450,5 +456,40 @@ mod tests {
             almacen.prestado(TipoGafete::ProvisionalKof, numero(3)),
             "sigue prestado"
         );
+    }
+
+    // --- Hechos ---
+
+    /// Los hechos guardados son exactamente la entrada y la salida de
+    /// `registro`, en ese orden, por la vía indicada.
+    fn entrada_y_salida(almacen: &AlmacenMemoria, via: Via, registro: Uuid) {
+        let hechos = almacen.hechos();
+        let [entro, salio] = hechos.as_slice() else {
+            panic!("se esperaban dos hechos: {hechos:?}");
+        };
+        for hecho in [entro, salio] {
+            assert_eq!(hecho.via(), via, "la vía del hecho");
+            assert_eq!(hecho.registro(), registro, "el registro del hecho");
+            assert_eq!(hecho.marca().operador, sesion().operador(), "quién");
+        }
+        assert!(entro.es_entrada(), "primero la entrada");
+        assert!(!salio.es_entrada(), "después la salida");
+        assert!(entro.id() < salio.id(), "el ID ordena los hechos");
+    }
+
+    #[tokio::test]
+    async fn la_entrega_y_la_devolucion_dejan_cada_una_su_hecho() {
+        let (almacen, ana, _) = preparado().await;
+        let id = entregar(&almacen)
+            .ejecutar(&sesion(), ana, 3)
+            .await
+            .unwrap();
+        let hechos_previos = almacen.hechos().len();
+        assert_eq!(
+            hechos_previos, 1,
+            "registrar personas no deja hechos; la entrega sí"
+        );
+        devolver(&almacen).ejecutar(&sesion(), id).await.unwrap();
+        entrada_y_salida(&almacen, Via::Kof, id.uuid());
     }
 }

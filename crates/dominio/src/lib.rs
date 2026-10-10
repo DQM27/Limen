@@ -17,6 +17,7 @@ pub mod contratista;
 pub mod empresa;
 pub mod empresa_proveedora;
 pub mod gafete;
+pub mod hecho;
 pub mod ingreso_contratista;
 pub mod ingreso_correo;
 pub mod ingreso_proveedor;

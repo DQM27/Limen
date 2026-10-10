@@ -12,6 +12,7 @@ use limen_dominio::contratista::{Contratista, ContratistaGuardado, ContratistaId
 use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
 use limen_dominio::gafete::{Deudor, EstadoGafete, Gafete, NumeroGafete, TipoGafete};
+use limen_dominio::hecho::{Hecho, HechoId, Salida, Suceso};
 use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoGuardado, IngresoId};
 use limen_dominio::ingreso_correo::{
     IngresoCorreo, IngresoCorreoGuardado, IngresoCorreoId, Motivo,
@@ -24,7 +25,7 @@ use limen_dominio::movimiento::Marca;
 use limen_dominio::nombre::NombrePersona;
 use limen_dominio::operador::OperadorId;
 use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
-use limen_dominio::presencia::Identidad;
+use limen_dominio::presencia::{Identidad, Via};
 use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofGuardado, PrestamoKofId};
 use limen_dominio::tipo_ingreso::TipoIngreso;
 use limen_dominio::visitante::Visitante;
@@ -47,6 +48,7 @@ pub const TABLA_PRESTAMO_KOF: &str = "prestamo_kof";
 pub const TABLA_PERSONAL_KOF_CON_PRESTAMO: &str = "personal_kof_con_prestamo";
 pub const TABLA_RELOJ: &str = "reloj";
 pub const TABLA_AUDITORIA: &str = "auditoria";
+pub const TABLA_HECHO: &str = "hecho";
 
 // --- IDs ---
 //
@@ -743,4 +745,163 @@ impl From<&EntradaAuditoria> for AuditoriaRegistro {
             en: entrada.en,
         }
     }
+}
+
+// --- Hechos ---
+
+const ENTRADA: &str = "ENTRADA";
+const SALIDA: &str = "SALIDA";
+
+/// Un hecho tal como se guarda. Una entrada lleva el registro que abrió (en
+/// el campo de su vía) para que otro equipo pueda reconstruirlo; una salida
+/// no lleva ninguno.
+#[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
+pub struct HechoDatos {
+    pub tipo: String,
+    pub via: String,
+    pub registro: Uuid,
+    pub en: DateTime<Utc>,
+    pub operador: Uuid,
+    pub ingreso_contratista: Option<IngresoDatos>,
+    pub ingreso_proveedor: Option<IngresoProveedorDatos>,
+    pub ingreso_correo: Option<IngresoCorreoDatos>,
+    pub prestamo_kof: Option<PrestamoKofDatos>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
+pub struct HechoLeido {
+    pub id: RecordId,
+    pub tipo: String,
+    pub via: String,
+    pub registro: Uuid,
+    pub en: DateTime<Utc>,
+    pub operador: Uuid,
+    pub ingreso_contratista: Option<IngresoDatos>,
+    pub ingreso_proveedor: Option<IngresoProveedorDatos>,
+    pub ingreso_correo: Option<IngresoCorreoDatos>,
+    pub prestamo_kof: Option<PrestamoKofDatos>,
+}
+
+impl From<&Hecho> for HechoDatos {
+    fn from(hecho: &Hecho) -> Self {
+        let marca = hecho.marca();
+        let mut datos = Self {
+            tipo: if hecho.es_entrada() { ENTRADA } else { SALIDA }.to_owned(),
+            via: hecho.via().codigo().to_owned(),
+            registro: hecho.registro(),
+            en: marca.en,
+            operador: marca.operador.uuid(),
+            ingreso_contratista: None,
+            ingreso_proveedor: None,
+            ingreso_correo: None,
+            prestamo_kof: None,
+        };
+        match hecho.suceso() {
+            Suceso::EntradaContratista(ingreso) => {
+                datos.ingreso_contratista = Some(IngresoDatos::from(ingreso));
+            }
+            Suceso::EntradaProveedor(ingreso) => {
+                datos.ingreso_proveedor = Some(IngresoProveedorDatos::from(ingreso));
+            }
+            Suceso::EntradaCorreo(ingreso) => {
+                datos.ingreso_correo = Some(IngresoCorreoDatos::from(ingreso));
+            }
+            Suceso::EntregaKof(prestamo) => {
+                datos.prestamo_kof = Some(PrestamoKofDatos::from(prestamo));
+            }
+            Suceso::Salida(_) => {}
+        }
+        datos
+    }
+}
+
+impl TryFrom<HechoLeido> for Hecho {
+    type Error = ErrorPersistencia;
+
+    fn try_from(leido: HechoLeido) -> Result<Self, ErrorPersistencia> {
+        let id = HechoId::desde_uuid(uuid_de(&leido.id, TABLA_HECHO)?);
+        let datos = leido;
+        let via = Via::desde_codigo(&datos.via)
+            .ok_or_else(|| dato_corrupto(TABLA_HECHO, format!("vía desconocida: {}", datos.via)))?;
+        let suceso = match (datos.tipo.as_str(), via) {
+            (SALIDA, _) => Suceso::Salida(Salida {
+                via,
+                registro: datos.registro,
+                marca: Marca {
+                    en: datos.en,
+                    operador: OperadorId::desde_uuid(datos.operador),
+                },
+            }),
+            (ENTRADA, Via::Contratista) => {
+                let ingreso = entrada_de(datos.ingreso_contratista)?;
+                Suceso::EntradaContratista(IngresoContratista::try_from(IngresoLeido {
+                    id: id_registro(TABLA_INGRESO_CONTRATISTA, datos.registro),
+                    contratista: ingreso.contratista,
+                    cedula: ingreso.cedula,
+                    placa: ingreso.placa,
+                    gafete: ingreso.gafete,
+                    entrada_en: ingreso.entrada_en,
+                    entrada_operador: ingreso.entrada_operador,
+                    salida_en: ingreso.salida_en,
+                    salida_operador: ingreso.salida_operador,
+                })?)
+            }
+            (ENTRADA, Via::Proveedor) => {
+                let ingreso = entrada_de(datos.ingreso_proveedor)?;
+                Suceso::EntradaProveedor(IngresoProveedor::try_from(IngresoProveedorLeido {
+                    id: id_registro(TABLA_INGRESO_PROVEEDOR, datos.registro),
+                    cedula: ingreso.cedula,
+                    nombre: ingreso.nombre,
+                    empresa: ingreso.empresa,
+                    placa: ingreso.placa,
+                    gafete: ingreso.gafete,
+                    entrada_en: ingreso.entrada_en,
+                    entrada_operador: ingreso.entrada_operador,
+                    salida_en: ingreso.salida_en,
+                    salida_operador: ingreso.salida_operador,
+                })?)
+            }
+            (ENTRADA, Via::Correo) => {
+                let ingreso = entrada_de(datos.ingreso_correo)?;
+                Suceso::EntradaCorreo(IngresoCorreo::try_from(IngresoCorreoLeido {
+                    id: id_registro(TABLA_INGRESO_CORREO, datos.registro),
+                    cedula: ingreso.cedula,
+                    nombre: ingreso.nombre,
+                    motivo: ingreso.motivo,
+                    placa: ingreso.placa,
+                    gafete: ingreso.gafete,
+                    entrada_en: ingreso.entrada_en,
+                    entrada_operador: ingreso.entrada_operador,
+                    salida_en: ingreso.salida_en,
+                    salida_operador: ingreso.salida_operador,
+                })?)
+            }
+            (ENTRADA, Via::Kof) => {
+                let prestamo = entrada_de(datos.prestamo_kof)?;
+                Suceso::EntregaKof(PrestamoKof::try_from(PrestamoKofLeido {
+                    id: id_registro(TABLA_PRESTAMO_KOF, datos.registro),
+                    personal: prestamo.personal,
+                    codigo_empleado: prestamo.codigo_empleado,
+                    nombre: prestamo.nombre,
+                    gafete: prestamo.gafete,
+                    entrega_en: prestamo.entrega_en,
+                    entrega_operador: prestamo.entrega_operador,
+                    devolucion_en: prestamo.devolucion_en,
+                    devolucion_operador: prestamo.devolucion_operador,
+                })?)
+            }
+            (otro, _) => {
+                return Err(dato_corrupto(
+                    TABLA_HECHO,
+                    format!("tipo desconocido: {otro}"),
+                ));
+            }
+        };
+        Ok(Self::restaurar(id, suceso))
+    }
+}
+
+/// El registro que abrió una entrada: tiene que estar en el campo de su vía.
+fn entrada_de<T>(registro: Option<T>) -> Result<T, ErrorPersistencia> {
+    registro.ok_or_else(|| dato_corrupto(TABLA_HECHO, "una entrada sin el registro que abrió"))
 }
