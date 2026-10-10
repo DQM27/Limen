@@ -68,6 +68,19 @@ pub fn run() {
             comandos::registrar_contratista,
             comandos::editar_contratista,
             comandos::registrar_entrada_contratista,
+            comandos::renombrar_empresa,
+            comandos::buscar_empresas_proveedoras,
+            comandos::registrar_empresa_proveedora,
+            comandos::renombrar_empresa_proveedora,
+            comandos::registrar_entrada_proveedor,
+            comandos::registrar_entrada_correo,
+            comandos::buscar_personal_kof,
+            comandos::registrar_personal_kof,
+            comandos::editar_personal_kof,
+            comandos::entregar_gafete_kof,
+            comandos::listar_gafetes,
+            comandos::registrar_gafetes,
+            comandos::cambiar_gafete,
         ])
         .run(tauri::generate_context!())
         .expect("error al ejecutar la aplicación de escritorio");

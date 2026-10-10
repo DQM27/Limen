@@ -72,6 +72,12 @@ pub enum ErrorEntrada {
     MedioInvalido,
     #[error("La vía de ingreso no es válida")]
     ViaInvalida,
+    #[error("El tipo de gafete no es válido")]
+    TipoGafeteInvalido,
+    #[error("El cambio de estado del gafete no es válido")]
+    CambioGafeteInvalido,
+    #[error("Indique quién debe el gafete: un contratista o la cédula de la persona")]
+    DeudorInvalido,
 }
 
 impl ErrorEntrada {
@@ -83,6 +89,9 @@ impl ErrorEntrada {
             Self::TipoIngresoInvalido => "tipo_ingreso_invalido",
             Self::MedioInvalido => "medio_invalido",
             Self::ViaInvalida => "via_invalida",
+            Self::TipoGafeteInvalido => "tipo_gafete_invalido",
+            Self::CambioGafeteInvalido => "cambio_gafete_invalido",
+            Self::DeudorInvalido => "deudor_invalido",
         }
     }
 }

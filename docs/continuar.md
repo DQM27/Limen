@@ -55,6 +55,12 @@ en GitHub (exigir PR y el resultado `CI verde`).
      `fecha_vencimiento_praind`, o `nombre` en la empresa): el mensaje va junto a ese
      campo, sin que la interfaz traduzca códigos. `campo: null` → mensaje general.
    - Para editar, la fila de la grilla ya trae todo para precargar el formulario.
+   - **Lo mismo para las demás pantallas** (comandos, errores por campo y funciones en
+     `nucleo/comandos.ts`, todo probado): empresas (`renombrarEmpresa`), empresas
+     proveedoras (buscar, registrar, renombrar), entrada de proveedor y por correo,
+     personal KOF (buscar, registrar, editar, entregar el provisional) y gafetes
+     (listar por tipo, crear por rango, cambiar estado: perdido con su deudor, pagado,
+     apareció, de baja). Las salidas por las cuatro vías ya existían.
 3. ✅ **CI para Node y Tauri**: el trabajo `escritorio` (Windows) instala, revisa el
    formato, prueba y compila Angular, y pasa clippy al cascarón; los demás trabajos
    excluyen `limen-escritorio`. Falta activar CodeQL para el JavaScript.

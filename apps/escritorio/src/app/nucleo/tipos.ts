@@ -59,3 +59,60 @@ export interface Cambio {
   antes: string;
   despues: string;
 }
+
+/** Una empresa proveedora (catálogo aparte del de contratistas). */
+export interface EmpresaProveedora {
+  id: string;
+  nombre: string;
+}
+
+export type Medio = 'A_PIE' | 'VEHICULO';
+
+/** El formulario de entrada de un proveedor. */
+export interface EntradaProveedor {
+  cedula: string;
+  nombre: string;
+  empresa_id: string;
+  medio: Medio;
+  /** Obligatoria en vehículo; a pie se descarta. */
+  placa: string | null;
+  gafete: number;
+}
+
+/** El formulario de un ingreso por correo (visita autorizada). */
+export interface EntradaCorreo {
+  cedula: string;
+  nombre: string;
+  motivo: string;
+  medio: Medio;
+  placa: string | null;
+  gafete: number;
+}
+
+/** Una persona del personal KOF. */
+export interface PersonalKof {
+  id: string;
+  codigo_empleado: string;
+  nombre: string;
+  activo: boolean;
+}
+
+export type TipoGafete = 'CONTRATISTA' | 'VISITA' | 'PROVEEDOR' | 'PROVISIONAL_KOF';
+
+/** Un gafete del catálogo, con su estado y si está prestado ahora. */
+export interface Gafete {
+  tipo: TipoGafete;
+  numero: number;
+  estado: 'DISPONIBLE' | 'PERDIDO' | 'DE_BAJA';
+  prestado: boolean;
+  /** Si está perdido: quién lo debe (un contratista o una cédula). */
+  deudor_contratista_id: string | null;
+  deudor_cedula: string | null;
+}
+
+/** Un cambio de estado de un gafete. Al marcarlo perdido, un solo deudor. */
+export interface CambioGafete {
+  cambio: 'PERDIDO' | 'PAGADO' | 'APARECIDO' | 'DE_BAJA';
+  deudor_contratista_id: string | null;
+  deudor_cedula: string | null;
+}
