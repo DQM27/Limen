@@ -2,7 +2,7 @@
 
 Lee primero [`AGENTS.md`](../AGENTS.md) (reglas del dueño y de arquitectura) y, si hace
 falta el detalle, [`arquitectura.md`](arquitectura.md), [`reglas.md`](reglas.md) y
-[`importador-lattis.md`](importador-lattis.md).
+[`operacion-sin-conexion.md`](operacion-sin-conexion.md).
 
 ## Dónde quedó todo
 
@@ -31,15 +31,27 @@ falta el detalle, [`arquitectura.md`](arquitectura.md), [`reglas.md`](reglas.md)
   queda marcado (`hora_confiable = false`, con la `hora_equipo` cruda). **Pendiente de
   probar en la PC**: que la red de la planta deje salir NTP (UDP 123); si no, todo queda
   "sin comprobar" hasta que exista la nube, que dará la hora.
-- **Importador de Lattis** (`herramientas/importador-lattis`): carga un volcado SQL en la
-  base de Limen. Los datos reales viven en `datos-privados/` (ignorada por git) y **nunca
-  se suben**: el repositorio es público.
+- **Importador de Lattis**: vive todavía en la rama `feat/importador-lattis` (no en
+  `main`), con su documento `docs/importador-lattis.md`. Carga un volcado SQL en la base
+  de Limen. Los datos reales viven en `datos-privados/` (ignorada por git) y **nunca se
+  suben**: el repositorio es público.
 
 ## Ramas y PR (nada va a `main` sin PR y CI en verde)
 
-Todo lo anterior ya está en `main` (PR #3 a #8). La rama de trabajo actual es
-`feat/usuarios` (bloque L). `feat/importador-lattis` quedó atrás: necesita traer `main`
-y generar los hechos de los ingresos importados antes de su PR.
+Todo lo anterior está en `main` (PR #3 a #11). `feat/importador-lattis` quedó atrás:
+necesita traer `main` y generar los hechos (con la hora sellada) de los ingresos
+importados antes de su PR. Las demás ramas viejas ya están fusionadas y se pueden borrar.
+
+## Decisiones pendientes del dueño
+
+- **App móvil:** Tauri 2 móvil con la misma interfaz de Angular y un plugin Kotlin para
+  la cámara (CameraX + ML Kit: PDF417 de la cédula, QR y lectura de texto de cédula,
+  carnet KOF y placa, como en Lattis), o UniFFI + Kotlin/Compose como Lattis.
+- **Cifrado en reposo:** SurrealDB embebido no cifra la base; la propuesta es exigir
+  BitLocker en los equipos (y avisar al arrancar si no está activo).
+- **Sincronización de catálogos** (contratistas, empresas, gafetes, usuarios): no son
+  hechos; la propuesta es changefeed por tabla con "el último cambio gana" y la
+  auditoría como respaldo.
 
 ## Lo que sigue
 
