@@ -42,13 +42,18 @@ Todo lo anterior está en `main` (PR #3 a #11). `feat/importador-lattis` quedó 
 necesita traer `main` y generar los hechos (con la hora sellada) de los ingresos
 importados antes de su PR. Las demás ramas viejas ya están fusionadas y se pueden borrar.
 
+## Decidido y en espera
+
+- **Cifrado en reposo:** se espera a que SurrealKV publique su cifrado (TDE, ya en su
+  rama principal) y a que SurrealDB lo conecte; la clave, como en Lattis (DPAPI en
+  Windows, Keystore en Android). Detalle en `arquitectura.md`, sección 8.2. Revisar las
+  versiones nuevas de `surrealkv` y de `surrealdb`.
+
 ## Decisiones pendientes del dueño
 
 - **App móvil:** Tauri 2 móvil con la misma interfaz de Angular y un plugin Kotlin para
   la cámara (CameraX + ML Kit: PDF417 de la cédula, QR y lectura de texto de cédula,
   carnet KOF y placa, como en Lattis), o UniFFI + Kotlin/Compose como Lattis.
-- **Cifrado en reposo:** SurrealDB embebido no cifra la base; la propuesta es exigir
-  BitLocker en los equipos (y avisar al arrancar si no está activo).
 - **Sincronización de catálogos** (contratistas, empresas, gafetes, usuarios): no son
   hechos; la propuesta es changefeed por tabla con "el último cambio gana" y la
   auditoría como respaldo.
