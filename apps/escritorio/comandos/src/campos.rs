@@ -97,7 +97,6 @@ impl CampoDelError for ErrorUsuario {
             Self::ClaveCorta | Self::ClaveLarga | Self::ClaveIgualALaCedula => Some(CLAVE),
             Self::ClaveActualIncorrecta => Some(CLAVE_ACTUAL),
             Self::NoSeDesactivaASiMismo => Some(ACTIVO),
-            Self::YaHayUsuarios => None,
         }
     }
 }

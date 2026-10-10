@@ -48,8 +48,11 @@ El **núcleo** (todo lo que funciona dentro de un equipo, sin pantalla ni nube) 
 completo y probado: dominio, aplicación, `infra-memoria`, `infra-surreal`, `infra-plataforma`
 y `composicion`. Cubre contratistas, empresas, gafetes, ingresos y salidas (contratista,
 proveedor y correo), personal KOF con su gafete provisional, el buscador, las consultas
-de lectura y los usuarios con su inicio de sesión (bloque L: cédula y clave,
-Argon2id, bloqueo tras 5 fallos; la app arranca sin sesión). El detalle está en [`docs/reglas.md`](docs/reglas.md) y en la hoja de ruta de
+de lectura y el inicio de sesión (bloque L: cédula y clave, Argon2id, bloqueo tras 5
+fallos; la app arranca sin sesión). **Los usuarios son globales y vienen de la nube**: el
+equipo no los crea ni los administra; sólo inicia sesión y cambia la propia clave. Al
+desarrollar, la base se siembra con usuarios de prueba (`composicion/src/semilla.rs`,
+sólo en depuración). El detalle está en [`docs/reglas.md`](docs/reglas.md) y en la hoja de ruta de
 `docs/arquitectura.md` (sección 13).
 
 Lo que sigue, en este orden: **(1)** app de escritorio con Tauri (`apps/escritorio`),

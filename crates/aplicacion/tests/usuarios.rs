@@ -1,25 +1,25 @@
-//! Pruebas de los casos de uso de usuarios e inicio de sesión contra los
-//! dobles en memoria.
+//! Pruebas de los casos de uso de la sesión (iniciar sesión y cambiar la
+//! propia clave) contra los dobles en memoria. Los usuarios no se crean en el
+//! equipo (vienen de la nube): las pruebas los siembran en la base.
 
 #[cfg(test)]
 mod tests {
     use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
-    use limen_aplicacion::casos_de_uso::usuarios::{
-        CambiarClave, CrearPrimerUsuario, EditarUsuario, HayUsuarios, IniciarSesion,
-        ListarUsuarios, RegistrarUsuario, RestablecerClave, SesionIniciada,
-    };
+    use limen_aplicacion::casos_de_uso::usuarios::{CambiarClave, IniciarSesion, SesionIniciada};
     use limen_aplicacion::errores::ErrorCaso;
-    use limen_aplicacion::puertos::{
-        AccionAuditada, ErrorPersistencia, RegistroAuditado, Restriccion,
-    };
-    use limen_aplicacion::sesion::OperadorId;
+    use limen_aplicacion::puertos::{AccionAuditada, RegistroAuditado};
+    use limen_aplicacion::sesion::{OperadorId, Sesion};
     use limen_dominio::cedula::Cedula;
-    use limen_dominio::usuario::{ErrorInicioSesion, ErrorUsuario};
+    use limen_dominio::nombre::NombrePersona;
+    use limen_dominio::usuario::{ErrorInicioSesion, ErrorUsuario, Usuario, UsuarioGuardado};
     use limen_infra_memoria::{AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo};
+    use uuid::Uuid;
 
     const AHORA: &str = "2026-10-10T08:00:00Z";
     const CEDULA_ANA: &str = "1-1111-1111";
     const CLAVE_ANA: &str = "portería segura";
+    const ANA: OperadorId = OperadorId::desde_uuid(Uuid::from_u128(1));
+    const BETO: OperadorId = OperadorId::desde_uuid(Uuid::from_u128(2));
 
     fn instante(texto: &str) -> DateTime<Utc> {
         texto.parse().unwrap()
@@ -33,18 +33,6 @@ mod tests {
         reloj_en(instante(AHORA))
     }
 
-    fn primer_usuario(
-        almacen: &AlmacenMemoria,
-    ) -> CrearPrimerUsuario<AlmacenMemoria, RelojFijo, IdsSecuenciales, ClavesFalsas> {
-        CrearPrimerUsuario::new(almacen.clone(), reloj(), almacen.ids(), ClavesFalsas)
-    }
-
-    fn registrar(
-        almacen: &AlmacenMemoria,
-    ) -> RegistrarUsuario<AlmacenMemoria, RelojFijo, IdsSecuenciales, ClavesFalsas> {
-        RegistrarUsuario::new(almacen.clone(), reloj(), almacen.ids(), ClavesFalsas)
-    }
-
     fn iniciar_en(
         almacen: &AlmacenMemoria,
         ahora: DateTime<Utc>,
@@ -52,86 +40,80 @@ mod tests {
         IniciarSesion::new(almacen.clone(), reloj_en(ahora), ClavesFalsas)
     }
 
-    /// Un equipo con Ana como primer usuario, ya con su sesión.
-    async fn con_ana() -> (AlmacenMemoria, SesionIniciada) {
-        let almacen = AlmacenMemoria::new();
-        let ana = primer_usuario(&almacen)
-            .ejecutar(CEDULA_ANA, "ana mora", CLAVE_ANA)
-            .await
-            .unwrap();
-        (almacen, ana)
+    fn cambiar(
+        almacen: &AlmacenMemoria,
+    ) -> CambiarClave<AlmacenMemoria, RelojFijo, IdsSecuenciales, ClavesFalsas> {
+        CambiarClave::new(almacen.clone(), reloj(), almacen.ids(), ClavesFalsas)
     }
 
     fn cedula(texto: &str) -> Cedula {
         Cedula::normalizar(texto).unwrap()
     }
 
-    #[tokio::test]
-    async fn el_primer_usuario_abre_su_sesion_y_luego_ya_no_se_puede() {
-        let almacen = AlmacenMemoria::new();
-        let hay = HayUsuarios::new(almacen.clone());
-        assert!(!hay.ejecutar().await.unwrap(), "equipo recién instalado");
-
-        let ana = primer_usuario(&almacen)
-            .ejecutar(CEDULA_ANA, "ana mora", CLAVE_ANA)
-            .await
-            .unwrap();
-        assert_eq!(ana.cedula, "111111111");
-        assert_eq!(ana.nombre, "ANA MORA");
-        assert!(!ana.debe_cambiar_clave, "eligió su clave");
-        assert!(hay.ejecutar().await.unwrap(), "ya hay usuarios");
-
-        let auditoria = almacen.auditoria();
-        let [alta] = auditoria.as_slice() else {
-            panic!("se audita el alta: {auditoria:?}");
-        };
-        assert_eq!(
-            alta.registro,
-            RegistroAuditado::Usuario(ana.sesion.operador())
-        );
-        assert_eq!(
-            alta.operador,
-            ana.sesion.operador(),
-            "se dio de alta a sí mismo"
-        );
-        assert!(
-            alta.cambios.iter().all(|cambio| cambio.campo != "clave"),
-            "la clave no va a la auditoría: {:?}",
-            alta.cambios
-        );
-
-        let segundo = primer_usuario(&almacen)
-            .ejecutar("222222222", "beto solís", "otra clave larga")
-            .await;
-        assert_eq!(
-            segundo,
-            Err(ErrorCaso::Negocio(ErrorUsuario::YaHayUsuarios))
-        );
+    /// Un usuario como llega de la nube.
+    fn usuario(
+        id: OperadorId,
+        cedula_texto: &str,
+        nombre: &str,
+        clave: &str,
+        activo: bool,
+        temporal: bool,
+    ) -> Usuario {
+        Usuario::restaurar(UsuarioGuardado {
+            id,
+            cedula: cedula(cedula_texto),
+            nombre: NombrePersona::nuevo(nombre).unwrap(),
+            activo,
+            clave: ClavesFalsas::hash_de(clave),
+            debe_cambiar_clave: temporal,
+        })
     }
 
-    #[tokio::test]
-    async fn la_clave_se_guarda_cifrada() {
-        let (almacen, _) = con_ana().await;
-        let usuarios = almacen.usuarios();
-        let [ana] = usuarios.as_slice() else {
-            panic!("un usuario: {usuarios:?}");
-        };
-        assert_eq!(ana.clave(), &ClavesFalsas::hash_de(CLAVE_ANA));
+    /// La base de un equipo con los usuarios que trajo la nube: Ana (clave
+    /// propia), Beto (clave temporal) y Carla (desactivada).
+    fn equipo() -> AlmacenMemoria {
+        let almacen = AlmacenMemoria::new();
+        almacen.sembrar_usuario(usuario(ANA, CEDULA_ANA, "ana mora", CLAVE_ANA, true, false));
+        almacen.sembrar_usuario(usuario(
+            BETO,
+            "222222222",
+            "beto solís",
+            "temporal 123",
+            true,
+            true,
+        ));
+        almacen.sembrar_usuario(usuario(
+            OperadorId::desde_uuid(Uuid::from_u128(3)),
+            "333333333",
+            "carla vega",
+            "la de carla",
+            false,
+            false,
+        ));
+        almacen
     }
 
     #[tokio::test]
     async fn inicia_sesion_con_cedula_y_clave() {
-        let (almacen, ana) = con_ana().await;
+        let almacen = equipo();
         let iniciada = iniciar_en(&almacen, instante(AHORA))
             .ejecutar("111111111", CLAVE_ANA)
             .await
             .unwrap();
-        assert_eq!(iniciada, ana);
+        assert_eq!(
+            iniciada,
+            SesionIniciada {
+                sesion: Sesion::nueva(ANA),
+                cedula: "111111111".to_owned(),
+                nombre: "ANA MORA".to_owned(),
+                debe_cambiar_clave: false,
+            }
+        );
     }
 
     #[tokio::test]
     async fn cedula_desconocida_y_clave_equivocada_dan_el_mismo_error() {
-        let (almacen, _) = con_ana().await;
+        let almacen = equipo();
         let iniciar = iniciar_en(&almacen, instante(AHORA));
         let esperado = Err(ErrorCaso::Negocio(ErrorInicioSesion::CredencialesInvalidas));
         assert_eq!(
@@ -144,7 +126,7 @@ mod tests {
 
     #[tokio::test]
     async fn cinco_fallos_bloquean_aunque_despues_acierte() {
-        let (almacen, _) = con_ana().await;
+        let almacen = equipo();
         let ahora = instante(AHORA);
         let iniciar = iniciar_en(&almacen, ahora);
         for _ in 0..5 {
@@ -194,105 +176,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn al_desactivado_se_le_avisa_solo_con_la_clave_correcta() {
-        let (almacen, ana) = con_ana().await;
-        let beto = registrar(&almacen)
-            .ejecutar(&ana.sesion, "222222222", "beto solís", "temporal 123")
-            .await
-            .unwrap();
-        EditarUsuario::new(almacen.clone(), reloj(), almacen.ids())
-            .ejecutar(&ana.sesion, beto, "beto solís", false)
-            .await
-            .unwrap();
-
-        let iniciar = iniciar_en(&almacen, instante(AHORA));
-        assert_eq!(
-            iniciar.ejecutar("222222222", "equivocada").await,
-            Err(ErrorCaso::Negocio(ErrorInicioSesion::CredencialesInvalidas))
-        );
-        assert_eq!(
-            iniciar.ejecutar("222222222", "temporal 123").await,
-            Err(ErrorCaso::Negocio(ErrorInicioSesion::Desactivado))
-        );
-        assert_eq!(
-            almacen
-                .intentos_inicio(&cedula("222222222"))
-                .map(|intentos| intentos.cantidad),
-            Some(1),
-            "el desactivado con la clave correcta no suma intento"
-        );
-    }
-
-    #[tokio::test]
-    async fn el_registrado_entra_con_una_clave_temporal() {
-        let (almacen, ana) = con_ana().await;
-        registrar(&almacen)
-            .ejecutar(&ana.sesion, "222222222", "beto solís", "temporal 123")
-            .await
-            .unwrap();
-        let beto = iniciar_en(&almacen, instante(AHORA))
-            .ejecutar("222222222", "temporal 123")
-            .await
-            .unwrap();
-        assert!(beto.debe_cambiar_clave, "la eligió otra persona");
-
-        CambiarClave::new(almacen.clone(), reloj(), almacen.ids(), ClavesFalsas)
-            .ejecutar(&beto.sesion, "temporal 123", "la mía de verdad")
-            .await
-            .unwrap();
-        let beto = iniciar_en(&almacen, instante(AHORA))
-            .ejecutar("222222222", "la mía de verdad")
-            .await
-            .unwrap();
-        assert!(!beto.debe_cambiar_clave, "ya la cambió");
-    }
-
-    #[tokio::test]
-    async fn la_cedula_de_usuario_no_se_repite_ni_aunque_otro_equipo_gane() {
-        let (almacen, ana) = con_ana().await;
-        let repetida = registrar(&almacen)
-            .ejecutar(&ana.sesion, CEDULA_ANA, "otra ana", "temporal 123")
-            .await;
-        assert_eq!(
-            repetida,
-            Err(ErrorCaso::Negocio(ErrorUsuario::CedulaRepetida))
-        );
-
-        almacen
-            .fallar_proxima_confirmacion(ErrorPersistencia::Conflicto(Restriccion::CedulaUsuario));
-        let carrera = registrar(&almacen)
-            .ejecutar(&ana.sesion, "222222222", "beto solís", "temporal 123")
-            .await;
-        assert_eq!(
-            carrera,
-            Err(ErrorCaso::Negocio(ErrorUsuario::CedulaRepetida))
-        );
-    }
-
-    #[tokio::test]
-    async fn la_clave_nueva_cumple_l3() {
-        let (almacen, ana) = con_ana().await;
-        let registrar = registrar(&almacen);
-        assert_eq!(
-            registrar
-                .ejecutar(&ana.sesion, "222222222", "beto solís", "corta")
-                .await,
-            Err(ErrorCaso::Negocio(ErrorUsuario::ClaveCorta))
-        );
-        assert_eq!(
-            registrar
-                .ejecutar(&ana.sesion, "222222222", "beto solís", "222222222")
-                .await,
-            Err(ErrorCaso::Negocio(ErrorUsuario::ClaveIgualALaCedula))
-        );
-        assert_eq!(almacen.usuarios().len(), 1, "no se guardó nada");
-    }
-
-    #[tokio::test]
     async fn cambiar_la_clave_pide_la_actual() {
-        let (almacen, ana) = con_ana().await;
-        let cambio = CambiarClave::new(almacen.clone(), reloj(), almacen.ids(), ClavesFalsas)
-            .ejecutar(&ana.sesion, "no es la actual", "otra clave larga")
+        let almacen = equipo();
+        let cambio = cambiar(&almacen)
+            .ejecutar(&Sesion::nueva(ANA), "no es la actual", "otra clave larga")
             .await;
         assert_eq!(
             cambio,
@@ -308,81 +195,86 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn restablecer_deja_una_temporal_y_se_audita_sin_el_hash() {
-        let (almacen, ana) = con_ana().await;
-        let beto = registrar(&almacen)
-            .ejecutar(&ana.sesion, "222222222", "beto solís", "temporal 123")
+    async fn al_desactivado_se_le_avisa_solo_con_la_clave_correcta() {
+        let almacen = equipo();
+        let iniciar = iniciar_en(&almacen, instante(AHORA));
+        assert_eq!(
+            iniciar.ejecutar("333333333", "equivocada").await,
+            Err(ErrorCaso::Negocio(ErrorInicioSesion::CredencialesInvalidas))
+        );
+        assert_eq!(
+            iniciar.ejecutar("333333333", "la de carla").await,
+            Err(ErrorCaso::Negocio(ErrorInicioSesion::Desactivado))
+        );
+        assert_eq!(
+            almacen
+                .intentos_inicio(&cedula("333333333"))
+                .map(|intentos| intentos.cantidad),
+            Some(1),
+            "la desactivada con la clave correcta no suma intento"
+        );
+    }
+
+    #[tokio::test]
+    async fn con_clave_temporal_entra_y_la_cambia() {
+        let almacen = equipo();
+        let beto = iniciar_en(&almacen, instante(AHORA))
+            .ejecutar("222222222", "temporal 123")
             .await
             .unwrap();
-        RestablecerClave::new(almacen.clone(), reloj(), almacen.ids(), ClavesFalsas)
-            .ejecutar(&ana.sesion, beto, "nueva temporal")
+        assert!(beto.debe_cambiar_clave, "la puso la nube");
+
+        cambiar(&almacen)
+            .ejecutar(&beto.sesion, "temporal 123", "la mía de verdad")
             .await
             .unwrap();
-        let iniciada = iniciar_en(&almacen, instante(AHORA))
-            .ejecutar("222222222", "nueva temporal")
+        let beto = iniciar_en(&almacen, instante(AHORA))
+            .ejecutar("222222222", "la mía de verdad")
             .await
             .unwrap();
-        assert!(iniciada.debe_cambiar_clave, "queda temporal");
+        assert!(!beto.debe_cambiar_clave, "ya la cambió");
 
         let auditoria = almacen.auditoria();
-        let Some(ultima) = auditoria.last() else {
-            panic!("hay auditoría");
+        let [cambio] = auditoria.as_slice() else {
+            panic!("se audita el cambio: {auditoria:?}");
         };
-        assert_eq!(ultima.accion, AccionAuditada::Edicion);
-        assert_eq!(ultima.operador, ana.sesion.operador(), "quien restableció");
+        assert_eq!(cambio.registro, RegistroAuditado::Usuario(BETO));
+        assert_eq!(cambio.accion, AccionAuditada::Edicion);
+        assert_eq!(cambio.operador, BETO, "la cambió él mismo");
         assert!(
-            ultima
+            cambio
                 .cambios
                 .iter()
-                .all(|cambio| !cambio.despues.contains("falso:")),
+                .all(|campo| !campo.despues.contains("falso:")),
             "el hash no va a la auditoría: {:?}",
-            ultima.cambios
+            cambio.cambios
         );
     }
 
     #[tokio::test]
-    async fn nadie_se_desactiva_a_si_mismo_y_editar_lo_mismo_no_escribe() {
-        let (almacen, ana) = con_ana().await;
-        let editar = EditarUsuario::new(almacen.clone(), reloj(), almacen.ids());
+    async fn la_clave_nueva_cumple_l3_y_se_guarda_cifrada() {
+        let almacen = equipo();
+        let sesion = Sesion::nueva(ANA);
         assert_eq!(
-            editar
-                .ejecutar(&ana.sesion, ana.sesion.operador(), "ana mora", false)
+            cambiar(&almacen)
+                .ejecutar(&sesion, CLAVE_ANA, "corta")
                 .await,
-            Err(ErrorCaso::Negocio(ErrorUsuario::NoSeDesactivaASiMismo))
+            Err(ErrorCaso::Negocio(ErrorUsuario::ClaveCorta))
         );
-        let confirmaciones = almacen.confirmaciones();
-        let cambios = editar
-            .ejecutar(&ana.sesion, ana.sesion.operador(), "ana mora", true)
-            .await
-            .unwrap();
-        assert!(cambios.is_empty(), "nada cambió: {cambios:?}");
-        assert_eq!(almacen.confirmaciones(), confirmaciones, "no se escribió");
-
-        let otro = OperadorId::desde_uuid(uuid::Uuid::from_u128(77));
         assert_eq!(
-            editar.ejecutar(&ana.sesion, otro, "nadie", true).await,
-            Err(ErrorCaso::NoEncontrado)
+            cambiar(&almacen)
+                .ejecutar(&sesion, CLAVE_ANA, "111111111")
+                .await,
+            Err(ErrorCaso::Negocio(ErrorUsuario::ClaveIgualALaCedula))
         );
-    }
-
-    #[tokio::test]
-    async fn la_lista_va_por_nombre_y_sin_claves() {
-        let (almacen, ana) = con_ana().await;
-        registrar(&almacen)
-            .ejecutar(&ana.sesion, "222222222", "abel rojas", "temporal 123")
+        cambiar(&almacen)
+            .ejecutar(&sesion, CLAVE_ANA, "otra clave larga")
             .await
             .unwrap();
-        let lista = ListarUsuarios::new(almacen.clone())
-            .ejecutar()
-            .await
-            .unwrap();
-        let nombres: Vec<&str> = lista.iter().map(|fila| fila.nombre.as_str()).collect();
-        assert_eq!(nombres, ["ABEL ROJAS", "ANA MORA"]);
-        assert!(
-            lista
-                .iter()
-                .all(|fila| fila.activo && fila.cedula.len() == 9),
-            "{lista:?}"
-        );
+        let usuarios = almacen.usuarios();
+        let Some(ana) = usuarios.iter().find(|usuario| usuario.id() == ANA) else {
+            panic!("está Ana: {usuarios:?}");
+        };
+        assert_eq!(ana.clave(), &ClavesFalsas::hash_de("otra clave larga"));
     }
 }

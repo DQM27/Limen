@@ -651,8 +651,8 @@ Se avanza por capas, completando cada una para un módulo antes de pasar al sigu
    el núcleo de todas las pantallas está conectado por comandos; las pantallas se
    construyen de a una (ver `continuar.md`).
 6. Resto del dominio, en orden: ✅ ingreso y salida (E), ✅ gafetes (F), ✅ proveedores
-   (H), ✅ ingreso por correo (I), ✅ personal KOF (K), ✅ usuarios en el equipo (L; falta
-   lo de la nube: L4 y L5) y equipos (M).
+   (H), ✅ ingreso por correo (I), ✅ personal KOF (K), ✅ inicio de sesión y cambio de clave en el
+   equipo (L; los usuarios se administran en la nube: falta L4, L5 y su sincronización) y equipos (M).
    Lo que debe ser único entre equipos (una persona adentro, un gafete prestado, un
    número de gafete) usa una clave natural en la base (`presencia:⟨cédula⟩`,
    `prestamo_gafete:⟨TIPO-NÚMERO⟩`, `gafete:⟨TIPO-NÚMERO⟩`): si dos equipos lo

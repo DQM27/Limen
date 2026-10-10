@@ -75,17 +75,6 @@ describe('SesionServicio', () => {
     expect(sesion.usuario()).toBeNull();
   });
 
-  it('crear el primer usuario abre su sesión', async () => {
-    vi.mocked(invoke).mockResolvedValue({ ...ana, debe_cambiar_clave: false });
-    const sesion = TestBed.inject(SesionServicio);
-    const entrada = { cedula: '1-1111-1111', nombre: 'ana mora', clave: 'portería segura' };
-
-    await sesion.crearPrimerUsuario(entrada);
-
-    expect(invoke).toHaveBeenCalledWith('crear_primer_usuario', { usuario: entrada });
-    expect(sesion.usuario()?.nombre).toBe('ANA MORA');
-  });
-
   it('cambiar la clave temporal deja de pedirla', async () => {
     vi.mocked(invoke).mockResolvedValue(ana);
     const sesion = TestBed.inject(SesionServicio);

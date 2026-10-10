@@ -28,9 +28,14 @@ falta el detalle, [`arquitectura.md`](arquitectura.md), [`reglas.md`](reglas.md)
   - Frontend: barra lateral, `compartido/tabla` (la grilla base de toda la app, con el
     diseño unificado) y la pantalla de Contratistas.
 - **Usuarios e inicio de sesión** (bloque L, reglas L1–L3 y L6–L8): cédula y
-  clave, Argon2id (`infra-plataforma`), bloqueo tras 5 fallos, primer usuario del
-  equipo y clave temporal. El operador provisional (`operador.json`) ya no existe:
-  **la app arranca sin sesión** y ningún comando hace nada hasta entrar.
+  clave, Argon2id (`infra-plataforma`), bloqueo tras 5 fallos y clave temporal.
+  **Los usuarios son globales y vienen de la nube**: el equipo sólo inicia sesión,
+  cambia la propia clave (actual y nueva) y cierra la sesión; no crea ni administra
+  usuarios. **La app arranca sin sesión** y ningún comando hace nada hasta entrar.
+- **Semilla de desarrollo** (`composicion/src/semilla.rs`, sólo en compilación de
+  depuración): si la base no tiene usuarios, al abrirla se siembran `100000001`
+  (OPERADOR UNO) y `100000002` (OPERADOR DOS), los dos con la clave `desarrollo`. La
+  versión para producción no trae la semilla; ahí los usuarios llegarán de la nube.
 - **Reloj confiable** (regla E5 nueva): la hora sale de NTP (`time.windows.com`, luego
   `pool.ntp.org`) anclada al reloj monotónico del proceso; se vuelve a medir cada hora en
   segundo plano y el último desfase se guarda en `reloj-desfase.txt` (carpeta de datos de
@@ -71,18 +76,15 @@ importados antes de su PR. Las demás ramas viejas ya están fusionadas y se pue
 
 0. **La pantalla de inicio de sesión va primero**: sin ella la app no puede operar.
    Todo está listo en `nucleo/sesion.ts` (`SesionServicio`: `usuario`, `cargar`,
-   `iniciar`, `crearPrimerUsuario`, `cambiarClave`, `cerrar`) y en
-   `nucleo/comandos.ts` (`hayUsuarios` y la administración de usuarios). Flujo:
-   - al abrir, `hayUsuarios()`: sin usuarios, el alta del primero (cédula, nombre y
-     clave); con usuarios, cédula y clave;
+   `iniciar`, `cambiarClave`, `cerrar`). Flujo:
+   - al abrir, cédula y clave (al desarrollar, los usuarios de la semilla);
    - si `usuario().debe_cambiar_clave`, sólo el cambio de clave (el núcleo
      rechaza todo lo demás con `clave_temporal`);
    - los errores de entrada no traen campo (`credenciales_invalidas`,
      `inicio_bloqueado`, `usuario_desactivado`): mensaje general, tal cual;
    - cualquier comando puede responder `sin_sesion`: volver a la pantalla de entrada.
-   - Pantalla de Usuarios (listar, registrar con clave temporal, editar nombre y
-     activo, restablecer clave); los errores traen `campo` (`cedula`, `nombre`,
-     `clave`, `clave_actual`, `activo`).
+   - el cambio de la propia clave (actual y nueva); los errores traen `campo`
+     (`clave`, `clave_actual`). No hay pantalla de usuarios: eso es de la nube.
 1. **Historial de ingresos: el núcleo ya está; falta la pantalla.**
    `nucleo/comandos.ts`: `listarHistorial(desde, hasta)` (fechas `AAAA-MM-DD` o `null`;
    trae `movimientos`, `truncado` y `maximo`) y `atajosDeFecha()` (código, etiqueta,

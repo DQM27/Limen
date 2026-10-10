@@ -205,26 +205,6 @@ export interface UsuarioActual {
   debe_cambiar_clave: boolean;
 }
 
-/** Un usuario en la lista de usuarios (nunca trae la clave). */
-export interface Usuario {
-  id: string;
-  cedula: string;
-  nombre: string;
-  /** Se desactiva, no se borra. */
-  activo: boolean;
-  debe_cambiar_clave: boolean;
-}
-
-/**
- * El formulario de alta de un usuario. Para el primer usuario del equipo la
- * clave es la suya; para los demás, una temporal.
- */
-export interface UsuarioEntrada {
-  cedula: string;
-  nombre: string;
-  clave: string;
-}
-
 // --- Historial de ingresos ---
 
 /** Una fila del historial: una entrada, con su salida si ya salió. */

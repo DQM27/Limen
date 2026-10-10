@@ -10,13 +10,14 @@ publish.workspace = true
 limen-aplicacion.workspace = true
 limen-infra-surreal.workspace = true
 limen-infra-plataforma.workspace = true
+# La semilla de desarrollo (sólo en depuración) arma usuarios del dominio.
+limen-dominio.workspace = true
 thiserror.workspace = true
+uuid.workspace = true
 
 [dev-dependencies]
-limen-dominio.workspace = true
 limen-infra-memoria.workspace = true
 chrono.workspace = true
-uuid.workspace = true
 tokio = { workspace = true, features = ["time"] }
 
 [lints]

@@ -1,9 +1,14 @@
 //! Usuarios: quienes operan el sistema (bloque L de `docs/reglas.md`).
 //!
+//! Los usuarios son globales: se crean y se administran en la nube, nunca en
+//! un equipo. En el equipo sólo se inicia sesión y se cambia la propia clave.
+//! Las reglas de alta y edición ([`Usuario::registrar`], [`Usuario::editar`],
+//! [`Usuario::restablecer_clave`]) viven igual aquí, porque el dominio es el
+//! mismo en todas partes (también compila a WebAssembly para la nube).
+//!
 //! - L1: un solo rol, Operador. Su identificador es el [`OperadorId`] que
 //!   queda en cada hecho y en cada entrada de la auditoría.
-//! - L2: se desactivan, no se borran. Nadie se desactiva a sí mismo (así el
-//!   equipo nunca se queda sin quién entre).
+//! - L2: se desactivan, no se borran. Nadie se desactiva a sí mismo.
 //! - L3: la clave tiene entre 8 y 128 caracteres y no puede ser la
 //!   propia cédula. El máximo evita que un texto enorme trabe al cifrador.
 //! - L6: tras 5 intentos fallidos seguidos con la misma cédula, se bloquea
@@ -55,8 +60,6 @@ pub enum ErrorUsuario {
     ClaveActualIncorrecta,
     #[error("No puede desactivar su propio usuario")]
     NoSeDesactivaASiMismo,
-    #[error("Ya hay usuarios: pídale a uno de ellos que lo registre")]
-    YaHayUsuarios,
 }
 
 impl ErrorUsuario {
@@ -72,7 +75,6 @@ impl ErrorUsuario {
             Self::ClaveIgualALaCedula => "clave_igual_a_la_cedula",
             Self::ClaveActualIncorrecta => "clave_actual_incorrecta",
             Self::NoSeDesactivaASiMismo => "no_se_desactiva_a_si_mismo",
-            Self::YaHayUsuarios => "ya_hay_usuarios",
         }
     }
 }
@@ -198,31 +200,6 @@ impl Usuario {
             clave,
             debe_cambiar_clave: temporal,
         })
-    }
-
-    /// El primer usuario de un equipo recién instalado: lo crea quien
-    /// instala, sin sesión, y sólo mientras no haya ningún otro. Su
-    /// clave la eligió él mismo, así que no es temporal.
-    pub fn crear_primero(
-        id: OperadorId,
-        cedula: Cedula,
-        nombre: &str,
-        clave: HashClave,
-        hay_usuarios: bool,
-    ) -> Result<Self, ErrorUsuario> {
-        if hay_usuarios {
-            return Err(ErrorUsuario::YaHayUsuarios);
-        }
-        Self::registrar(
-            id,
-            cedula,
-            nombre,
-            clave,
-            false,
-            HechosUsuario {
-                cedula_en_uso: false,
-            },
-        )
     }
 
     /// Cambia el nombre y si está activo (L2). Nadie se desactiva a sí
@@ -551,18 +528,6 @@ mod tests {
         assert_eq!(usuario.nombre().as_str(), "ANA MORA");
         let alta: Vec<&str> = usuario.cambios_de_alta().iter().map(|c| c.campo).collect();
         assert_eq!(alta, ["cedula", "nombre", "activo", "debe_cambiar_clave"]);
-    }
-
-    #[test]
-    fn el_primer_usuario_solo_se_crea_si_no_hay_ninguno() {
-        let primero =
-            Usuario::crear_primero(id(1), cedula(), "ana mora", hash("h"), false).unwrap();
-        assert!(primero.activo(), "entra activo");
-        assert!(!primero.debe_cambiar_clave(), "eligió su clave");
-        assert_eq!(
-            Usuario::crear_primero(id(2), cedula(), "ana mora", hash("h"), true),
-            Err(ErrorUsuario::YaHayUsuarios)
-        );
     }
 
     #[test]
