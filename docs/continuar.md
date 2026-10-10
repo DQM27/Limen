@@ -57,13 +57,14 @@ y generar los hechos de los ingresos importados antes de su PR.
    - Pantalla de Usuarios (listar, registrar con contraseña temporal, editar nombre y
      activo, restablecer contraseña); los errores traen `campo` (`cedula`, `nombre`,
      `contrasena`, `contrasena_actual`, `activo`).
-1. **Historial, segunda mitad.** Conectar `ListarHistorial` y `AtajosDeFecha` en
-   `composicion`, en `apps/escritorio/comandos` (DTO + comandos `listar_historial` y
-   `atajos_de_fecha`) y en `src-tauri`. Luego la pantalla en Angular sobre la grilla base,
-   con un selector de rango de fechas (botón con la etiqueta corta, panel con los accesos
-   rápidos que da el núcleo y fechas Desde/Hasta; el modelo es el de Lattis) y las
-   exportaciones: CSV, Excel y PDF (necesitan un comando de Rust que guarde el archivo y
-   el plugin de diálogo de Tauri).
+1. **Historial de ingresos: el núcleo ya está; falta la pantalla.**
+   `nucleo/comandos.ts`: `listarHistorial(desde, hasta)` (fechas `AAAA-MM-DD` o `null`;
+   trae `movimientos`, `truncado` y `maximo`) y `atajosDeFecha()` (código, etiqueta,
+   nombre corto, rango y cuál abre el historial: los últimos 6 meses). Un rango
+   invertido rechaza con `campo: 'hasta'`. La pantalla: la grilla base con un selector
+   de rango (botón con la etiqueta corta, panel con los atajos y fechas Desde/Hasta, el
+   modelo de Lattis). Las exportaciones (CSV, Excel, PDF) quedan para el final, a pedido
+   del dueño.
 2. **Formulario de "Nuevo contratista"** (diálogo de Material) y el botón en la fila de
    herramientas de la grilla. **El núcleo ya está listo**; falta sólo la pantalla:
    - `nucleo/comandos.ts`: `registrarContratista`, `editarContratista` (devuelve los

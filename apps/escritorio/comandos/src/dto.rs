@@ -10,7 +10,9 @@
 //! - los nombres de los campos, en `snake_case`.
 
 use chrono::{NaiveDate, SecondsFormat};
-use limen_aplicacion::casos_de_uso::consultas::ContratistaEnLista;
+use limen_aplicacion::casos_de_uso::consultas::{
+    AtajoConRango, ContratistaEnLista, Historial, MAXIMO_MOVIMIENTOS,
+};
 use limen_aplicacion::casos_de_uso::contratistas::ComandoContratista;
 use limen_aplicacion::casos_de_uso::correo::ComandoEntradaCorreo;
 use limen_aplicacion::casos_de_uso::gafetes::CambioGafete;
@@ -19,7 +21,9 @@ use limen_aplicacion::casos_de_uso::ingresos::{
 };
 use limen_aplicacion::casos_de_uso::proveedores::ComandoEntradaProveedor;
 use limen_aplicacion::casos_de_uso::usuarios::FilaUsuario;
-use limen_aplicacion::puertos::{IngresoAbierto, PersonaAdentro, ResumenGafete};
+use limen_aplicacion::puertos::{
+    IngresoAbierto, MovimientoHistorial, PersonaAdentro, ResumenGafete,
+};
 use limen_dominio::acceso::ResultadoAcceso;
 use limen_dominio::auditoria::CambioCampo;
 use limen_dominio::cedula::Cedula;
@@ -31,6 +35,7 @@ use limen_dominio::ingreso_contratista::ErrorIngreso;
 use limen_dominio::medio::{Medio, TipoMedio};
 use limen_dominio::personal_kof::{PersonalKof, PersonalKofId};
 use limen_dominio::presencia::{Via, YaEstaAdentro};
+use limen_dominio::rango_fechas::Atajo;
 use limen_dominio::tipo_ingreso::TipoIngreso;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -81,22 +86,36 @@ pub struct PersonaAdentroDto {
     pub desde: String,
 }
 
+/// El ID del registro de un ingreso, sea de la vía que sea.
+fn id_del_ingreso(ingreso: IngresoAbierto) -> String {
+    match ingreso {
+        IngresoAbierto::Contratista(id) => id.uuid(),
+        IngresoAbierto::Proveedor(id) => id.uuid(),
+        IngresoAbierto::Correo(id) => id.uuid(),
+        IngresoAbierto::Kof(id) => id.uuid(),
+    }
+    .to_string()
+}
+
+/// El código del medio y la placa, si llegó en vehículo.
+fn medio_y_placa(medio: Option<&Medio>) -> (Option<&'static str>, Option<String>) {
+    match medio {
+        None => (None, None),
+        Some(Medio::APie) => (Some(A_PIE), None),
+        Some(Medio::Vehiculo(placa)) => (Some(VEHICULO), Some(placa.as_str().to_owned())),
+    }
+}
+
+fn instante(en: chrono::DateTime<chrono::Utc>) -> String {
+    en.to_rfc3339_opts(SecondsFormat::Secs, true)
+}
+
 impl From<&PersonaAdentro> for PersonaAdentroDto {
     fn from(persona: &PersonaAdentro) -> Self {
-        let ingreso_id = match persona.ingreso {
-            IngresoAbierto::Contratista(id) => id.uuid(),
-            IngresoAbierto::Proveedor(id) => id.uuid(),
-            IngresoAbierto::Correo(id) => id.uuid(),
-            IngresoAbierto::Kof(id) => id.uuid(),
-        };
-        let (medio, placa) = match &persona.medio {
-            None => (None, None),
-            Some(Medio::APie) => (Some(A_PIE), None),
-            Some(Medio::Vehiculo(placa)) => (Some(VEHICULO), Some(placa.as_str().to_owned())),
-        };
+        let (medio, placa) = medio_y_placa(persona.medio.as_ref());
         Self {
             via: persona.ingreso.via().codigo(),
-            ingreso_id: ingreso_id.to_string(),
+            ingreso_id: id_del_ingreso(persona.ingreso),
             identidad: persona.identidad.to_string(),
             nombre: persona.nombre.as_str().to_owned(),
             procedencia: persona.procedencia.clone(),
@@ -104,7 +123,7 @@ impl From<&PersonaAdentro> for PersonaAdentroDto {
             placa,
             gafete: persona.gafete.map(NumeroGafete::valor),
             sin_gafete: persona.sin_gafete,
-            desde: persona.desde.to_rfc3339_opts(SecondsFormat::Secs, true),
+            desde: instante(persona.desde),
         }
     }
 }
@@ -633,4 +652,122 @@ pub struct UsuarioEntrada {
     pub cedula: String,
     pub nombre: String,
     pub contrasena: String,
+}
+
+// --- Historial de ingresos ---
+
+/// Una fila del historial: una entrada, con su salida si ya salió.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MovimientoDto {
+    /// `CONTRATISTA`, `PROVEEDOR`, `CORREO` o `KOF`.
+    pub via: &'static str,
+    pub ingreso_id: String,
+    /// La cédula o, para el personal KOF, el código de empleado.
+    pub identidad: String,
+    pub nombre: String,
+    pub procedencia: String,
+    /// `A_PIE` o `VEHICULO`; el personal KOF no lo registra.
+    pub medio: Option<&'static str>,
+    pub placa: Option<String>,
+    pub gafete: Option<u32>,
+    /// Entró sin gafete (S/G): la pantalla muestra "S/G".
+    pub sin_gafete: bool,
+    /// RFC 3339, UTC.
+    pub entrada: String,
+    /// `None` mientras siga adentro.
+    pub salida: Option<String>,
+}
+
+impl From<&MovimientoHistorial> for MovimientoDto {
+    fn from(movimiento: &MovimientoHistorial) -> Self {
+        let (medio, placa) = medio_y_placa(movimiento.medio.as_ref());
+        Self {
+            via: movimiento.ingreso.via().codigo(),
+            ingreso_id: id_del_ingreso(movimiento.ingreso),
+            identidad: movimiento.identidad.to_string(),
+            nombre: movimiento.nombre.as_str().to_owned(),
+            procedencia: movimiento.procedencia.clone(),
+            medio,
+            placa,
+            gafete: movimiento.gafete.map(NumeroGafete::valor),
+            sin_gafete: movimiento.sin_gafete,
+            entrada: instante(movimiento.entrada),
+            salida: movimiento.salida.map(instante),
+        }
+    }
+}
+
+fn fecha(dia: NaiveDate) -> String {
+    dia.format("%Y-%m-%d").to_string()
+}
+
+/// Lo que devuelve el historial: el rango consultado y sus movimientos.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct HistorialDto {
+    /// `AAAA-MM-DD`; `None` = sin límite.
+    pub desde: Option<String>,
+    pub hasta: Option<String>,
+    /// Del más reciente al más antiguo.
+    pub movimientos: Vec<MovimientoDto>,
+    /// El rango tenía más de `maximo` movimientos: sólo vienen los más
+    /// recientes. La pantalla avisa que acote el rango.
+    pub truncado: bool,
+    pub maximo: usize,
+}
+
+impl From<&Historial> for HistorialDto {
+    fn from(historial: &Historial) -> Self {
+        Self {
+            desde: historial.rango.desde().map(fecha),
+            hasta: historial.rango.hasta().map(fecha),
+            movimientos: historial
+                .movimientos
+                .iter()
+                .map(MovimientoDto::from)
+                .collect(),
+            truncado: historial.truncado,
+            maximo: MAXIMO_MOVIMIENTOS,
+        }
+    }
+}
+
+/// Un acceso rápido de fecha con el rango que da hoy.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AtajoFechaDto {
+    /// `HOY`, `AYER`, `ESTA_SEMANA`…
+    pub codigo: &'static str,
+    /// Para el menú: "Últimos 7 días".
+    pub etiqueta: &'static str,
+    /// Para el botón: "7 días".
+    pub corta: &'static str,
+    pub desde: Option<String>,
+    pub hasta: Option<String>,
+    /// El que abre el historial.
+    pub por_omision: bool,
+}
+
+impl From<&AtajoConRango> for AtajoFechaDto {
+    fn from(atajo: &AtajoConRango) -> Self {
+        Self {
+            codigo: atajo.atajo.codigo(),
+            etiqueta: atajo.atajo.etiqueta(),
+            corta: atajo.atajo.corta(),
+            desde: atajo.rango.desde().map(fecha),
+            hasta: atajo.rango.hasta().map(fecha),
+            por_omision: atajo.atajo == Atajo::POR_OMISION,
+        }
+    }
+}
+
+/// Una fecha opcional del formulario (`AAAA-MM-DD`; vacía = sin límite).
+pub fn leer_fecha_opcional(
+    texto: Option<&str>,
+    campo: &'static str,
+) -> Result<Option<NaiveDate>, ErrorJson> {
+    match texto.map(str::trim) {
+        None | Some("") => Ok(None),
+        Some(texto) => NaiveDate::parse_from_str(texto, "%Y-%m-%d")
+            .map(Some)
+            .map_err(|_| ErrorJson::from(ErrorEntrada::FechaInvalida).en_campo(Some(campo))),
+    }
 }

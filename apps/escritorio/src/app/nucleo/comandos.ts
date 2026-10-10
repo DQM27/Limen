@@ -1,4 +1,5 @@
 import type {
+  AtajoFecha,
   Cambio,
   CambioGafete,
   CandidatoIngreso,
@@ -11,6 +12,7 @@ import type {
   EntradaProveedor,
   FilaContratista,
   Gafete,
+  Historial,
   PersonaAdentro,
   PersonalKof,
   TipoGafete,
@@ -221,4 +223,21 @@ export function editarUsuario(id: string, nombre: string, activo: boolean): Prom
 /** Le pone una contraseña temporal a otro usuario (por ejemplo, si la olvidó). */
 export function restablecerContrasena(id: string, contrasena: string): Promise<void> {
   return invocar<void>('restablecer_contrasena', { id, contrasena });
+}
+
+// --- Historial de ingresos ---
+
+/**
+ * Los ingresos y salidas de las cuatro vías entre `desde` y `hasta`
+ * (`AAAA-MM-DD`, días de Costa Rica, ambos incluidos; `null` = sin límite).
+ * Un rango invertido rechaza con `campo: 'hasta'`; una fecha ilegible, con su
+ * campo.
+ */
+export function listarHistorial(desde: string | null, hasta: string | null): Promise<Historial> {
+  return invocar<Historial>('listar_historial', { desde, hasta });
+}
+
+/** Los accesos rápidos de fecha, con el rango que da cada uno hoy. */
+export function atajosDeFecha(): Promise<AtajoFecha[]> {
+  return invocar<AtajoFecha[]>('atajos_de_fecha');
 }

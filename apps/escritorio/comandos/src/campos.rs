@@ -18,6 +18,7 @@ use limen_dominio::ingreso_proveedor::ErrorIngresoProveedor;
 use limen_dominio::medio::ErrorMedio;
 use limen_dominio::personal_kof::ErrorPersonalKof;
 use limen_dominio::prestamo_kof::ErrorPrestamoKof;
+use limen_dominio::rango_fechas::ErrorRango;
 use limen_dominio::usuario::ErrorUsuario;
 use limen_dominio::visitante::ErrorVisitante;
 
@@ -41,6 +42,7 @@ pub const CONTRATISTA: &str = "contratista_id";
 pub const CONTRASENA: &str = "contrasena";
 pub const CONTRASENA_ACTUAL: &str = "contrasena_actual";
 pub const ACTIVO: &str = "activo";
+pub const DESDE: &str = "desde";
 
 /// El campo del formulario al que pertenece un error de negocio.
 pub trait CampoDelError {
@@ -99,6 +101,15 @@ impl CampoDelError for ErrorUsuario {
             Self::NoSeDesactivaASiMismo => Some(ACTIVO),
             Self::YaHayUsuarios => None,
         }
+    }
+}
+
+/// En el historial, un rango invertido se muestra junto a la fecha final.
+impl CampoDelError for ErrorRango {
+    fn campo(&self) -> Option<&'static str> {
+        Some(match self {
+            Self::Invertido => HASTA,
+        })
     }
 }
 
