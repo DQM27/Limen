@@ -1,0 +1,122 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+// La tarjeta ocupa toda la ventana de entrada (que no tiene marco propio).
+.tarjeta {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 32px 40px;
+  background: var(--mat-sys-surface-container-low);
+}
+
+.cabecera {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+
+  img {
+    border-radius: 22%;
+    pointer-events: none;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 700;
+  }
+}
+
+.aviso {
+  margin: 0;
+  text-align: center;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-medium);
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  label {
+    font: var(--mat-sys-label-large);
+    font-weight: 600;
+  }
+}
+
+input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+  background: var(--mat-sys-surface-container-lowest);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-large);
+
+  &:focus-visible {
+    border-color: var(--mat-sys-primary);
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: -1px;
+  }
+
+  &[aria-invalid='true'] {
+    border-color: var(--mat-sys-error);
+  }
+}
+
+.con-boton {
+  position: relative;
+
+  input {
+    padding-right: 72px;
+  }
+}
+
+.ojo {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mat-sys-primary);
+  font: var(--mat-sys-label-large);
+  cursor: pointer;
+}
+
+.recordar {
+  align-self: center;
+}
+
+.error {
+  margin: 0;
+  color: var(--mat-sys-error);
+  font: var(--mat-sys-body-small);
+
+  // Reserva su alto para que la tarjeta no salte al aparecer un mensaje.
+  &.general {
+    min-height: 2.6em;
+    text-align: center;
+  }
+}
+
+.acciones {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: auto;
+
+  button {
+    height: 44px;
+  }
+}

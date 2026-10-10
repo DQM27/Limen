@@ -5,9 +5,48 @@
     <title>Limen</title>
     <base href="/" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
     <link rel="icon" type="image/x-icon" href="favicon.ico" />
+    <style>
+      /* El splash estático: se pinta antes de que cargue Angular, que lo
+         reemplaza por su propia pantalla de carga (misma imagen, mismo sitio). */
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: #fafafa;
+        color: #1b1b1f;
+        font-family: system-ui, 'Segoe UI', sans-serif;
+      }
+      @media (prefers-color-scheme: dark) {
+        html,
+        body {
+          background: #1b1b1f;
+          color: #e4e2e6;
+        }
+      }
+      .splash-inicial {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        height: 100%;
+      }
+      .splash-inicial img {
+      }
+      .splash-inicial span {
+        font-size: 2.25rem;
+        font-weight: 700;
+      }
+    </style>
   </head>
   <body>
-    <app-root></app-root>
+    <app-root>
+      <div class="splash-inicial">
+        <img src="logo.svg" alt="" width="112" height="112" />
+        <span>Limen</span>
+      </div>
+    </app-root>
   </body>
 </html>

@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { SesionServicio } from './sesion';
+import { invocar } from './tauri';
 import type { UsuarioActual } from './tipos';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -88,5 +89,32 @@ describe('SesionServicio', () => {
       clave: 'la mía de verdad',
     });
     expect(sesion.usuario()?.debe_cambiar_clave).toBe(false);
+  });
+
+  it('sabe cuándo ya preguntó al núcleo, aunque no haya sesión ni app', async () => {
+    vi.mocked(isTauri).mockReturnValue(false);
+    const sesion = TestBed.inject(SesionServicio);
+
+    expect(sesion.cargada()).toBe(false);
+    await sesion.cargar();
+
+    expect(sesion.cargada()).toBe(true);
+  });
+
+  it('si cualquier comando responde sin_sesion, la sesión se cierra sola', async () => {
+    vi.mocked(isTauri).mockReturnValue(true);
+    vi.mocked(invoke).mockResolvedValue(ana);
+    const sesion = TestBed.inject(SesionServicio);
+    await sesion.iniciar('111111111', 'portería segura');
+
+    vi.mocked(invoke).mockRejectedValue({
+      tipo: 'negocio',
+      codigo: 'sin_sesion',
+      mensaje: 'Inicia sesión.',
+      campo: null,
+    });
+    await expect(invocar('dentro')).rejects.toMatchObject({ codigo: 'sin_sesion' });
+
+    expect(sesion.usuario()).toBeNull();
   });
 });

@@ -102,4 +102,41 @@ describe('carcasa de la app', () => {
       'Contratistas',
     );
   });
+
+  it('sin sesión muestra la entrada y no la carcasa, con la ventana en modo entrada', async () => {
+    vi.mocked(isTauri).mockReturnValue(true);
+    vi.mocked(invoke).mockImplementation((comando: string) =>
+      Promise.resolve(comando === 'usuario_actual' ? null : undefined),
+    );
+    TestBed.configureTestingModule({ imports: [App], providers: [provideRouter(routes)] });
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const raiz = fixture.nativeElement as HTMLElement;
+
+    expect(raiz.querySelector('app-pantalla-entrada')).not.toBeNull();
+    expect(raiz.querySelector('.carcasa')).toBeNull();
+    expect(raiz.querySelector('a.saltar')).toBeNull();
+    expect(invoke).toHaveBeenCalledWith('modo_ventana', { modo: 'entrada' });
+  });
+
+  it('mientras el núcleo no responde muestra el splash', async () => {
+    vi.mocked(isTauri).mockReturnValue(true);
+    vi.mocked(invoke).mockImplementation(() => new Promise(() => {}));
+    TestBed.configureTestingModule({ imports: [App], providers: [provideRouter(routes)] });
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+
+    expect((fixture.nativeElement as HTMLElement).querySelector('app-splash')).not.toBeNull();
+  });
+
+  it('con sesión la ventana pasa a modo aplicación y se puede cerrar la sesión', async () => {
+    const { fixture, raiz } = await crear(true);
+
+    expect(invoke).toHaveBeenCalledWith('modo_ventana', { modo: 'aplicacion' });
+    raiz.querySelector<HTMLButtonElement>('button[aria-label="Cerrar sesión"]')?.click();
+    await fixture.whenStable();
+
+    expect(invoke).toHaveBeenCalledWith('cerrar_sesion', undefined);
+    expect(raiz.querySelector('app-pantalla-entrada')).not.toBeNull();
+  });
 });

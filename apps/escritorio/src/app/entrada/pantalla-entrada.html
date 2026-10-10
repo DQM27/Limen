@@ -1,0 +1,124 @@
+<form class="tarjeta" (submit)="enviar($event)" novalidate>
+  <div class="cabecera" data-tauri-drag-region>
+    <img src="logo.svg" alt="" width="96" height="96" />
+    <h1>Limen</h1>
+    @if (cambiando()) {
+      <p class="aviso">Tu clave es temporal. Elige una nueva para continuar.</p>
+    }
+  </div>
+
+  @if (!cambiando()) {
+    <div class="campo">
+      <label for="cedula">Cédula</label>
+      <input
+        #campoCedula
+        id="cedula"
+        name="cedula"
+        type="text"
+        inputmode="numeric"
+        autocomplete="username"
+        [value]="cedula()"
+        (input)="escribir('cedula', $event)"
+        [attr.aria-invalid]="errorCampo().cedula ? 'true' : null"
+        [attr.aria-describedby]="errorCampo().cedula ? 'error-cedula' : null"
+      />
+      @if (errorCampo().cedula; as mensaje) {
+        <p class="error" id="error-cedula">{{ mensaje }}</p>
+      }
+    </div>
+
+    <div class="campo">
+      <label for="clave">Clave</label>
+      <div class="con-boton">
+        <input
+          #campoClave
+          id="clave"
+          name="clave"
+          [type]="verClave() ? 'text' : 'password'"
+          autocomplete="current-password"
+          [value]="clave()"
+          (input)="escribir('clave', $event)"
+          [attr.aria-invalid]="errorCampo().clave ? 'true' : null"
+          [attr.aria-describedby]="errorCampo().clave ? 'error-clave' : null"
+        />
+        <button
+          type="button"
+          class="ojo"
+          [attr.aria-label]="verClave() ? 'Ocultar la clave' : 'Mostrar la clave'"
+          [attr.aria-pressed]="verClave()"
+          (click)="verClave.set(!verClave())"
+        >
+          {{ verClave() ? 'Ocultar' : 'Ver' }}
+        </button>
+      </div>
+      @if (errorCampo().clave; as mensaje) {
+        <p class="error" id="error-clave">{{ mensaje }}</p>
+      }
+    </div>
+
+    <mat-checkbox class="recordar" [checked]="recordar()" (change)="recordar.set($event.checked)">
+      Recordar usuario
+    </mat-checkbox>
+  } @else {
+    <div class="campo">
+      <label for="clave-actual">Clave actual</label>
+      <input
+        #campoClave
+        id="clave-actual"
+        name="clave-actual"
+        type="password"
+        autocomplete="current-password"
+        [value]="claveActual()"
+        (input)="escribir('claveActual', $event)"
+        [attr.aria-invalid]="errorCampo().clave_actual ? 'true' : null"
+        [attr.aria-describedby]="errorCampo().clave_actual ? 'error-clave-actual' : null"
+      />
+      @if (errorCampo().clave_actual; as mensaje) {
+        <p class="error" id="error-clave-actual">{{ mensaje }}</p>
+      }
+    </div>
+
+    <div class="campo">
+      <label for="clave-nueva">Clave nueva</label>
+      <input
+        id="clave-nueva"
+        name="clave-nueva"
+        type="password"
+        autocomplete="new-password"
+        [value]="clave()"
+        (input)="escribir('clave', $event)"
+        [attr.aria-invalid]="errorCampo().clave ? 'true' : null"
+        [attr.aria-describedby]="errorCampo().clave ? 'error-clave-nueva' : null"
+      />
+      @if (errorCampo().clave; as mensaje) {
+        <p class="error" id="error-clave-nueva">{{ mensaje }}</p>
+      }
+    </div>
+
+    <div class="campo">
+      <label for="confirmacion">Repite la clave nueva</label>
+      <input
+        id="confirmacion"
+        name="confirmacion"
+        type="password"
+        autocomplete="new-password"
+        [value]="confirmacion()"
+        (input)="escribir('confirmacion', $event)"
+        [attr.aria-invalid]="errorCampo().confirmacion ? 'true' : null"
+        [attr.aria-describedby]="errorCampo().confirmacion ? 'error-confirmacion' : null"
+      />
+      @if (errorCampo().confirmacion; as mensaje) {
+        <p class="error" id="error-confirmacion">{{ mensaje }}</p>
+      }
+    </div>
+  }
+
+  <p class="error general" role="alert">{{ errorGeneral() }}</p>
+
+  <div class="acciones">
+    <button mat-stroked-button type="button" (click)="cancelar()">Cancelar</button>
+    <button mat-flat-button type="submit" [disabled]="enviando()">
+      {{ cambiando() ? 'Cambiar clave' : 'Ingresar' }}
+    </button>
+  </div>
+</form>

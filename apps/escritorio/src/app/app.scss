@@ -105,8 +105,10 @@ mat-nav-list {
   color: var(--mat-sys-on-surface-variant);
 
   .reducida & {
+    flex-direction: column;
     justify-content: center;
-    padding: 16px 0;
+    gap: 4px;
+    padding: 12px 0;
   }
 }
 

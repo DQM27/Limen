@@ -21,11 +21,50 @@ use limen_escritorio_comandos::{
     EntradaCorreoEntrada, EntradaProveedorEntrada, EntradaRegistradaDto, ErrorJson,
     FilaContratistaDto, GafeteDto, HistorialDto, PersonaAdentroDto, PersonalKofDto, UsuarioActual,
 };
-use tauri::State;
+use tauri::{LogicalSize, State, WebviewWindow};
 
 use crate::estado::Estado;
 
 type Resultado<T> = Result<T, ErrorJson>;
+
+// --- Ventana ---
+
+/// Tamaño de la ventana de entrada (splash e inicio de sesión), sin marco.
+const ENTRADA: LogicalSize<f64> = LogicalSize::new(460.0, 640.0);
+
+/// Pone la ventana en su forma de "entrada" (pequeña, sin marco, centrada: el
+/// splash y el inicio de sesión) y la muestra, o de "aplicacion" (con marco y
+/// maximizada).
+/// No decide nada de negocio: sólo da forma a la ventana.
+#[tauri::command]
+pub fn modo_ventana(ventana: WebviewWindow, modo: String) -> Result<(), String> {
+    let error = |e: tauri::Error| e.to_string();
+    match modo.as_str() {
+        "entrada" => {
+            ventana.unmaximize().map_err(error)?;
+            ventana.set_resizable(false).map_err(error)?;
+            ventana.set_decorations(false).map_err(error)?;
+            ventana.set_size(ENTRADA).map_err(error)?;
+            ventana.center().map_err(error)?;
+            // La ventana nace oculta: se muestra cuando la interfaz ya pintó
+            // el splash, para que nunca se vea un rectángulo en blanco.
+            ventana.show().map_err(error)
+        }
+        "aplicacion" => {
+            ventana.set_decorations(true).map_err(error)?;
+            ventana.set_resizable(true).map_err(error)?;
+            ventana.maximize().map_err(error)
+        }
+        otro => Err(format!("modo de ventana desconocido: {otro}")),
+    }
+}
+
+/// Cierra la app (el botón "Cancelar" de la ventana de entrada, que no tiene
+/// marco con su propio botón de cerrar).
+#[tauri::command]
+pub fn salir(app: tauri::AppHandle) {
+    app.exit(0);
+}
 
 // --- Sesión (bloque L) ---
 

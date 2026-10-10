@@ -18,6 +18,9 @@ use estado::Estado;
 const CARPETA_BASE: &str = "base";
 /// El último desfase medido del reloj del equipo, para la próxima apertura.
 const ARCHIVO_DESFASE_RELOJ: &str = "reloj-desfase.txt";
+/// Cuánto puede seguir oculta la ventana si la interfaz no la muestra.
+const ESPERA_MAXIMA_VENTANA_OCULTA: std::time::Duration = std::time::Duration::from_secs(5);
+
 /// Abre la base. Si falla no hay app que mostrar: el error sube a `setup`,
 /// que detiene el arranque con el motivo escrito. La app arranca sin
 /// sesión: la interfaz pide entrar. Al desarrollar, la base se siembra con
@@ -37,6 +40,19 @@ fn preparar_estado(app: &tauri::App) -> Result<Estado, Box<dyn std::error::Error
         &reloj,
     ))?;
     Ok(Estado::new(aplicacion))
+}
+
+/// La ventana nace oculta y la interfaz la muestra (`modo_ventana`) cuando ya
+/// pintó el splash. Si por una falla la interfaz nunca avisa, esta red de
+/// seguridad la muestra pasado un rato, para que la app no quede invisible.
+fn mostrar_si_la_interfaz_no_avisa(app: &tauri::App) {
+    let Some(ventana) = app.get_webview_window("main") else {
+        return;
+    };
+    std::thread::spawn(move || {
+        std::thread::sleep(ESPERA_MAXIMA_VENTANA_OCULTA);
+        drop(ventana.show());
+    });
 }
 
 /// Arranca la aplicación y no vuelve hasta que se cierra la ventana.
@@ -59,9 +75,12 @@ pub fn run() {
         .setup(|app| {
             let estado = preparar_estado(app)?;
             app.manage(estado);
+            mostrar_si_la_interfaz_no_avisa(app);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            comandos::modo_ventana,
+            comandos::salir,
             comandos::iniciar_sesion,
             comandos::cerrar_sesion,
             comandos::usuario_actual,
