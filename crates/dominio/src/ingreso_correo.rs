@@ -6,15 +6,16 @@
 //! empresa lleva un motivo ("a quién visita"), y el gafete es de visita y
 //! obligatorio. Al entrar se revisa, en este orden:
 //! 1. el medio: en vehículo la placa es obligatoria (E2);
-//! 2. el reloj no retrocedió respecto al último movimiento (E5);
-//! 3. la persona no está adentro por ninguna vía (I2, A7). Pesa más que el
+//! 2. la persona no está adentro por ninguna vía (I2, A7). Pesa más que el
 //!    veto: si está adentro, lo que corresponde es registrar su salida;
-//! 4. la cédula no está vetada (A8);
-//! 5. el gafete de visita: registrado, disponible y libre (I2, E3).
+//! 3. la cédula no está vetada (A8);
+//! 4. el gafete de visita: registrado, disponible y libre (I2, E3).
+//!
+//! El reloj no detiene la entrada (E5): la marca llega con la hora ya
+//! sellada por [`crate::reloj::sellar_hora`].
 
 use std::fmt;
 
-use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::cedula::Cedula;
@@ -22,7 +23,6 @@ use crate::gafete::{ErrorPrestamoGafete, NumeroGafete, SituacionGafete, verifica
 use crate::medio::{ErrorMedio, Medio, TipoMedio};
 use crate::movimiento::{ErrorSalida, Marca, cerrar};
 use crate::presencia::{Via, YaEstaAdentro, verificar_afuera};
-use crate::reloj::{RelojAtrasado, verificar_reloj};
 use crate::visitante::{ErrorVisitante, PersonaVetada, Visitante, verificar_veto};
 
 /// Largo máximo del motivo de una visita.
@@ -111,7 +111,6 @@ pub struct DatosEntradaCorreo<'a> {
 /// Lo que el caso de uso averiguó antes de pedir la decisión.
 #[derive(Debug, Clone, Copy)]
 pub struct HechosEntradaCorreo {
-    pub ultimo_movimiento: Option<DateTime<Utc>>,
     /// Por qué vía está adentro la persona (por su cédula), si lo está.
     pub adentro_por: Option<Via>,
     /// La cédula tiene el acceso denegado (A8).
@@ -129,8 +128,6 @@ pub enum ErrorIngresoCorreo {
     #[error("{0}")]
     Medio(ErrorMedio),
     #[error("{0}")]
-    Reloj(RelojAtrasado),
-    #[error("{0}")]
     YaEstaAdentro(YaEstaAdentro),
     #[error("{0}")]
     AccesoDenegado(PersonaVetada),
@@ -144,7 +141,6 @@ impl ErrorIngresoCorreo {
             Self::Visitante(error) => error.codigo(),
             Self::Motivo(error) => error.codigo(),
             Self::Medio(error) => error.codigo(),
-            Self::Reloj(error) => error.codigo(),
             Self::YaEstaAdentro(error) => error.codigo(),
             Self::AccesoDenegado(error) => error.codigo(),
             Self::Gafete(error) => error.codigo(),
@@ -186,7 +182,6 @@ impl IngresoCorreo {
     ) -> Result<Self, ErrorIngresoCorreo> {
         let medio =
             Medio::desde_formulario(datos.medio, datos.placa).map_err(ErrorIngresoCorreo::Medio)?;
-        verificar_reloj(entrada.en, hechos.ultimo_movimiento).map_err(ErrorIngresoCorreo::Reloj)?;
         verificar_afuera(hechos.adentro_por).map_err(ErrorIngresoCorreo::YaEstaAdentro)?;
         verificar_veto(hechos.vetada).map_err(ErrorIngresoCorreo::AccesoDenegado)?;
         verificar_prestamo(hechos.situacion_gafete).map_err(ErrorIngresoCorreo::Gafete)?;
@@ -201,13 +196,9 @@ impl IngresoCorreo {
         })
     }
 
-    /// Registra la salida (E4, E5). El gafete queda libre con ella.
-    pub fn registrar_salida(
-        &mut self,
-        salida: Marca,
-        ultimo_movimiento: Option<DateTime<Utc>>,
-    ) -> Result<(), ErrorSalida> {
-        cerrar(self.entrada, &mut self.salida, salida, ultimo_movimiento)
+    /// Registra la salida (E4). El gafete queda libre con ella.
+    pub fn registrar_salida(&mut self, salida: Marca) -> Result<(), ErrorSalida> {
+        cerrar(self.entrada, &mut self.salida, salida)
     }
 
     pub fn restaurar(guardado: IngresoCorreoGuardado) -> Self {
@@ -284,7 +275,6 @@ mod tests {
 
     fn hechos() -> HechosEntradaCorreo {
         HechosEntradaCorreo {
-            ultimo_movimiento: None,
             adentro_por: None,
             vetada: false,
             situacion_gafete: SituacionGafete::Registrado {
@@ -346,16 +336,6 @@ mod tests {
     }
 
     #[test]
-    fn no_entra_con_el_reloj_atrasado() {
-        let mut atrasado = hechos();
-        atrasado.ultimo_movimiento = Some("2026-10-09T10:00:00Z".parse().unwrap());
-        assert_eq!(
-            entrar(datos(), atrasado),
-            Err(ErrorIngresoCorreo::Reloj(RelojAtrasado))
-        );
-    }
-
-    #[test]
     fn estar_adentro_pesa_mas_que_el_veto() {
         let mut ambos = hechos();
         ambos.adentro_por = Some(Via::Proveedor);
@@ -399,11 +379,11 @@ mod tests {
     fn la_salida_sigue_las_reglas_comunes() {
         let mut ingreso = entrar(datos(), hechos()).unwrap();
         ingreso
-            .registrar_salida(marca("2026-10-09T10:00:00Z"), None)
+            .registrar_salida(marca("2026-10-09T10:00:00Z"))
             .unwrap();
         assert!(!ingreso.esta_abierto(), "ya salió");
         assert_eq!(
-            ingreso.registrar_salida(marca("2026-10-09T11:00:00Z"), None),
+            ingreso.registrar_salida(marca("2026-10-09T11:00:00Z")),
             Err(ErrorSalida::YaSalio)
         );
     }

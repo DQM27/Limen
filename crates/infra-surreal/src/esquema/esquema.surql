@@ -195,6 +195,11 @@ DEFINE FIELD OVERWRITE via ON hecho TYPE 'CONTRATISTA' | 'PROVEEDOR' | 'CORREO' 
 DEFINE FIELD OVERWRITE registro ON hecho TYPE uuid READONLY;
 DEFINE FIELD OVERWRITE en ON hecho TYPE datetime READONLY;
 DEFINE FIELD OVERWRITE operador ON hecho TYPE uuid READONLY;
+-- E5: si la hora con que se selló era confiable, y la hora cruda del reloj
+-- del equipo en ese momento (un salto entre las dos delata un reloj
+-- cambiado a mano).
+DEFINE FIELD OVERWRITE hora_confiable ON hecho TYPE bool READONLY;
+DEFINE FIELD OVERWRITE hora_equipo ON hecho TYPE datetime READONLY;
 DEFINE FIELD OVERWRITE ingreso_contratista ON hecho TYPE option<object> FLEXIBLE READONLY;
 DEFINE FIELD OVERWRITE ingreso_proveedor ON hecho TYPE option<object> FLEXIBLE READONLY;
 DEFINE FIELD OVERWRITE ingreso_correo ON hecho TYPE option<object> FLEXIBLE READONLY;

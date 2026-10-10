@@ -14,6 +14,7 @@ pub mod contratistas;
 pub mod correo;
 pub mod empresas;
 pub mod gafetes;
+mod hora;
 pub mod ingresos;
 pub mod kof;
 pub mod proveedores;

@@ -14,6 +14,7 @@ use limen_dominio::prestamo_kof::{
 };
 
 use super::gafetes::situacion_para_prestar;
+use super::hora::sellar;
 use crate::errores::ErrorCaso;
 use crate::puertos::{
     AccionAuditada, EntradaAuditoria, FabricaUnidadDeTrabajo, GeneradorIds, RegistroAuditado,
@@ -184,7 +185,6 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> EntregarGafeteKof<F, 
             .await?
             .ok_or(ErrorCaso::NoEncontrado)?;
         let hechos = HechosEntregaKof {
-            ultimo_movimiento: uow.reloj().ultimo_movimiento().await?,
             ya_tiene_prestamo: uow.prestamos_kof().tiene_abierto(personal).await?,
             situacion_gafete: situacion_para_prestar(
                 uow.gafetes(),
@@ -193,8 +193,9 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> EntregarGafeteKof<F, 
             )
             .await?,
         };
+        let hora = sellar(&mut uow, &self.reloj).await?;
         let marca = Marca {
-            en: self.reloj.ahora(),
+            en: hora.en,
             operador: sesion.operador(),
         };
         let prestamo = PrestamoKof::entregar(
@@ -211,6 +212,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> EntregarGafeteKof<F, 
         uow.hechos().anotar(Hecho::entrega_kof(
             HechoId::desde_uuid(self.ids.nuevo()),
             &prestamo,
+            hora.into(),
         ));
         uow.presencias()
             .anotar_entrada(&prestamo.identidad(), Via::Kof, marca.en);
@@ -274,19 +276,20 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> DevolverGafeteKof<F, 
         mut uow: U,
         mut prestamo: PrestamoKof,
     ) -> Result<(), ErrorDevolucion> {
+        let hora = sellar(&mut uow, &self.reloj).await?;
         let marca = Marca {
-            en: self.reloj.ahora(),
+            en: hora.en,
             operador: sesion.operador(),
         };
-        let ultimo_movimiento = uow.reloj().ultimo_movimiento().await?;
-        prestamo
-            .devolver(marca, ultimo_movimiento)
-            .map_err(ErrorCaso::Negocio)?;
+        prestamo.devolver(marca).map_err(ErrorCaso::Negocio)?;
 
         // Devolver el gafete es la salida.
         uow.prestamos_kof().anotar_devolucion(&prestamo);
-        if let Some(hecho) = Hecho::devolucion_kof(HechoId::desde_uuid(self.ids.nuevo()), &prestamo)
-        {
+        if let Some(hecho) = Hecho::devolucion_kof(
+            HechoId::desde_uuid(self.ids.nuevo()),
+            &prestamo,
+            hora.into(),
+        ) {
             uow.hechos().anotar(hecho);
         }
         uow.presencias().anotar_salida(&prestamo.identidad());

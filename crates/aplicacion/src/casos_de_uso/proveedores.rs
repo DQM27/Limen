@@ -16,6 +16,7 @@ use limen_dominio::presencia::{Identidad, Via, YaEstaAdentro};
 use limen_dominio::visitante::Visitante;
 
 use super::gafetes::situacion_para_prestar;
+use super::hora::sellar;
 use super::veto::cedula_vetada;
 use crate::errores::ErrorCaso;
 use crate::puertos::{
@@ -208,7 +209,6 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarEntradaProve
         let cedula = visitante.cedula();
         let hechos = HechosEntradaProveedor {
             empresa_existe: uow.empresas_proveedoras().existe(comando.empresa).await?,
-            ultimo_movimiento: uow.reloj().ultimo_movimiento().await?,
             adentro_por: uow
                 .presencias()
                 .via_adentro(&Identidad::from(cedula))
@@ -217,8 +217,9 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarEntradaProve
             situacion_gafete: situacion_para_prestar(uow.gafetes(), TipoGafete::Proveedor, gafete)
                 .await?,
         };
+        let hora = sellar(&mut uow, &self.reloj).await?;
         let marca = Marca {
-            en: self.reloj.ahora(),
+            en: hora.en,
             operador: sesion.operador(),
         };
         let datos = DatosEntradaProveedor {
@@ -240,6 +241,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarEntradaProve
         uow.hechos().anotar(Hecho::entrada_proveedor(
             HechoId::desde_uuid(self.ids.nuevo()),
             &ingreso,
+            hora.into(),
         ));
         uow.presencias().anotar_entrada(
             &Identidad::from(ingreso.cedula()),
@@ -310,18 +312,18 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarSalidaProvee
         mut uow: U,
         mut ingreso: IngresoProveedor,
     ) -> Result<(), ErrorSalidaProveedor> {
-        let ultimo_movimiento = uow.reloj().ultimo_movimiento().await?;
+        let hora = sellar(&mut uow, &self.reloj).await?;
         let marca = Marca {
-            en: self.reloj.ahora(),
+            en: hora.en,
             operador: sesion.operador(),
         };
         ingreso
-            .registrar_salida(marca, ultimo_movimiento)
+            .registrar_salida(marca)
             .map_err(ErrorCaso::Negocio)?;
 
         uow.ingresos_proveedor().guardar(&ingreso);
         if let Some(hecho) =
-            Hecho::salida_proveedor(HechoId::desde_uuid(self.ids.nuevo()), &ingreso)
+            Hecho::salida_proveedor(HechoId::desde_uuid(self.ids.nuevo()), &ingreso, hora.into())
         {
             uow.hechos().anotar(hecho);
         }

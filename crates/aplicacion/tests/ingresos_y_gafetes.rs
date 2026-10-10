@@ -27,7 +27,6 @@ mod tests {
     use limen_dominio::medio::{ErrorMedio, TipoMedio};
     use limen_dominio::movimiento::ErrorSalida;
     use limen_dominio::presencia::{Via, YaEstaAdentro};
-    use limen_dominio::reloj::RelojAtrasado;
     use limen_dominio::tipo_ingreso::TipoIngreso;
     use limen_infra_memoria::{AlmacenMemoria, IdsSecuenciales, RelojFijo};
     use uuid::Uuid;
@@ -294,15 +293,51 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn con_el_reloj_atrasado_no_entra() {
+    async fn con_el_reloj_atrasado_entra_igual_y_la_hora_queda_marcada() {
         let almacen = preparado().await;
         let id = praind(&almacen, "111111111").await;
-        almacen.fijar_ultimo_movimiento(instante("2026-10-09T15:00:00Z"));
+        let ultimo = instante("2026-10-09T15:00:00Z");
+        almacen.fijar_ultimo_movimiento(ultimo);
+        entrada(&almacen)
+            .ejecutar(&sesion(), &a_pie(id, Some(3)))
+            .await
+            .unwrap();
         assert_eq!(
-            entrada(&almacen)
-                .ejecutar(&sesion(), &a_pie(id, None))
-                .await,
-            Err(ErrorCaso::Negocio(ErrorIngreso::Reloj(RelojAtrasado)))
+            almacen
+                .ingresos()
+                .first()
+                .map(|ingreso| ingreso.entrada().en),
+            Some(ultimo),
+            "la portería no se detiene y el historial no va hacia atrás"
+        );
+        let hechos = almacen.hechos();
+        let Some(hecho) = hechos.last() else {
+            panic!("quedó el hecho de la entrada");
+        };
+        assert!(!hecho.hora().confiable, "la hora queda para revisarla");
+        assert_eq!(
+            hecho.hora().hora_equipo,
+            instante(ENTRADA),
+            "con la hora cruda del equipo"
+        );
+    }
+
+    #[tokio::test]
+    async fn una_hora_sin_comprobar_tambien_queda_marcada() {
+        let almacen = preparado().await;
+        let id = praind(&almacen, "111111111").await;
+        RegistrarEntrada::new(
+            almacen.clone(),
+            reloj_a(ENTRADA).sin_comprobar(),
+            almacen.ids(),
+        )
+        .ejecutar(&sesion(), &a_pie(id, Some(3)))
+        .await
+        .unwrap();
+        let hechos = almacen.hechos();
+        assert!(
+            hechos.last().is_some_and(|hecho| !hecho.hora().confiable),
+            "{hechos:?}"
         );
     }
 
@@ -468,7 +503,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn con_el_reloj_atrasado_no_sale() {
+    async fn con_el_reloj_atrasado_sale_igual_con_la_hora_de_la_entrada() {
         let almacen = preparado().await;
         let id = praind(&almacen, "111111111").await;
         let ingreso = entrada(&almacen)
@@ -481,11 +516,23 @@ mod tests {
             reloj_a("2026-10-09T13:00:00Z"),
             almacen.ids(),
         );
+        reloj_atrasado.ejecutar(&sesion(), ingreso).await.unwrap();
+        let ingresos = almacen.ingresos();
+        let Some(cerrado) = ingresos.first() else {
+            panic!("hay un ingreso");
+        };
         assert_eq!(
-            reloj_atrasado.ejecutar(&sesion(), ingreso).await,
-            Err(ErrorCaso::Negocio(ErrorSalida::Reloj(RelojAtrasado)))
+            cerrado.salida().map(|marca| marca.en),
+            Some(instante(ENTRADA)),
+            "sale, con la hora del último movimiento (su entrada)"
         );
-        assert!(almacen.ingresos()[0].esta_abierto(), "sigue adentro");
+        assert!(
+            almacen
+                .hechos()
+                .last()
+                .is_some_and(|hecho| !hecho.hora().confiable),
+            "y la hora de la salida queda marcada"
+        );
     }
 
     #[tokio::test]

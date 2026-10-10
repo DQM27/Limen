@@ -23,7 +23,6 @@ mod tests {
     use limen_dominio::movimiento::ErrorSalida;
     use limen_dominio::nombre::NombrePersona;
     use limen_dominio::presencia::{Via, YaEstaAdentro};
-    use limen_dominio::reloj::RelojAtrasado;
     use limen_dominio::tipo_ingreso::TipoIngreso;
     use limen_dominio::visitante::{ErrorVisitante, PersonaVetada};
     use limen_infra_memoria::{AlmacenMemoria, IdsSecuenciales, RelojFijo};
@@ -359,12 +358,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn no_registra_con_el_reloj_atrasado() {
+    async fn con_el_reloj_atrasado_registra_igual_y_marca_la_hora() {
         let almacen = preparado().await;
         almacen.fijar_ultimo_movimiento(instante("2026-10-09T15:00:00Z"));
+        entrada(&almacen)
+            .ejecutar(&sesion(), &comando())
+            .await
+            .unwrap();
         assert_eq!(
-            entrada(&almacen).ejecutar(&sesion(), &comando()).await,
-            Err(negocio(ErrorIngresoProveedor::Reloj(RelojAtrasado)))
+            almacen.via_adentro(&cedula()),
+            Some(Via::Proveedor),
+            "la portería no se detiene"
+        );
+        assert!(
+            almacen
+                .hechos()
+                .last()
+                .is_some_and(|hecho| !hecho.hora().confiable),
+            "la hora queda marcada para revisarla"
         );
     }
 
@@ -468,27 +479,27 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn la_salida_respeta_el_reloj() {
+    async fn la_salida_con_el_reloj_atrasado_se_registra_igual() {
         let almacen = preparado().await;
         let id = entrada(&almacen)
             .ejecutar(&sesion(), &comando())
             .await
             .unwrap();
-        assert_eq!(
-            RegistrarSalidaProveedor::new(
-                almacen.clone(),
-                reloj_a("2026-10-09T13:00:00Z"),
-                almacen.ids()
-            )
-            .ejecutar(&sesion(), id)
-            .await,
-            Err(ErrorCaso::Negocio(ErrorSalida::Reloj(RelojAtrasado))),
-            "la hora es anterior al último movimiento"
-        );
-        assert_eq!(
-            almacen.via_adentro(&cedula()),
-            Some(Via::Proveedor),
-            "sigue adentro"
+        RegistrarSalidaProveedor::new(
+            almacen.clone(),
+            reloj_a("2026-10-09T13:00:00Z"),
+            almacen.ids(),
+        )
+        .ejecutar(&sesion(), id)
+        .await
+        .unwrap();
+        assert_eq!(almacen.via_adentro(&cedula()), None, "salió");
+        assert!(
+            almacen
+                .hechos()
+                .last()
+                .is_some_and(|hecho| !hecho.hora().confiable),
+            "la hora queda marcada para revisarla"
         );
     }
 

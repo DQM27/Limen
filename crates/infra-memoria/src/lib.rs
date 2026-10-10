@@ -46,6 +46,7 @@ use limen_dominio::operador::OperadorId;
 use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
 use limen_dominio::presencia::{Identidad, Via};
 use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofId};
+use limen_dominio::reloj::LecturaReloj;
 use limen_dominio::usuario::{ContrasenaNueva, HashContrasena, IntentosFallidos, Usuario};
 use uuid::Uuid;
 
@@ -1501,16 +1502,32 @@ impl RegistroHechos for HechosMemoria {
 }
 
 /// Reloj detenido en un instante fijo: las pruebas nunca dependen de la
-/// hora real.
+/// hora real. Por omisión su hora está comprobada (margen 0), como la de un
+/// equipo recién sincronizado.
 #[derive(Debug, Clone, Copy)]
 pub struct RelojFijo {
     ahora: DateTime<Utc>,
     hoy: NaiveDate,
+    comprobado: bool,
 }
 
 impl RelojFijo {
     pub const fn new(ahora: DateTime<Utc>, hoy: NaiveDate) -> Self {
-        Self { ahora, hoy }
+        Self {
+            ahora,
+            hoy,
+            comprobado: true,
+        }
+    }
+
+    /// El mismo reloj, pero sin haber podido comprobar su hora contra una
+    /// fuente externa (sin red desde que arrancó).
+    #[must_use]
+    pub const fn sin_comprobar(self) -> Self {
+        Self {
+            comprobado: false,
+            ..self
+        }
     }
 }
 
@@ -1529,6 +1546,14 @@ impl Reloj for RelojFijo {
         medianoche
             + TimeDelta::try_hours(HORAS_DE_COSTA_RICA_DETRAS_DE_UTC)
                 .unwrap_or_else(TimeDelta::zero)
+    }
+
+    fn lectura(&self) -> LecturaReloj {
+        LecturaReloj {
+            instante: self.ahora,
+            margen_ms: self.comprobado.then_some(0),
+            hora_equipo: self.ahora,
+        }
     }
 }
 

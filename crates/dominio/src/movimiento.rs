@@ -2,13 +2,14 @@
 //! marcas de entrada y salida y las reglas de la salida.
 //!
 //! - E4: la salida no puede ser anterior a la entrada.
-//! - E5: no se registra nada si el reloj retrocedió (ver [`crate::reloj`]).
+//! - E5: la hora de cada marca ya viene sellada por [`crate::reloj::sellar_hora`]:
+//!   nunca es anterior al último movimiento, así que una salida nunca es
+//!   anterior a su entrada salvo que se pase a mano una marca mal formada.
 //! - Un ingreso cerrado no se vuelve a cerrar.
 
 use chrono::{DateTime, Utc};
 
 use crate::operador::OperadorId;
-use crate::reloj::{RelojAtrasado, verificar_reloj};
 
 /// Cuándo y quién registró una entrada o una salida.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,8 +22,6 @@ pub struct Marca {
 pub enum ErrorSalida {
     #[error("Este ingreso ya tiene la salida registrada")]
     YaSalio,
-    #[error("{0}")]
-    Reloj(RelojAtrasado),
     #[error("La salida no puede ser anterior a la entrada")]
     AnteriorALaEntrada,
 }
@@ -31,23 +30,16 @@ impl ErrorSalida {
     pub const fn codigo(self) -> &'static str {
         match self {
             Self::YaSalio => "ya_salio",
-            Self::Reloj(error) => error.codigo(),
             Self::AnteriorALaEntrada => "salida_anterior_a_la_entrada",
         }
     }
 }
 
 /// Aplica las reglas de la salida y, si se cumplen, la registra.
-pub fn cerrar(
-    entrada: Marca,
-    salida: &mut Option<Marca>,
-    nueva: Marca,
-    ultimo_movimiento: Option<DateTime<Utc>>,
-) -> Result<(), ErrorSalida> {
+pub fn cerrar(entrada: Marca, salida: &mut Option<Marca>, nueva: Marca) -> Result<(), ErrorSalida> {
     if salida.is_some() {
         return Err(ErrorSalida::YaSalio);
     }
-    verificar_reloj(nueva.en, ultimo_movimiento).map_err(ErrorSalida::Reloj)?;
     if nueva.en < entrada.en {
         return Err(ErrorSalida::AnteriorALaEntrada);
     }
@@ -74,7 +66,7 @@ mod tests {
     fn registra_la_salida() {
         let mut salida = None;
         let nueva = marca("2026-10-09T17:00:00Z");
-        assert_eq!(cerrar(marca(ENTRADA), &mut salida, nueva, None), Ok(()));
+        assert_eq!(cerrar(marca(ENTRADA), &mut salida, nueva), Ok(()));
         assert_eq!(salida, Some(nueva));
     }
 
@@ -82,7 +74,7 @@ mod tests {
     fn salir_en_el_mismo_instante_de_entrar_vale() {
         let mut salida = None;
         assert_eq!(
-            cerrar(marca(ENTRADA), &mut salida, marca(ENTRADA), None),
+            cerrar(marca(ENTRADA), &mut salida, marca(ENTRADA)),
             Ok(()),
             "E4 dice 'no anterior', no 'posterior'"
         );
@@ -92,12 +84,7 @@ mod tests {
     fn no_se_cierra_dos_veces() {
         let mut salida = Some(marca("2026-10-09T12:00:00Z"));
         assert_eq!(
-            cerrar(
-                marca(ENTRADA),
-                &mut salida,
-                marca("2026-10-09T17:00:00Z"),
-                None
-            ),
+            cerrar(marca(ENTRADA), &mut salida, marca("2026-10-09T17:00:00Z")),
             Err(ErrorSalida::YaSalio)
         );
         assert_eq!(salida, Some(marca("2026-10-09T12:00:00Z")), "no cambió");
@@ -107,29 +94,9 @@ mod tests {
     fn la_salida_no_puede_ser_anterior_a_la_entrada() {
         let mut salida = None;
         assert_eq!(
-            cerrar(
-                marca(ENTRADA),
-                &mut salida,
-                marca("2026-10-09T07:59:59Z"),
-                None
-            ),
+            cerrar(marca(ENTRADA), &mut salida, marca("2026-10-09T07:59:59Z")),
             Err(ErrorSalida::AnteriorALaEntrada)
         );
         assert_eq!(salida, None, "no se registró");
-    }
-
-    #[test]
-    fn con_el_reloj_atrasado_no_se_registra_la_salida() {
-        let mut salida = None;
-        let ultimo = "2026-10-09T18:00:00Z".parse().unwrap();
-        assert_eq!(
-            cerrar(
-                marca(ENTRADA),
-                &mut salida,
-                marca("2026-10-09T17:00:00Z"),
-                Some(ultimo)
-            ),
-            Err(ErrorSalida::Reloj(RelojAtrasado))
-        );
     }
 }

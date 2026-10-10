@@ -17,7 +17,6 @@ mod tests {
     use limen_dominio::personal_kof::{CodigoEmpleado, ErrorPersonalKof, PersonalKofId};
     use limen_dominio::presencia::{Identidad, Via};
     use limen_dominio::prestamo_kof::{ErrorDevolucionKof, ErrorPrestamoKof, PrestamoKofId};
-    use limen_dominio::reloj::RelojAtrasado;
     use limen_infra_memoria::{AlmacenMemoria, IdsSecuenciales, RelojFijo};
     use uuid::Uuid;
 
@@ -349,14 +348,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn no_se_entrega_con_el_reloj_atrasado() {
+    async fn con_el_reloj_atrasado_se_entrega_igual_y_la_hora_queda_marcada() {
         let (almacen, ana, _) = preparado().await;
         almacen.fijar_ultimo_movimiento(instante("2026-10-09T09:00:00Z"));
-        assert_eq!(
-            entregar(&almacen).ejecutar(&sesion(), ana, 3).await,
-            Err(ErrorCaso::Negocio(ErrorPrestamoKof::Reloj(RelojAtrasado)))
+        entregar(&almacen)
+            .ejecutar(&sesion(), ana, 3)
+            .await
+            .unwrap();
+        assert_eq!(almacen.prestamos_kof().len(), 1, "se prestó");
+        assert!(
+            almacen
+                .hechos()
+                .last()
+                .is_some_and(|hecho| !hecho.hora().confiable),
+            "la hora queda marcada para revisarla"
         );
-        assert!(almacen.prestamos_kof().is_empty(), "no se prestó nada");
     }
 
     #[tokio::test]
@@ -435,26 +441,36 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn no_se_devuelve_antes_de_haber_entregado() {
+    async fn devolver_con_el_reloj_atrasado_no_queda_antes_de_la_entrega() {
         let (almacen, ana, _) = preparado().await;
         let id = entregar(&almacen)
             .ejecutar(&sesion(), ana, 3)
             .await
             .unwrap();
-        assert_eq!(
-            DevolverGafeteKof::new(
-                almacen.clone(),
-                reloj_a("2026-10-09T07:00:00Z"),
-                almacen.ids()
-            )
-            .ejecutar(&sesion(), id)
-            .await,
-            Err(ErrorCaso::Negocio(ErrorDevolucionKof::Reloj(RelojAtrasado))),
-            "devolver antes de la entrega es devolver con el reloj atrasado"
+        DevolverGafeteKof::new(
+            almacen.clone(),
+            reloj_a("2026-10-09T07:00:00Z"),
+            almacen.ids(),
+        )
+        .ejecutar(&sesion(), id)
+        .await
+        .unwrap();
+        assert!(
+            !almacen.prestado(TipoGafete::ProvisionalKof, numero(3)),
+            "se devolvió"
         );
         assert!(
-            almacen.prestado(TipoGafete::ProvisionalKof, numero(3)),
-            "sigue prestado"
+            almacen.prestamos_kof().iter().all(|prestamo| prestamo
+                .devolucion()
+                .is_some_and(|devolucion| devolucion.en >= prestamo.entrega().en)),
+            "con la hora de la entrega, nunca antes"
+        );
+        assert!(
+            almacen
+                .hechos()
+                .last()
+                .is_some_and(|hecho| !hecho.hora().confiable),
+            "la hora queda marcada para revisarla"
         );
     }
 
