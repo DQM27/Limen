@@ -68,6 +68,8 @@ pub fn run() {
             comandos::registrar_contratista,
             comandos::editar_contratista,
             comandos::registrar_entrada_contratista,
+            comandos::buscar_para_ingreso,
+            comandos::preparar_ingreso,
             comandos::renombrar_empresa,
             comandos::buscar_empresas_proveedoras,
             comandos::registrar_empresa_proveedora,

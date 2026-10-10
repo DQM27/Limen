@@ -25,7 +25,7 @@ pub const MAXIMO_RESULTADOS: usize = 50;
 /// regla, sólo por una falla técnica.
 pub type ErrorConsulta = ErrorCaso<std::convert::Infallible>;
 
-fn limitar(pedido: usize) -> usize {
+pub(crate) fn limitar(pedido: usize) -> usize {
     pedido.clamp(1, MAXIMO_RESULTADOS)
 }
 

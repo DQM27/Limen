@@ -822,4 +822,68 @@ mod tests {
         .unwrap();
         assert!(!leida.sin_gafete, "por omisión no se marca");
     }
+
+    // --- Buscador y ficha del ingreso ---
+
+    #[tokio::test]
+    async fn el_buscador_del_ingreso_trae_la_decision_y_la_ficha_lo_mismo() {
+        let (comandos, contratista) = con_contratista().await;
+        for texto in ["1111", "peña", "jose pena"] {
+            let encontrados = comandos.buscar_para_ingreso(texto, 10).await.unwrap();
+            assert_eq!(encontrados.len(), 1, "buscar {texto:?}");
+            assert_eq!(
+                encontrados[0].contratista.id, contratista,
+                "buscar {texto:?}"
+            );
+        }
+        let ficha = comandos.preparar_ingreso(&contratista).await.unwrap();
+        let json = serde_json::to_value(&ficha).unwrap();
+        assert_eq!(json["puede_entrar"], json!(true));
+        assert_eq!(json["acceso"]["resultado"], json!("PERMITIDO"));
+        assert_eq!(json["motivo"], json!(null));
+        assert_eq!(json["adentro_por"], json!(null));
+        assert_eq!(json["empresa_nombre"], json!("ACME S.A."));
+        assert_eq!(
+            json["requiere_gafete"],
+            json!(true),
+            "PRAIND: pide gafete o S/G"
+        );
+        assert_eq!(json["gafetes_perdidos"], json!([]));
+        assert_eq!(
+            json["cedula"],
+            json!("111111111"),
+            "los datos del contratista, aplanados"
+        );
+
+        comandos
+            .registrar_entrada_contratista(&sesion(), &entrada(&contratista, Some(3)))
+            .await
+            .unwrap();
+        let adentro =
+            serde_json::to_value(comandos.preparar_ingreso(&contratista).await.unwrap()).unwrap();
+        assert_eq!(adentro["puede_entrar"], json!(false));
+        assert_eq!(adentro["motivo"]["codigo"], json!("ya_esta_adentro"));
+        assert_eq!(
+            adentro["adentro_por"],
+            json!("CONTRATISTA"),
+            "para ofrecer su salida"
+        );
+        assert_eq!(adentro["acceso"], json!(null));
+    }
+
+    #[tokio::test]
+    async fn la_ficha_de_un_contratista_ilegible_o_inexistente() {
+        let (comandos, _) = con_contratista().await;
+        let ilegible = error_de(comandos.preparar_ingreso("x").await);
+        assert_eq!(
+            codigo_y_campo(&ilegible),
+            ("id_invalido", Some("contratista_id"))
+        );
+        let inexistente = error_de(
+            comandos
+                .preparar_ingreso(&Uuid::from_u128(77).to_string())
+                .await,
+        );
+        assert_eq!(codigo_y_campo(&inexistente), ("no_encontrado", None));
+    }
 }

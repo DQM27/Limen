@@ -55,6 +55,13 @@ en GitHub (exigir PR y el resultado `CI verde`).
      `fecha_vencimiento_praind`, o `nombre` en la empresa): el mensaje va junto a ese
      campo, sin que la interfaz traduzca códigos. `campo: null` → mensaje general.
    - Para editar, la fila de la grilla ya trae todo para precargar el formulario.
+   - **Ingreso de contratista (lo más crítico), listo sin pantalla:** `buscarParaIngreso`
+     (cédula o nombre en un solo campo) y `prepararIngreso` traen a cada contratista con
+     la decisión tomada por el núcleo (`puede_entrar`, `acceso` con su aviso, o `motivo`
+     y `adentro_por` para ofrecer su salida) y sus `gafetes_perdidos`;
+     `registrarEntradaContratista` lleva `gafete` o `sin_gafete` (S/G). Si
+     `requiere_gafete`, el núcleo exige uno de los dos (`gafete_requerido`); la pantalla
+     no decide nada. `dentro()` trae `sin_gafete` para mostrar «S/G».
    - **Lo mismo para las demás pantallas** (comandos, errores por campo y funciones en
      `nucleo/comandos.ts`, todo probado): empresas (`renombrarEmpresa`), empresas
      proveedoras (buscar, registrar, renombrar), entrada de proveedor y por correo,

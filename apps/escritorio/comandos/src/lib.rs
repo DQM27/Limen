@@ -29,9 +29,10 @@ use limen_dominio::presencia::Via;
 use limen_dominio::prestamo_kof::PrestamoKofId;
 
 pub use dto::{
-    AccesoDto, CambioDto, CambioGafeteEntrada, ContratistaDto, ContratistaEntrada, EmpresaDto,
-    EmpresaProveedoraDto, EntradaContratistaEntrada, EntradaCorreoEntrada, EntradaProveedorEntrada,
-    EntradaRegistradaDto, FilaContratistaDto, GafeteDto, PersonaAdentroDto, PersonalKofDto,
+    AccesoDto, CambioDto, CambioGafeteEntrada, CandidatoIngresoDto, ContratistaDto,
+    ContratistaEntrada, EmpresaDto, EmpresaProveedoraDto, EntradaContratistaEntrada,
+    EntradaCorreoEntrada, EntradaProveedorEntrada, EntradaRegistradaDto, FilaContratistaDto,
+    GafeteDto, MotivoDto, PersonaAdentroDto, PersonalKofDto,
 };
 pub use error::{ErrorEntrada, ErrorJson, TipoErrorJson};
 pub use operador::{ErrorOperador, NOMBRE_PROVISIONAL, Operador, OperadorDelEquipo};
@@ -225,6 +226,30 @@ where
             .await
             .map_err(con_campo)?;
         Ok(registrada.into())
+    }
+
+    /// El buscador del ingreso: cédula (sólo números) o nombre en el mismo
+    /// campo, del mejor al peor resultado, cada uno con su decisión.
+    pub async fn buscar_para_ingreso(
+        &self,
+        texto: &str,
+        limite: usize,
+    ) -> Result<Vec<CandidatoIngresoDto>, ErrorJson> {
+        let candidatos = self.app.ingresos.preparar.buscar(texto, limite).await?;
+        Ok(candidatos.iter().map(CandidatoIngresoDto::from).collect())
+    }
+
+    /// La ficha del contratista elegido, antes de registrar su entrada.
+    pub async fn preparar_ingreso(
+        &self,
+        contratista_id: &str,
+    ) -> Result<CandidatoIngresoDto, ErrorJson> {
+        let id = ContratistaId::desde_uuid(
+            leer_uuid(contratista_id)
+                .map_err(|e| ErrorJson::from(e).en_campo(Some(campos::CONTRATISTA)))?,
+        );
+        let candidato = self.app.ingresos.preparar.ficha(id).await?;
+        Ok(CandidatoIngresoDto::from(&candidato))
     }
 
     // --- Empresas de contratistas ---

@@ -1,15 +1,20 @@
 import type {
   Cambio,
   CambioGafete,
+  CandidatoIngreso,
   ContratistaEntrada,
   Empresa,
   EmpresaProveedora,
+  EntradaContratista,
   EntradaCorreo,
+  EntradaRegistrada,
   EntradaProveedor,
   FilaContratista,
   Gafete,
+  PersonaAdentro,
   PersonalKof,
   TipoGafete,
+  Via,
 } from './tipos';
 import { invocar } from './tauri';
 
@@ -121,4 +126,40 @@ export function cambiarGafete(
   cambio: CambioGafete,
 ): Promise<Cambio[]> {
   return invocar<Cambio[]>('cambiar_gafete', { tipo, numero, cambio });
+}
+
+// --- Ingreso de contratista ---
+
+/** El buscador del ingreso: cédula o nombre en el mismo campo. */
+export function buscarParaIngreso(texto: string, limite: number): Promise<CandidatoIngreso[]> {
+  return invocar<CandidatoIngreso[]>('buscar_para_ingreso', { texto, limite });
+}
+
+/** La ficha del contratista elegido, antes de registrar su entrada. */
+export function prepararIngreso(contratistaId: string): Promise<CandidatoIngreso> {
+  return invocar<CandidatoIngreso>('preparar_ingreso', { contratistaId });
+}
+
+/** Registra la entrada; si algo no pasa, el error trae su `campo`. */
+export function registrarEntradaContratista(
+  entrada: EntradaContratista,
+): Promise<EntradaRegistrada> {
+  return invocar<EntradaRegistrada>('registrar_entrada_contratista', { entrada });
+}
+
+// --- Dentro y salidas ---
+
+/** Quién está adentro ahora, por las cuatro vías. */
+export function dentro(): Promise<PersonaAdentro[]> {
+  return invocar<PersonaAdentro[]>('dentro');
+}
+
+/** Registra la salida desde la lista «dentro». */
+export function registrarSalida(via: Via, ingresoId: string): Promise<void> {
+  return invocar<void>('registrar_salida', { via, ingresoId });
+}
+
+/** Registra la salida por el número del gafete que devuelve la persona. */
+export function registrarSalidaPorGafete(via: Via, numero: number): Promise<void> {
+  return invocar<void>('registrar_salida_por_gafete', { via, numero });
 }
