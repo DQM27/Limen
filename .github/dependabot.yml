@@ -1,0 +1,22 @@
+version: 2
+
+updates:
+  # Un solo workspace de Rust. Las versiones de SurrealDB se suben a mano
+  # (revisar antes `.cargo/audit.toml`), no por Dependabot.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: surrealdb
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    groups:
+      cargo:
+        patterns:
+          - "*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

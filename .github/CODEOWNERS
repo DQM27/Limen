@@ -1,0 +1,4 @@
+# Revisor por defecto de cualquier Pull Request. Bloquea el merge sólo si en
+# GitHub (Settings → Branches → `main`) está activado "Require review from
+# Code Owners".
+* @DQM27

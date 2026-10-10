@@ -1,0 +1,40 @@
+name: zizmor
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Corre aparte de cada push/PR para atrapar reglas nuevas de zizmor sobre
+    # workflows que ya están en main y no se volvieron a tocar.
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  zizmor:
+    name: Auditoría de seguridad de GitHub Actions
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # `continue-on-error`: zizmor sale con error en cuanto encuentra algo;
+      # el hallazgo se ve igual en la pestaña Security (paso siguiente) y no
+      # debe tumbar el trabajo antes de subir el reporte.
+      - name: zizmor (SARIF)
+        continue-on-error: true
+        run: |
+          pipx run zizmor --format sarif .github/workflows/ > zizmor-results.sarif
+
+      - name: Subir resultados a GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          sarif_file: zizmor-results.sarif
+          category: zizmor
