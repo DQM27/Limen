@@ -101,16 +101,19 @@ crates/
   aplicacion/               ✅ casos_de_uso/, puertos/, errores.rs
   infra-surreal/            ✅ repositorios, consultas, Unit of Work, esquema .surql
   infra-nube/               sincronización con SurrealDB Cloud, avisos en vivo
-  infra-plataforma/         DPAPI (Windows), Android Keystore, reloj del sistema
+  infra-plataforma/         ✅ reloj confiable (NTP), IDs, Argon2id; luego DPAPI y Keystore
   infra-memoria/            ✅ dobles en memoria para pruebas
   composicion/              ✅ construir `Aplicacion`
   pruebas-contrato/         ✅ batería que corre contra todos los adaptadores (sólo pruebas)
 apps/
-  escritorio/               Tauri + React (comandos delgados)
-  movil/                    uniffi + Kotlin (fachada delgada)
+  escritorio/               ✅ Tauri 2 + Angular 22 (comandos delgados en `comandos/`)
+  movil/                    por decidir: Tauri 2 móvil con la misma interfaz y un plugin
+                            Kotlin para la cámara (propuesta), o UniFFI + Kotlin como Lattis
 docs/
   arquitectura.md           este documento
   reglas.md                 catálogo de reglas
+  operacion-sin-conexion.md la portería sin red y los choques al sincronizar
+  continuar.md              dónde quedó el trabajo y qué sigue
 ```
 
 Sólo existe lo marcado con ✅. El resto se crea en el orden de la sección 13.
@@ -607,8 +610,9 @@ Se avanza por capas, completando cada una para un módulo antes de pasar al sigu
 4. ✅ **`infra-surreal`:** esquema, repositorios, Unit of Work real, pruebas de
    integración y la batería de contrato compartida (`pruebas-contrato`).
 5. ✅ **`composicion`** (raíz de composición con prueba de un día completo) y ✅ el
-   buscador y las consultas de lectura. Sigue una app mínima de escritorio para
-   contratistas.
+   buscador y las consultas de lectura. ✅ App de escritorio (Tauri 2 + Angular 22):
+   el núcleo de todas las pantallas está conectado por comandos; las pantallas se
+   construyen de a una (ver `continuar.md`).
 6. Resto del dominio, en orden: ✅ ingreso y salida (E), ✅ gafetes (F), ✅ proveedores
    (H), ✅ ingreso por correo (I), ✅ personal KOF (K), ✅ usuarios en el equipo (L; falta
    lo de la nube: L4 y L5) y equipos (M).
@@ -616,7 +620,8 @@ Se avanza por capas, completando cada una para un módulo antes de pasar al sigu
    número de gafete) usa una clave natural en la base (`presencia:⟨cédula⟩`,
    `prestamo_gafete:⟨TIPO-NÚMERO⟩`, `gafete:⟨TIPO-NÚMERO⟩`): si dos equipos lo
    registran a la vez, el segundo `CREATE` falla y la transacción entera se descarta.
-   ✅ Cada entrada y salida deja además un **hecho inmutable** (sección 9.1).
+   ✅ Cada entrada y salida deja además un **hecho inmutable** (sección 9.1), con la
+   hora sellada por el reloj confiable (regla E5).
 7. **Nube:** instancia de SurrealDB Cloud, sincronización, Worker de Cloudflare.
 8. **Móvil.**
 9. Migración de datos desde Lattis y corte.
