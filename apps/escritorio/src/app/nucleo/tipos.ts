@@ -105,14 +105,22 @@ export interface Gafete {
   numero: number;
   estado: 'DISPONIBLE' | 'PERDIDO' | 'DE_BAJA';
   prestado: boolean;
-  /** Si está perdido: quién lo debe (un contratista o una cédula). */
-  deudor_contratista_id: string | null;
-  deudor_cedula: string | null;
+  /**
+   * Si está perdido, su último portador: el campo de su clase trae valor
+   * (contratista, cédula de un proveedor o una visita, o personal KOF).
+   */
+  portador_contratista_id: string | null;
+  portador_cedula: string | null;
+  portador_personal_id: string | null;
 }
 
-/** Un cambio de estado de un gafete. Al marcarlo perdido, un solo deudor. */
+/**
+ * Un cambio de estado de un gafete. Al marcarlo perdido, un solo último
+ * portador; que corresponda al tipo del gafete lo decide el núcleo.
+ */
 export interface CambioGafete {
   cambio: 'PERDIDO' | 'PAGADO' | 'APARECIDO' | 'DE_BAJA';
-  deudor_contratista_id: string | null;
-  deudor_cedula: string | null;
+  portador_contratista_id: string | null;
+  portador_cedula: string | null;
+  portador_personal_id: string | null;
 }

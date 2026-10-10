@@ -21,7 +21,7 @@ mod tests {
     use limen_dominio::acceso::ResultadoAcceso;
     use limen_dominio::contratista::ErrorContratista;
     use limen_dominio::empresa::EmpresaId;
-    use limen_dominio::gafete::{Deudor, ErrorPrestamoGafete, NumeroGafete, TipoGafete};
+    use limen_dominio::gafete::{ErrorPrestamoGafete, NumeroGafete, Portador, TipoGafete};
     use limen_dominio::ingreso_contratista::ErrorIngreso;
     use limen_dominio::medio::TipoMedio;
     use limen_dominio::tipo_ingreso::TipoIngreso;
@@ -235,7 +235,7 @@ mod tests {
                 &sesion(),
                 TipoGafete::Contratista,
                 7,
-                CambioGafete::MarcarPerdido(Deudor::Contratista(contratista)),
+                CambioGafete::MarcarPerdido(Portador::Contratista(contratista)),
             )
             .await
             .unwrap();

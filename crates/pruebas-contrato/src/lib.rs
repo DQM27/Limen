@@ -71,7 +71,7 @@ macro_rules! bateria_de_contrato {
             una_persona_entra_y_sale,
             salir_sin_estar_adentro_no_falla,
             dos_equipos_registran_a_la_misma_persona_y_el_segundo_choca,
-            guarda_y_lee_un_gafete_con_y_sin_deudor,
+            guarda_y_lee_un_gafete_con_y_sin_portador,
             un_numero_de_gafete_repetido_choca_solo_en_su_tipo,
             existentes_devuelve_los_del_tipo_de_menor_a_mayor,
             un_gafete_no_se_presta_dos_veces_hasta_que_se_devuelve,

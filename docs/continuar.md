@@ -59,7 +59,7 @@ en GitHub (exigir PR y el resultado `CI verde`).
      `nucleo/comandos.ts`, todo probado): empresas (`renombrarEmpresa`), empresas
      proveedoras (buscar, registrar, renombrar), entrada de proveedor y por correo,
      personal KOF (buscar, registrar, editar, entregar el provisional) y gafetes
-     (listar por tipo, crear por rango, cambiar estado: perdido con su deudor, pagado,
+     (listar por tipo, crear por rango, cambiar estado: perdido con su portador, pagado,
      apareció, de baja). Las salidas por las cuatro vías ya existían.
 3. ✅ **CI para Node y Tauri**: el trabajo `escritorio` (Windows) instala, revisa el
    formato, prueba y compila Angular, y pasa clippy al cascarón; los demás trabajos

@@ -33,9 +33,8 @@ pub const MEDIO: &str = "medio";
 pub const PLACA: &str = "placa";
 pub const GAFETE: &str = "gafete";
 pub const TIPO_GAFETE: &str = "tipo";
-pub const DESDE: &str = "desde";
 pub const HASTA: &str = "hasta";
-pub const DEUDOR: &str = "deudor";
+pub const PORTADOR: &str = "portador";
 pub const PERSONA: &str = "personal_id";
 pub const CONTRATISTA: &str = "contratista_id";
 
@@ -162,13 +161,20 @@ impl CampoDelError for ErrorPrestamoKof {
 }
 
 /// Los gafetes se crean por rango (`desde`, `hasta`) y se cambian de estado
-/// uno por uno: lo que falla en un cambio de estado es del gafete entero.
+/// uno por uno: lo que falla en un cambio de estado es del gafete entero,
+/// salvo el último portador de uno perdido.
 impl CampoDelError for ErrorGafete {
     fn campo(&self) -> Option<&'static str> {
         match self {
-            Self::NumeroInvalido => Some(DESDE),
+            // Al crear por rango, un `desde` en cero ya es rango inválido:
+            // un número inválido sólo sale de un cambio de estado.
             Self::RangoInvalido => Some(HASTA),
-            Self::Repetido | Self::NoDisponible | Self::NoEstaPerdido | Self::EnUso => None,
+            Self::PortadorDeOtroTipo | Self::CedulaDelPortadorInvalida => Some(PORTADOR),
+            Self::NumeroInvalido
+            | Self::Repetido
+            | Self::NoDisponible
+            | Self::NoEstaPerdido
+            | Self::EnUso => None,
         }
     }
 }

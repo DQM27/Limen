@@ -34,14 +34,16 @@ DEFINE INDEX OVERWRITE contratista_cedula_unica ON contratista FIELDS cedula UNI
 DEFINE INDEX OVERWRITE contratista_busqueda ON contratista FIELDS nombre_busqueda
     FULLTEXT ANALYZER buscador_prefijos BM25;
 
--- Catálogo de gafetes (bloque F). Clave natural: gafete:⟨TIPO-NÚMERO⟩, así
+-- Catálogo de gafetes (bloque F). Un gafete perdido guarda su último
+-- portador (F5) en el campo de su clase: contratista, cédula o personal KOF. Clave natural: gafete:⟨TIPO-NÚMERO⟩, así
 -- el mismo número no puede existir dos veces en un tipo.
 DEFINE TABLE OVERWRITE gafete SCHEMAFULL;
 DEFINE FIELD OVERWRITE tipo ON gafete TYPE 'CONTRATISTA' | 'VISITA' | 'PROVEEDOR' | 'PROVISIONAL_KOF';
 DEFINE FIELD OVERWRITE numero ON gafete TYPE int ASSERT $value > 0;
 DEFINE FIELD OVERWRITE estado ON gafete TYPE 'DISPONIBLE' | 'PERDIDO' | 'DE_BAJA';
-DEFINE FIELD OVERWRITE deudor_contratista ON gafete TYPE option<record<contratista>>;
-DEFINE FIELD OVERWRITE deudor_cedula ON gafete TYPE option<string>;
+DEFINE FIELD OVERWRITE portador_contratista ON gafete TYPE option<record<contratista>>;
+DEFINE FIELD OVERWRITE portador_cedula ON gafete TYPE option<string>;
+DEFINE FIELD OVERWRITE portador_personal_kof ON gafete TYPE option<record<personal_kof>>;
 
 -- Gafetes prestados ahora. Clave: prestamo_gafete:⟨TIPO-NÚMERO⟩; se crea
 -- al prestar y se borra al devolver, así un gafete no se presta dos veces.

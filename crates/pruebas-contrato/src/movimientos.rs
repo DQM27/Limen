@@ -5,14 +5,16 @@
 use chrono::{DateTime, Utc};
 use limen_aplicacion::puertos::{
     ErrorPersistencia, FabricaUnidadDeTrabajo, RepositorioGafetes, RepositorioIngresos,
-    RepositorioPresencias, RepositorioReloj, Restriccion, UnidadDeTrabajo,
+    RepositorioPersonalKof, RepositorioPresencias, RepositorioReloj, Restriccion, UnidadDeTrabajo,
 };
 use limen_dominio::cedula::Cedula;
-use limen_dominio::gafete::{Deudor, EstadoGafete, Gafete, NumeroGafete, TipoGafete};
+use limen_dominio::gafete::{EstadoGafete, Gafete, NumeroGafete, Portador, TipoGafete};
 use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoGuardado, IngresoId};
 use limen_dominio::medio::{Medio, Placa};
 use limen_dominio::movimiento::Marca;
+use limen_dominio::nombre::NombrePersona;
 use limen_dominio::operador::OperadorId;
+use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
 use limen_dominio::presencia::{Identidad, Via};
 use uuid::Uuid;
 
@@ -149,7 +151,7 @@ pub async fn dos_equipos_registran_a_la_misma_persona_y_el_segundo_choca<
 
 // --- Gafetes ---
 
-pub async fn guarda_y_lee_un_gafete_con_y_sin_deudor<F: FabricaUnidadDeTrabajo>(fabrica: F) {
+pub async fn guarda_y_lee_un_gafete_con_y_sin_portador<F: FabricaUnidadDeTrabajo>(fabrica: F) {
     sembrar(&fabrica, &[contratista(1, "111111111", "ANA")]).await;
     let tipo = TipoGafete::Contratista;
     let libre = disponible(tipo, 1);
@@ -157,22 +159,45 @@ pub async fn guarda_y_lee_un_gafete_con_y_sin_deudor<F: FabricaUnidadDeTrabajo>(
         tipo,
         numero(2),
         EstadoGafete::Perdido,
-        Some(Deudor::Contratista(id_contratista(1))),
+        Some(Portador::Contratista(id_contratista(1))),
     );
     let perdido_por_persona = Gafete::restaurar(
         TipoGafete::Visita,
         numero(3),
         EstadoGafete::Perdido,
-        Some(Deudor::Persona(cedula("222222222"))),
+        Some(Portador::Persona(cedula("222222222"))),
+    );
+    let ana_kof = PersonalKof::restaurar(
+        PersonalKofId::desde_uuid(Uuid::from_u128(4001)),
+        CodigoEmpleado::nuevo("5040017").unwrap(),
+        NombrePersona::nuevo("ANA MORA").unwrap(),
+        true,
+    );
+    let perdido_por_personal_kof = Gafete::restaurar(
+        TipoGafete::ProvisionalKof,
+        numero(4),
+        EstadoGafete::Perdido,
+        Some(Portador::PersonalKof(ana_kof.id())),
     );
     let mut uow = fabrica.nueva();
-    for gafete in [&libre, &perdido_por_contratista, &perdido_por_persona] {
+    uow.personal_kof().guardar(&ana_kof);
+    for gafete in [
+        &libre,
+        &perdido_por_contratista,
+        &perdido_por_persona,
+        &perdido_por_personal_kof,
+    ] {
         uow.gafetes().agregar(gafete);
     }
     uow.confirmar().await.unwrap();
 
     let mut lectura = fabrica.nueva();
-    for esperado in [libre, perdido_por_contratista, perdido_por_persona] {
+    for esperado in [
+        libre,
+        perdido_por_contratista,
+        perdido_por_persona,
+        perdido_por_personal_kof,
+    ] {
         assert_eq!(
             lectura
                 .gafetes()
@@ -189,7 +214,7 @@ pub async fn guarda_y_lee_un_gafete_con_y_sin_deudor<F: FabricaUnidadDeTrabajo>(
         "un número sin registrar no existe"
     );
 
-    // Actualizar reemplaza el estado y el deudor.
+    // Actualizar reemplaza el estado y el portador.
     let mut uow = fabrica.nueva();
     uow.gafetes().actualizar(&disponible(tipo, 2));
     uow.confirmar().await.unwrap();
@@ -201,7 +226,7 @@ pub async fn guarda_y_lee_un_gafete_con_y_sin_deudor<F: FabricaUnidadDeTrabajo>(
             .await
             .unwrap(),
         Some(disponible(tipo, 2)),
-        "el deudor se borra al resolver"
+        "el portador se borra al resolver"
     );
 }
 

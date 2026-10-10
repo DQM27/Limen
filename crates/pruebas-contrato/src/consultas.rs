@@ -21,7 +21,7 @@ use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::{Contratista, ContratistaGuardado};
 use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
-use limen_dominio::gafete::{Deudor, EstadoGafete, Gafete, NumeroGafete, TipoGafete};
+use limen_dominio::gafete::{EstadoGafete, Gafete, NumeroGafete, Portador, TipoGafete};
 use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoGuardado, IngresoId};
 use limen_dominio::ingreso_correo::{
     IngresoCorreo, IngresoCorreoGuardado, IngresoCorreoId, Motivo,
@@ -872,7 +872,7 @@ pub async fn listar_gafetes_trae_los_del_tipo_con_su_estado_y_si_estan_prestados
         TipoGafete::Contratista,
         numero(3),
         EstadoGafete::Perdido,
-        Some(Deudor::Contratista(id_contratista(1))),
+        Some(Portador::Contratista(id_contratista(1))),
     );
     let mut uow = fabrica.nueva();
     for gafete in [
@@ -907,7 +907,7 @@ pub async fn listar_gafetes_trae_los_del_tipo_con_su_estado_y_si_estan_prestados
     assert_eq!(
         contratistas.get(1).map(|r| r.gafete.clone()),
         Some(perdido),
-        "el perdido conserva su deudor"
+        "el perdido conserva su portador"
     );
     let visitas = fabrica.listar_gafetes(TipoGafete::Visita).await.unwrap();
     assert_eq!(

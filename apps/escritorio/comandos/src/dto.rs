@@ -23,9 +23,9 @@ use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::{Contratista, ContratistaId};
 use limen_dominio::empresa::{Empresa, EmpresaId};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
-use limen_dominio::gafete::{Deudor, NumeroGafete, Resolucion, TipoGafete};
+use limen_dominio::gafete::{NumeroGafete, Portador, Resolucion, TipoGafete};
 use limen_dominio::medio::{Medio, TipoMedio};
-use limen_dominio::personal_kof::PersonalKof;
+use limen_dominio::personal_kof::{PersonalKof, PersonalKofId};
 use limen_dominio::presencia::Via;
 use limen_dominio::tipo_ingreso::TipoIngreso;
 use serde::{Deserialize, Serialize};
@@ -414,27 +414,53 @@ pub struct GafeteDto {
     /// `DISPONIBLE`, `PERDIDO` o `DE_BAJA`.
     pub estado: &'static str,
     pub prestado: bool,
-    /// Si está perdido y lo debe un contratista: su identificador.
-    pub deudor_contratista_id: Option<String>,
-    /// Si está perdido y lo debe un proveedor o una visita: su cédula.
-    pub deudor_cedula: Option<String>,
+    /// Si está perdido, su último portador (F5): el que corresponde a su
+    /// tipo trae valor y los otros, `null`.
+    #[serde(flatten)]
+    pub portador: PortadorDto,
+}
+
+/// El último portador de un gafete perdido, en el campo de su clase: un
+/// contratista, la cédula de un proveedor o una visita, o alguien del
+/// personal KOF. Todos vacíos si no está perdido.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct PortadorDto {
+    #[serde(rename = "portador_contratista_id")]
+    pub contratista_id: Option<String>,
+    #[serde(rename = "portador_cedula")]
+    pub cedula: Option<String>,
+    #[serde(rename = "portador_personal_id")]
+    pub personal_id: Option<String>,
+}
+
+impl From<Option<&Portador>> for PortadorDto {
+    fn from(portador: Option<&Portador>) -> Self {
+        let mut dto = Self::default();
+        match portador {
+            Some(Portador::Contratista(id)) => {
+                dto.contratista_id = Some(id.uuid().to_string());
+            }
+            Some(Portador::Persona(cedula)) => {
+                dto.cedula = Some(cedula.as_str().to_owned());
+            }
+            Some(Portador::PersonalKof(id)) => {
+                dto.personal_id = Some(id.uuid().to_string());
+            }
+            None => {}
+        }
+        dto
+    }
 }
 
 impl From<&ResumenGafete> for GafeteDto {
     fn from(resumen: &ResumenGafete) -> Self {
         let gafete = &resumen.gafete;
-        let (deudor_contratista_id, deudor_cedula) = match gafete.deudor() {
-            Some(Deudor::Contratista(id)) => (Some(id.uuid().to_string()), None),
-            Some(Deudor::Persona(cedula)) => (None, Some(cedula.as_str().to_owned())),
-            None => (None, None),
-        };
         Self {
             tipo: gafete.tipo().codigo(),
             numero: gafete.numero().valor(),
             estado: gafete.estado().codigo(),
             prestado: resumen.prestado,
-            deudor_contratista_id,
-            deudor_cedula,
+            portador: gafete.portador().into(),
         }
     }
 }
@@ -444,16 +470,20 @@ impl From<&ResumenGafete> for GafeteDto {
 pub struct CambioGafeteEntrada {
     /// `PERDIDO`, `PAGADO`, `APARECIDO` o `DE_BAJA`.
     pub cambio: String,
-    /// Al marcarlo perdido, quién lo debe (F5): un contratista…
-    pub deudor_contratista_id: Option<String>,
-    /// …o la cédula de un proveedor o una visita. Sólo uno de los dos.
-    pub deudor_cedula: Option<String>,
+    /// Al marcarlo perdido, su último portador (F5), uno solo: un
+    /// contratista…
+    pub portador_contratista_id: Option<String>,
+    /// …la cédula de un proveedor o una visita…
+    pub portador_cedula: Option<String>,
+    /// …o alguien del personal KOF. Que corresponda al tipo del gafete lo
+    /// decide el dominio.
+    pub portador_personal_id: Option<String>,
 }
 
 impl CambioGafeteEntrada {
     pub fn a_cambio(&self) -> Result<CambioGafete, ErrorJson> {
         match self.cambio.as_str() {
-            "PERDIDO" => Ok(CambioGafete::MarcarPerdido(self.deudor()?)),
+            "PERDIDO" => Ok(CambioGafete::MarcarPerdido(self.portador()?)),
             "PAGADO" => Ok(CambioGafete::Resolver(Resolucion::Pagado)),
             "APARECIDO" => Ok(CambioGafete::Resolver(Resolucion::Aparecido)),
             "DE_BAJA" => Ok(CambioGafete::DarDeBaja),
@@ -461,16 +491,26 @@ impl CambioGafeteEntrada {
         }
     }
 
-    fn deudor(&self) -> Result<Deudor, ErrorJson> {
+    /// Lee el portador indicado; si no hay exactamente uno o no se puede
+    /// leer, el error es del campo `portador`.
+    fn portador(&self) -> Result<Portador, ErrorJson> {
         let invalido =
-            || ErrorJson::from(ErrorEntrada::DeudorInvalido).en_campo(Some(campos::DEUDOR));
-        match (&self.deudor_contratista_id, &self.deudor_cedula) {
-            (Some(id), None) => Ok(Deudor::Contratista(ContratistaId::desde_uuid(
-                leer_uuid(id).map_err(|_| invalido())?,
-            ))),
-            (None, Some(cedula)) => Cedula::normalizar(cedula)
-                .map(Deudor::Persona)
+            || ErrorJson::from(ErrorEntrada::PortadorInvalido).en_campo(Some(campos::PORTADOR));
+        let uuid = |texto: &str| leer_uuid(texto).map_err(|_| invalido());
+        match (
+            &self.portador_contratista_id,
+            &self.portador_cedula,
+            &self.portador_personal_id,
+        ) {
+            (Some(id), None, None) => {
+                Ok(Portador::Contratista(ContratistaId::desde_uuid(uuid(id)?)))
+            }
+            (None, Some(cedula), None) => Cedula::normalizar(cedula)
+                .map(Portador::Persona)
                 .map_err(|_| invalido()),
+            (None, None, Some(id)) => {
+                Ok(Portador::PersonalKof(PersonalKofId::desde_uuid(uuid(id)?)))
+            }
             _ => Err(invalido()),
         }
     }

@@ -78,7 +78,7 @@ reconstruir cómo estaba el contratista el día que entró.
 | F2 | Tipos: contratista, visita (la usa el ingreso por correo), proveedor y provisional KOF. | ✅ |
 | F3 | Estados: Disponible → Perdido → Disponible (pagado o apareció, queda en la auditoría), y Disponible → De baja. | ✅ |
 | F4 | Sólo un gafete disponible se da de baja o se marca perdido. | ✅ |
-| F5 | Marcar perdido exige indicar quién lo debe. | ✅ |
+| F5 | Marcar perdido exige indicar su **último portador** (quién lo tenía), que corresponde al tipo del gafete: un contratista para el de contratista, un proveedor o una visita (por su cédula, que debe ser nacional o de extranjero, A3) para el de proveedor o de visita, y alguien del personal KOF para el provisional. Como en Lattis. | ✅ |
 | F6 | No se da de baja un gafete prestado en este momento. | ✅ |
 
 ## H. Proveedores

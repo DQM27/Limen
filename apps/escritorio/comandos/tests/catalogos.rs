@@ -328,8 +328,9 @@ mod tests {
                 "numero": 1,
                 "estado": "DISPONIBLE",
                 "prestado": false,
-                "deudor_contratista_id": null,
-                "deudor_cedula": null,
+                "portador_contratista_id": null,
+                "portador_cedula": null,
+                "portador_personal_id": null,
             })
         );
 
@@ -353,7 +354,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn un_gafete_se_pierde_con_su_deudor_se_paga_y_se_da_de_baja() {
+    async fn un_gafete_se_pierde_con_su_portador_se_paga_y_se_da_de_baja() {
         let comandos = comandos();
         comandos
             .registrar_gafetes(&sesion(), "VISITA", 1, 3)
@@ -361,8 +362,9 @@ mod tests {
             .unwrap();
         let perdido = CambioGafeteEntrada {
             cambio: "PERDIDO".into(),
-            deudor_contratista_id: None,
-            deudor_cedula: Some("3-3333-3333".into()),
+            portador_contratista_id: None,
+            portador_cedula: Some("3-3333-3333".into()),
+            portador_personal_id: None,
         };
         let cambios = comandos
             .cambiar_gafete(&sesion(), "VISITA", 1, &perdido)
@@ -371,12 +373,13 @@ mod tests {
         assert!(!cambios.is_empty(), "queda auditado");
         let lista = comandos.listar_gafetes("VISITA").await.unwrap();
         assert_eq!(lista[0].estado, "PERDIDO");
-        assert_eq!(lista[0].deudor_cedula.as_deref(), Some("333333333"));
+        assert_eq!(lista[0].portador.cedula.as_deref(), Some("333333333"));
 
         let pagado = CambioGafeteEntrada {
             cambio: "PAGADO".into(),
-            deudor_contratista_id: None,
-            deudor_cedula: None,
+            portador_contratista_id: None,
+            portador_cedula: None,
+            portador_personal_id: None,
         };
         comandos
             .cambiar_gafete(&sesion(), "VISITA", 1, &pagado)
@@ -411,34 +414,35 @@ mod tests {
             .registrar_gafetes(&sesion(), "VISITA", 1, 3)
             .await
             .unwrap();
-        let sin_deudor = CambioGafeteEntrada {
+        let sin_portador = CambioGafeteEntrada {
             cambio: "PERDIDO".into(),
-            deudor_contratista_id: None,
-            deudor_cedula: None,
+            portador_contratista_id: None,
+            portador_cedula: None,
+            portador_personal_id: None,
         };
         let casos = [
-            (sin_deudor.clone(), "deudor_invalido", "deudor"),
+            (sin_portador.clone(), "portador_invalido", "portador"),
             (
                 CambioGafeteEntrada {
-                    deudor_cedula: Some("¿?".into()),
-                    ..sin_deudor.clone()
+                    portador_cedula: Some("¿?".into()),
+                    ..sin_portador.clone()
                 },
-                "deudor_invalido",
-                "deudor",
+                "portador_invalido",
+                "portador",
             ),
             (
                 CambioGafeteEntrada {
-                    deudor_cedula: Some("111111111".into()),
-                    deudor_contratista_id: Some(Uuid::from_u128(1).to_string()),
-                    ..sin_deudor.clone()
+                    portador_cedula: Some("111111111".into()),
+                    portador_contratista_id: Some(Uuid::from_u128(1).to_string()),
+                    ..sin_portador.clone()
                 },
-                "deudor_invalido",
-                "deudor",
+                "portador_invalido",
+                "portador",
             ),
             (
                 CambioGafeteEntrada {
                     cambio: "ROBADO".into(),
-                    ..sin_deudor.clone()
+                    ..sin_portador.clone()
                 },
                 "cambio_gafete_invalido",
                 "cambio",
@@ -452,6 +456,63 @@ mod tests {
             );
             assert_eq!(codigo_y_campo(&error), (codigo, Some(campo)), "{cambio:?}");
         }
+    }
+
+    #[tokio::test]
+    async fn el_ultimo_portador_corresponde_al_tipo_del_gafete() {
+        let comandos = comandos();
+        comandos
+            .registrar_gafetes(&sesion(), "PROVISIONAL_KOF", 1, 3)
+            .await
+            .unwrap();
+        comandos
+            .registrar_gafetes(&sesion(), "VISITA", 1, 3)
+            .await
+            .unwrap();
+        let ana = comandos
+            .registrar_personal_kof(&sesion(), "5040017", "ana mora")
+            .await
+            .unwrap();
+        let por_ana = CambioGafeteEntrada {
+            cambio: "PERDIDO".into(),
+            portador_contratista_id: None,
+            portador_cedula: None,
+            portador_personal_id: Some(ana.clone()),
+        };
+
+        comandos
+            .cambiar_gafete(&sesion(), "PROVISIONAL_KOF", 1, &por_ana)
+            .await
+            .unwrap();
+        let lista = comandos.listar_gafetes("PROVISIONAL_KOF").await.unwrap();
+        assert_eq!(lista[0].estado, "PERDIDO");
+        assert_eq!(lista[0].portador.personal_id.as_deref(), Some(ana.as_str()));
+
+        // El personal KOF no tiene gafetes de visita, y la cédula del portador
+        // de una visita es nacional o de extranjero (A3).
+        let otro_tipo = error_de(
+            comandos
+                .cambiar_gafete(&sesion(), "VISITA", 1, &por_ana)
+                .await,
+        );
+        assert_eq!(
+            codigo_y_campo(&otro_tipo),
+            ("gafete_portador_de_otro_tipo", Some("portador"))
+        );
+        let pasaporte = CambioGafeteEntrada {
+            portador_cedula: Some("AB123".into()),
+            portador_personal_id: None,
+            ..por_ana
+        };
+        let cedula = error_de(
+            comandos
+                .cambiar_gafete(&sesion(), "VISITA", 1, &pasaporte)
+                .await,
+        );
+        assert_eq!(
+            codigo_y_campo(&cedula),
+            ("gafete_cedula_portador_invalida", Some("portador"))
+        );
     }
 
     // --- Campos ---

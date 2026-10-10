@@ -440,7 +440,7 @@ where
 
     /// Cambia el estado de un gafete (perdido, pagado, apareció, de baja) y
     /// devuelve lo que cambió. Lo que falla es del gafete entero: el error
-    /// no trae campo, salvo el deudor o el cambio ilegibles.
+    /// no trae campo, salvo el último portador o el cambio.
     pub async fn cambiar_gafete(
         &self,
         sesion: &Sesion,
@@ -455,7 +455,8 @@ where
             .gafetes
             .cambiar
             .ejecutar(sesion, tipo, numero, cambio)
-            .await?;
+            .await
+            .map_err(con_campo)?;
         Ok(cambios.iter().map(CambioDto::from).collect())
     }
 }

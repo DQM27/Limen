@@ -19,7 +19,7 @@ mod tests {
     use limen_dominio::contratista::ContratistaId;
     use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
     use limen_dominio::gafete::{
-        Deudor, ErrorGafete, ErrorPrestamoGafete, EstadoGafete, NumeroGafete, Resolucion,
+        ErrorGafete, ErrorPrestamoGafete, EstadoGafete, NumeroGafete, Portador, Resolucion,
         TipoGafete,
     };
     use limen_dominio::hecho::Suceso;
@@ -351,7 +351,7 @@ mod tests {
                 &sesion(),
                 TipoGafete::Contratista,
                 7,
-                CambioGafete::MarcarPerdido(Deudor::Contratista(id)),
+                CambioGafete::MarcarPerdido(Portador::Contratista(id)),
             )
             .await
             .unwrap();
@@ -575,13 +575,14 @@ mod tests {
     #[tokio::test]
     async fn perdido_resuelto_y_auditado() {
         let almacen = preparado().await;
-        let deudor = Deudor::Persona(cedula("111111111"));
+        // Un gafete de contratista lo pierde un contratista (F5).
+        let portador = Portador::Contratista(praind(&almacen, "111111111").await);
         let perdido = cambiar(&almacen)
             .ejecutar(
                 &sesion(),
                 TipoGafete::Contratista,
                 4,
-                CambioGafete::MarcarPerdido(deudor),
+                CambioGafete::MarcarPerdido(portador),
             )
             .await
             .unwrap();

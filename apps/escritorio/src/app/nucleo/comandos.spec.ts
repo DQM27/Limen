@@ -99,8 +99,9 @@ describe('comandos del núcleo', () => {
     const correo = { ...proveedor, motivo: 'RH' };
     const perdido = {
       cambio: 'PERDIDO' as const,
-      deudor_contratista_id: null,
-      deudor_cedula: '333333333',
+      portador_contratista_id: null,
+      portador_cedula: '333333333',
+      portador_personal_id: null,
     };
     const casos: [() => Promise<unknown>, string, Record<string, unknown>][] = [
       [() => renombrarEmpresa('e1', 'ACME'), 'renombrar_empresa', { id: 'e1', nombre: 'ACME' }],

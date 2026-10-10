@@ -76,8 +76,10 @@ pub enum ErrorEntrada {
     TipoGafeteInvalido,
     #[error("El cambio de estado del gafete no es válido")]
     CambioGafeteInvalido,
-    #[error("Indique quién debe el gafete: un contratista o la cédula de la persona")]
-    DeudorInvalido,
+    #[error(
+        "Indique un solo último portador del gafete: el contratista, la cédula de la persona o el personal KOF"
+    )]
+    PortadorInvalido,
 }
 
 impl ErrorEntrada {
@@ -91,7 +93,7 @@ impl ErrorEntrada {
             Self::ViaInvalida => "via_invalida",
             Self::TipoGafeteInvalido => "tipo_gafete_invalido",
             Self::CambioGafeteInvalido => "cambio_gafete_invalido",
-            Self::DeudorInvalido => "deudor_invalido",
+            Self::PortadorInvalido => "portador_invalido",
         }
     }
 }

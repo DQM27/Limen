@@ -8,7 +8,9 @@
 //! - F3: estados Disponible → Perdido → Disponible (pagado o apareció), y
 //!   Disponible → De baja.
 //! - F4: sólo un gafete disponible se da de baja o se marca perdido.
-//! - F5: marcar perdido exige indicar quién lo debe.
+//! - F5: marcar perdido exige indicar su último portador (quién lo tenía), que
+//!   corresponde al tipo del gafete; un proveedor o una visita, con su cédula
+//!   nacional o de extranjero (A3).
 //! - F6: no se da de baja un gafete prestado en este momento.
 //!
 //! Un gafete se identifica por su tipo y su número: el 25 de contratista y
@@ -19,6 +21,7 @@ use std::fmt;
 use crate::auditoria::{CambioCampo, CamposAuditables, cambios_de_alta, diferencias};
 use crate::cedula::Cedula;
 use crate::contratista::ContratistaId;
+use crate::personal_kof::PersonalKofId;
 
 /// Cuántos gafetes se pueden crear de una vez con un rango.
 pub const MAXIMO_POR_RANGO: u32 = 1000;
@@ -84,19 +87,36 @@ impl fmt::Display for TipoGafete {
     }
 }
 
-/// Quién debe un gafete perdido.
+/// El último portador de un gafete perdido: quién lo tenía (regla F5).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Deudor {
+pub enum Portador {
     Contratista(ContratistaId),
-    /// Proveedor o persona que entró por correo: se identifican por cédula.
+    /// Proveedor o persona que entró por correo: no hay catálogo de esas
+    /// personas, se identifican por su cédula.
     Persona(Cedula),
+    PersonalKof(PersonalKofId),
 }
 
-impl fmt::Display for Deudor {
+impl Portador {
+    /// Si puede haber tenido un gafete de ese tipo: el de contratista, un
+    /// contratista; el de visita o de proveedor, una persona; el
+    /// provisional, alguien del personal KOF.
+    pub const fn corresponde_a(&self, tipo: TipoGafete) -> bool {
+        matches!(
+            (self, tipo),
+            (Self::Contratista(_), TipoGafete::Contratista)
+                | (Self::Persona(_), TipoGafete::Visita | TipoGafete::Proveedor)
+                | (Self::PersonalKof(_), TipoGafete::ProvisionalKof)
+        )
+    }
+}
+
+impl fmt::Display for Portador {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Contratista(id) => write!(f, "contratista {id}"),
             Self::Persona(cedula) => write!(f, "persona {cedula}"),
+            Self::PersonalKof(id) => write!(f, "personal KOF {id}"),
         }
     }
 }
@@ -151,6 +171,10 @@ pub enum ErrorGafete {
     NoEstaPerdido,
     #[error("El gafete está prestado en este momento")]
     EnUso,
+    #[error("El último portador no corresponde al tipo de gafete")]
+    PortadorDeOtroTipo,
+    #[error("La cédula del último portador debe ser nacional o de extranjero (9 a 13 dígitos)")]
+    CedulaDelPortadorInvalida,
 }
 
 impl ErrorGafete {
@@ -162,6 +186,8 @@ impl ErrorGafete {
             Self::NoDisponible => "gafete_no_disponible",
             Self::NoEstaPerdido => "gafete_no_perdido",
             Self::EnUso => "gafete_en_uso",
+            Self::PortadorDeOtroTipo => "gafete_portador_de_otro_tipo",
+            Self::CedulaDelPortadorInvalida => "gafete_cedula_portador_invalida",
         }
     }
 }
@@ -171,7 +197,7 @@ pub struct Gafete {
     tipo: TipoGafete,
     numero: NumeroGafete,
     estado: EstadoGafete,
-    deudor: Option<Deudor>,
+    portador: Option<Portador>,
 }
 
 impl Gafete {
@@ -188,7 +214,7 @@ impl Gafete {
             tipo,
             numero,
             estado: EstadoGafete::Disponible,
-            deudor: None,
+            portador: None,
         })
     }
 
@@ -205,12 +231,21 @@ impl Gafete {
     }
 
     /// F4 y F5: sólo un gafete disponible se marca perdido, y hay que decir
-    /// quién lo debe.
-    pub fn marcar_perdido(&mut self, deudor: Deudor) -> Result<Vec<CambioCampo>, ErrorGafete> {
+    /// quién lo tenía: alguien que corresponda a su tipo y, si es un
+    /// proveedor o una visita, con cédula nacional o de extranjero (A3).
+    pub fn marcar_perdido(&mut self, portador: Portador) -> Result<Vec<CambioCampo>, ErrorGafete> {
         if self.estado != EstadoGafete::Disponible {
             return Err(ErrorGafete::NoDisponible);
         }
-        Ok(self.cambiar(EstadoGafete::Perdido, Some(deudor)))
+        if !portador.corresponde_a(self.tipo) {
+            return Err(ErrorGafete::PortadorDeOtroTipo);
+        }
+        if let Portador::Persona(cedula) = &portador
+            && !cedula.es_nacional_o_de_extranjero()
+        {
+            return Err(ErrorGafete::CedulaDelPortadorInvalida);
+        }
+        Ok(self.cambiar(EstadoGafete::Perdido, Some(portador)))
     }
 
     /// F3: un gafete perdido vuelve a estar disponible cuando se paga o
@@ -248,13 +283,13 @@ impl Gafete {
         tipo: TipoGafete,
         numero: NumeroGafete,
         estado: EstadoGafete,
-        deudor: Option<Deudor>,
+        portador: Option<Portador>,
     ) -> Self {
         Self {
             tipo,
             numero,
             estado,
-            deudor,
+            portador,
         }
     }
 
@@ -270,18 +305,18 @@ impl Gafete {
         self.estado
     }
 
-    pub const fn deudor(&self) -> Option<&Deudor> {
-        self.deudor.as_ref()
+    pub const fn portador(&self) -> Option<&Portador> {
+        self.portador.as_ref()
     }
 
     pub fn cambios_de_alta(&self) -> Vec<CambioCampo> {
         cambios_de_alta(self.campos_auditables())
     }
 
-    fn cambiar(&mut self, estado: EstadoGafete, deudor: Option<Deudor>) -> Vec<CambioCampo> {
+    fn cambiar(&mut self, estado: EstadoGafete, portador: Option<Portador>) -> Vec<CambioCampo> {
         let antes = self.campos_auditables();
         self.estado = estado;
-        self.deudor = deudor;
+        self.portador = portador;
         diferencias(antes, self.campos_auditables())
     }
 
@@ -291,8 +326,8 @@ impl Gafete {
             ("numero", self.numero.to_string()),
             ("estado", self.estado.to_string()),
             (
-                "deudor",
-                self.deudor
+                "portador",
+                self.portador
                     .as_ref()
                     .map(ToString::to_string)
                     .unwrap_or_default(),
@@ -367,8 +402,8 @@ mod tests {
         Gafete::registrar(TipoGafete::Contratista, numero(25), false).unwrap()
     }
 
-    fn deudor() -> Deudor {
-        Deudor::Contratista(ContratistaId::desde_uuid(Uuid::from_u128(7)))
+    fn portador() -> Portador {
+        Portador::Contratista(ContratistaId::desde_uuid(Uuid::from_u128(7)))
     }
 
     #[test]
@@ -381,7 +416,7 @@ mod tests {
     fn un_gafete_nuevo_nace_disponible_y_no_se_repite() {
         let gafete = disponible();
         assert_eq!(gafete.estado(), EstadoGafete::Disponible);
-        assert_eq!(gafete.deudor(), None);
+        assert_eq!(gafete.portador(), None);
         assert_eq!(
             Gafete::registrar(TipoGafete::Contratista, numero(25), true),
             Err(ErrorGafete::Repetido)
@@ -409,15 +444,15 @@ mod tests {
     #[test]
     fn perdido_y_resuelto_vuelve_a_estar_disponible() {
         let mut gafete = disponible();
-        let perdido = gafete.marcar_perdido(deudor()).unwrap();
+        let perdido = gafete.marcar_perdido(portador()).unwrap();
         assert_eq!(gafete.estado(), EstadoGafete::Perdido);
-        assert_eq!(gafete.deudor(), Some(&deudor()));
+        assert_eq!(gafete.portador(), Some(&portador()));
         let campos: Vec<_> = perdido.iter().map(|c| c.campo).collect();
-        assert_eq!(campos, ["estado", "deudor"], "auditoría del perdido");
+        assert_eq!(campos, ["estado", "portador"], "auditoría del perdido");
 
         let resuelto = gafete.resolver(Resolucion::Pagado).unwrap();
         assert_eq!(gafete.estado(), EstadoGafete::Disponible);
-        assert_eq!(gafete.deudor(), None, "ya nadie lo debe");
+        assert_eq!(gafete.portador(), None, "ya no tiene portador");
         assert_eq!(
             resuelto.last().unwrap().despues,
             "PAGADO",
@@ -428,9 +463,9 @@ mod tests {
     #[test]
     fn solo_un_gafete_disponible_se_marca_perdido_o_se_da_de_baja() {
         let mut perdido = disponible();
-        perdido.marcar_perdido(deudor()).unwrap();
+        perdido.marcar_perdido(portador()).unwrap();
         assert_eq!(
-            perdido.marcar_perdido(deudor()),
+            perdido.marcar_perdido(portador()),
             Err(ErrorGafete::NoDisponible)
         );
         assert_eq!(perdido.dar_de_baja(false), Err(ErrorGafete::NoDisponible));
@@ -439,7 +474,7 @@ mod tests {
         de_baja.dar_de_baja(false).unwrap();
         assert_eq!(de_baja.estado(), EstadoGafete::DeBaja);
         assert_eq!(
-            de_baja.marcar_perdido(deudor()),
+            de_baja.marcar_perdido(portador()),
             Err(ErrorGafete::NoDisponible)
         );
     }
@@ -502,5 +537,48 @@ mod tests {
         ] {
             assert_eq!(EstadoGafete::desde_codigo(estado.codigo()), Some(estado));
         }
+    }
+
+    #[test]
+    fn el_ultimo_portador_corresponde_al_tipo_del_gafete() {
+        let contratista = portador();
+        let persona = Portador::Persona(Cedula::normalizar("111111111").unwrap());
+        let kof = Portador::PersonalKof(PersonalKofId::desde_uuid(Uuid::from_u128(9)));
+        let casos = [
+            (TipoGafete::Contratista, &contratista, true),
+            (TipoGafete::Contratista, &persona, false),
+            (TipoGafete::Visita, &persona, true),
+            (TipoGafete::Proveedor, &persona, true),
+            (TipoGafete::Proveedor, &contratista, false),
+            (TipoGafete::ProvisionalKof, &kof, true),
+            (TipoGafete::ProvisionalKof, &persona, false),
+            (TipoGafete::Visita, &kof, false),
+        ];
+        for (tipo, portador, corresponde) in casos {
+            let mut gafete = Gafete::registrar(tipo, numero(1), false).unwrap();
+            let resultado = gafete.marcar_perdido(portador.clone());
+            if corresponde {
+                assert!(resultado.is_ok(), "{tipo} con {portador}: {resultado:?}");
+                assert_eq!(gafete.portador(), Some(portador));
+            } else {
+                assert_eq!(
+                    resultado,
+                    Err(ErrorGafete::PortadorDeOtroTipo),
+                    "{tipo} con {portador}"
+                );
+                assert_eq!(gafete.estado(), EstadoGafete::Disponible, "no cambia nada");
+            }
+        }
+    }
+
+    #[test]
+    fn la_cedula_del_portador_es_nacional_o_de_extranjero() {
+        let mut gafete = Gafete::registrar(TipoGafete::Visita, numero(1), false).unwrap();
+        let pasaporte = Portador::Persona(Cedula::normalizar("AB123").unwrap());
+        assert_eq!(
+            gafete.marcar_perdido(pasaporte),
+            Err(ErrorGafete::CedulaDelPortadorInvalida)
+        );
+        assert_eq!(gafete.estado(), EstadoGafete::Disponible, "no cambia nada");
     }
 }

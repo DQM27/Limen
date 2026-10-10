@@ -11,7 +11,7 @@ use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::{Contratista, ContratistaGuardado, ContratistaId};
 use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
-use limen_dominio::gafete::{Deudor, EstadoGafete, Gafete, NumeroGafete, TipoGafete};
+use limen_dominio::gafete::{EstadoGafete, Gafete, NumeroGafete, Portador, TipoGafete};
 use limen_dominio::hecho::{Hecho, HechoId, Salida, Suceso};
 use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoGuardado, IngresoId};
 use limen_dominio::ingreso_correo::{
@@ -276,24 +276,34 @@ pub struct GafeteDatos {
     pub tipo: String,
     pub numero: i64,
     pub estado: String,
-    pub deudor_contratista: Option<RecordId>,
-    pub deudor_cedula: Option<String>,
+    pub portador_contratista: Option<RecordId>,
+    pub portador_cedula: Option<String>,
+    pub portador_personal_kof: Option<RecordId>,
 }
 
 impl From<&Gafete> for GafeteDatos {
     fn from(gafete: &Gafete) -> Self {
-        let (deudor_contratista, deudor_cedula) = match gafete.deudor() {
-            Some(Deudor::Contratista(id)) => (Some(id_contratista(*id)), None),
-            Some(Deudor::Persona(cedula)) => (None, Some(cedula.as_str().to_owned())),
-            None => (None, None),
-        };
-        Self {
+        let mut datos = Self {
             tipo: gafete.tipo().codigo().to_owned(),
             numero: i64::from(gafete.numero().valor()),
             estado: gafete.estado().codigo().to_owned(),
-            deudor_contratista,
-            deudor_cedula,
+            portador_contratista: None,
+            portador_cedula: None,
+            portador_personal_kof: None,
+        };
+        match gafete.portador() {
+            Some(Portador::Contratista(id)) => {
+                datos.portador_contratista = Some(id_contratista(*id));
+            }
+            Some(Portador::Persona(cedula)) => {
+                datos.portador_cedula = Some(cedula.as_str().to_owned());
+            }
+            Some(Portador::PersonalKof(id)) => {
+                datos.portador_personal_kof = Some(id_personal_kof(*id));
+            }
+            None => {}
         }
+        datos
     }
 }
 
@@ -306,21 +316,28 @@ impl TryFrom<GafeteDatos> for Gafete {
             .ok_or_else(|| corrupto(format!("tipo desconocido: {}", datos.tipo)))?;
         let estado = EstadoGafete::desde_codigo(&datos.estado)
             .ok_or_else(|| corrupto(format!("estado desconocido: {}", datos.estado)))?;
-        let deudor = match (datos.deudor_contratista, datos.deudor_cedula) {
-            (Some(contratista), None) => Some(Deudor::Contratista(ContratistaId::desde_uuid(
-                uuid_de(&contratista, TABLA_CONTRATISTA)?,
-            ))),
-            (None, Some(cedula)) => Some(Deudor::Persona(
+        let portador = match (
+            datos.portador_contratista,
+            datos.portador_cedula,
+            datos.portador_personal_kof,
+        ) {
+            (Some(contratista), None, None) => Some(Portador::Contratista(
+                ContratistaId::desde_uuid(uuid_de(&contratista, TABLA_CONTRATISTA)?),
+            )),
+            (None, Some(cedula), None) => Some(Portador::Persona(
                 Cedula::normalizar(&cedula).map_err(|e| corrupto(e.to_string()))?,
             )),
-            (None, None) => None,
-            (Some(_), Some(_)) => return Err(corrupto("el gafete tiene dos deudores".to_owned())),
+            (None, None, Some(persona)) => Some(Portador::PersonalKof(PersonalKofId::desde_uuid(
+                uuid_de(&persona, TABLA_PERSONAL_KOF)?,
+            ))),
+            (None, None, None) => None,
+            _ => return Err(corrupto("el gafete tiene más de un portador".to_owned())),
         };
         Ok(Self::restaurar(
             tipo,
             numero_de(datos.numero, TABLA_GAFETE)?,
             estado,
-            deudor,
+            portador,
         ))
     }
 }
