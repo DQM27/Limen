@@ -92,6 +92,25 @@ dominio agrega una dependencia fuera de la lista permitida (`chrono`, `thiserror
 `uuid`). Cada crate nuevo de las capas internas debe traer su propia prueba de
 arquitectura.
 
+### La cámara es una herramienta, no decide
+
+En el móvil, **CameraX** (la cámara) y **ML Kit** (lectura de códigos y de texto) son un
+adaptador de entrada más, como el teclado o la pantalla: **capturan y entregan, nunca
+deciden**. Viven en el plugin Kotlin de la app y no conocen ninguna regla.
+
+| La herramienta (Kotlin: CameraX + ML Kit) | El núcleo (Rust: `dominio`) |
+|---|---|
+| Abre la cámara, enfoca y muestra el marco guía | — |
+| Lee el código (PDF417 de la cédula, QR) y entrega **el contenido crudo** | Interpreta el contenido: qué es la cédula, el nombre, la fecha |
+| Lee texto (cédula, carnet KOF, placa) y entrega **las líneas crudas** | Encuentra en esas líneas la cédula, el código de empleado o la placa, y los valida (A1, A3, E2…) |
+| Entrega cada lectura tal cual, cuadro a cuadro | Decide cuándo una lectura es estable y confiable, y si alcanza para llenar el formulario |
+| — | Todo lo demás: si la persona existe, si puede entrar, qué gafete corresponde |
+
+Así la misma regla sirve para el escáner de la cámara, un lector USB en el escritorio o
+el teclado: los tres entregan texto y el dominio decide igual. Y se prueba en Rust sin
+cámara, con lecturas de ejemplo. En Lattis parte de esto vivía en Kotlin (por ejemplo,
+el estabilizador de lecturas); en Limen pasa al dominio.
+
 ### Estructura de carpetas (objetivo)
 
 ```text
@@ -718,6 +737,8 @@ cambie la versión del esquema.
 ### Lo que no se hace
 
 - Poner un `if` de negocio en un caso de uso, un adaptador o la interfaz.
+- Interpretar o validar en Kotlin lo que leyó la cámara: el plugin entrega lo crudo y el
+  dominio decide.
 - Usar el reloj del sistema o generar IDs en el dominio.
 - Concatenar texto para armar una consulta.
 - Crear un repositorio genérico, un ORM o un contenedor de inyección de dependencias.

@@ -53,7 +53,9 @@ importados antes de su PR. Las demás ramas viejas ya están fusionadas y se pue
 
 - **App móvil:** Tauri 2 móvil con la misma interfaz de Angular y un plugin Kotlin para
   la cámara (CameraX + ML Kit: PDF417 de la cédula, QR y lectura de texto de cédula,
-  carnet KOF y placa, como en Lattis), o UniFFI + Kotlin/Compose como Lattis.
+  carnet KOF y placa, como en Lattis), o UniFFI + Kotlin/Compose como Lattis. Decidido
+  ya, sea cual sea la opción: **la cámara sólo captura y entrega lo crudo; interpretar,
+  validar y decidir es del dominio** (`arquitectura.md`, "La cámara es una herramienta").
 - **Sincronización de catálogos** (contratistas, empresas, gafetes, usuarios): no son
   hechos; la propuesta es changefeed por tabla con "el último cambio gana" y la
   auditoría como respaldo.

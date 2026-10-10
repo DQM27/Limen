@@ -25,6 +25,8 @@ empezar a trabajar. Resumen:
 - El dominio es puro: sin base de datos, red, reloj del sistema ni generación
   aleatoria. Recibe la fecha de hoy y los IDs. `tests/arquitectura.rs` lo vigila.
 - No hay un crate de "reglas" aparte para WebAssembly: el dominio ya compila a WASM.
+- En el móvil, CameraX y ML Kit son sólo herramientas: capturan y entregan el contenido
+  crudo (código o texto leído); interpretarlo, validarlo y decidir es del dominio.
 - Sin ORM. Las consultas de SurrealDB se escriben a la vista.
 - El catálogo de reglas acordadas está en `docs/reglas.md`; cualquier cambio de regla
   se refleja ahí.
