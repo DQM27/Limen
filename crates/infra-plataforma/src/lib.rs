@@ -3,6 +3,12 @@
 //! aplicación los reciben por los puertos `Reloj`, `GeneradorIds` y
 //! `Contrasenas`.
 
+mod reloj;
+mod sntp;
+
+pub use reloj::{RelojConfiable, SERVIDORES_NTP, guardar_desfase, leer_desfase};
+pub use sntp::{Medicion, medir as medir_sntp};
+
 use chrono::{DateTime, NaiveDate, NaiveTime, TimeZone, Utc};
 use chrono_tz::America::Costa_Rica;
 use std::sync::Arc;
@@ -14,7 +20,8 @@ use limen_aplicacion::puertos::{Contrasenas, GeneradorIds, Reloj};
 use limen_dominio::usuario::{ContrasenaNueva, HashContrasena};
 use uuid::Uuid;
 
-/// Hora real del sistema. Los instantes se manejan en UTC; las reglas de
+/// Hora del reloj del equipo, tal cual (sin corregir: la app usa
+/// [`RelojConfiable`]). Los instantes se manejan en UTC; las reglas de
 /// calendario (vencimiento del PRAIND) usan la fecha de Costa Rica, sin
 /// importar la zona horaria configurada en el equipo.
 #[derive(Debug, Clone, Copy, Default)]

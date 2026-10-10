@@ -3,11 +3,10 @@
 //! Al entrar se revisa, en este orden (el primer motivo que falla es el que
 //! se informa):
 //! 1. el medio: en vehículo la placa es obligatoria (E2);
-//! 2. el reloj no retrocedió respecto al último movimiento (E5);
-//! 3. la persona no está adentro por ninguna vía (E1, A7). Pesa más que el
+//! 2. la persona no está adentro por ninguna vía (E1, A7). Pesa más que el
 //!    acceso: si está adentro, lo que corresponde es registrar su salida;
-//! 4. el acceso: sin acceso o PRAIND vencido, no entra (D2, D4);
-//! 5. el gafete (E3): a quien le corresponde (PRAIND) el operador le indica
+//! 3. el acceso: sin acceso o PRAIND vencido, no entra (D2, D4);
+//! 4. el gafete (E3): a quien le corresponde (PRAIND) el operador le indica
 //!    un número o marca "sin gafete" (S/G), a propósito y nunca por omisión;
 //!    con número, el gafete debe estar registrado, disponible y libre. A
 //!    quien no le corresponde (IN HOUSE) no aplica: se ignora lo indicado.
@@ -16,12 +15,15 @@
 //! registró. Tampoco se le asigna un gafete después: quien entra S/G
 //! normalmente sale y no regresa.
 //!
-//! Los pasos 3 y 4 son [`puede_entrar`]: la misma regla que muestra la ficha
+//! El reloj no detiene la entrada (E5): la marca llega con la hora ya
+//! sellada por [`crate::reloj::sellar_hora`].
+//!
+//! Los pasos 2 y 3 son [`puede_entrar`]: la misma regla que muestra la ficha
 //! antes de registrar, para que nunca se contradigan.
 
 use std::fmt;
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::NaiveDate;
 use uuid::Uuid;
 
 use crate::acceso::{MotivoDenegacion, ResultadoAcceso, verificar_acceso};
@@ -31,7 +33,6 @@ use crate::gafete::{ErrorPrestamoGafete, NumeroGafete, SituacionGafete, verifica
 use crate::medio::{ErrorMedio, Medio, TipoMedio};
 use crate::movimiento::{ErrorSalida, Marca, cerrar};
 use crate::presencia::{Via, YaEstaAdentro, verificar_afuera};
-use crate::reloj::{RelojAtrasado, verificar_reloj};
 
 /// Identificador global de un ingreso (UUID v7).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -102,7 +103,6 @@ pub struct DatosEntrada<'a> {
 /// Lo que el caso de uso averiguó antes de pedir la decisión.
 #[derive(Debug, Clone, Copy)]
 pub struct HechosEntrada {
-    pub ultimo_movimiento: Option<DateTime<Utc>>,
     /// Por qué vía está adentro la persona (por su cédula), si lo está.
     pub adentro_por: Option<Via>,
     /// Situación del gafete de [`gafete_que_aplica`]. Si el caso de uso no
@@ -114,8 +114,6 @@ pub struct HechosEntrada {
 pub enum ErrorIngreso {
     #[error("{0}")]
     Medio(ErrorMedio),
-    #[error("{0}")]
-    Reloj(RelojAtrasado),
     #[error("{0}")]
     YaEstaAdentro(YaEstaAdentro),
     #[error("{0}")]
@@ -130,7 +128,6 @@ impl ErrorIngreso {
     pub const fn codigo(self) -> &'static str {
         match self {
             Self::Medio(error) => error.codigo(),
-            Self::Reloj(error) => error.codigo(),
             Self::YaEstaAdentro(error) => error.codigo(),
             Self::AccesoDenegado(motivo) => motivo.codigo(),
             Self::GafeteRequerido => "gafete_requerido",
@@ -225,7 +222,6 @@ impl IngresoContratista {
     ) -> Result<EntradaRegistrada, ErrorIngreso> {
         let medio =
             Medio::desde_formulario(datos.medio, datos.placa).map_err(ErrorIngreso::Medio)?;
-        verificar_reloj(entrada.en, hechos.ultimo_movimiento).map_err(ErrorIngreso::Reloj)?;
         let acceso = puede_entrar(contratista, hechos.adentro_por, hoy)?;
         let gafete = entrega_de_gafete(contratista, datos.gafete)?;
         if let EntregaGafete::Prestado(_) = gafete {
@@ -250,13 +246,9 @@ impl IngresoContratista {
         })
     }
 
-    /// Registra la salida (E4, E5). El gafete queda libre con ella.
-    pub fn registrar_salida(
-        &mut self,
-        salida: Marca,
-        ultimo_movimiento: Option<DateTime<Utc>>,
-    ) -> Result<(), ErrorSalida> {
-        cerrar(self.entrada, &mut self.salida, salida, ultimo_movimiento)
+    /// Registra la salida (E4). El gafete queda libre con ella.
+    pub fn registrar_salida(&mut self, salida: Marca) -> Result<(), ErrorSalida> {
+        cerrar(self.entrada, &mut self.salida, salida)
     }
 
     pub fn restaurar(guardado: IngresoGuardado) -> Self {
@@ -375,7 +367,6 @@ mod tests {
 
     const fn hechos() -> HechosEntrada {
         HechosEntrada {
-            ultimo_movimiento: None,
             adentro_por: None,
             situacion_gafete: Some(LIBRE),
         }
@@ -544,7 +535,6 @@ mod tests {
             gafete: None,
         };
         let todo_mal = HechosEntrada {
-            ultimo_movimiento: Some("2026-10-09T15:00:00Z".parse().unwrap()),
             adentro_por: Some(Via::Proveedor),
             situacion_gafete: Some(SituacionGafete::NoRegistrado),
         };
@@ -557,31 +547,22 @@ mod tests {
         );
         assert_eq!(
             entrar(&sin_acceso, a_pie_con_gafete(25), todo_mal),
-            Err(ErrorIngreso::Reloj(RelojAtrasado)),
-            "2. el reloj"
-        );
-        let reloj_bien = HechosEntrada {
-            ultimo_movimiento: None,
-            ..todo_mal
-        };
-        assert_eq!(
-            entrar(&sin_acceso, a_pie_con_gafete(25), reloj_bien),
             Err(ErrorIngreso::YaEstaAdentro(YaEstaAdentro(Via::Proveedor))),
-            "3. ya está adentro pesa más que el acceso"
+            "2. ya está adentro pesa más que el acceso"
         );
         let afuera = HechosEntrada {
             adentro_por: None,
-            ..reloj_bien
+            ..todo_mal
         };
         assert_eq!(
             entrar(&sin_acceso, a_pie_con_gafete(25), afuera),
             Err(ErrorIngreso::AccesoDenegado(MotivoDenegacion::SinAcceso)),
-            "4. el acceso"
+            "3. el acceso"
         );
         assert_eq!(
             entrar(&praind(), a_pie_con_gafete(25), afuera),
             Err(ErrorIngreso::Gafete(ErrorPrestamoGafete::NoRegistrado)),
-            "5. el gafete"
+            "4. el gafete"
         );
     }
 
@@ -642,11 +623,11 @@ mod tests {
             .unwrap()
             .ingreso;
         let salida = marca("2026-10-09T22:00:00Z");
-        assert_eq!(ingreso.registrar_salida(salida, Some(entrada().en)), Ok(()));
+        assert_eq!(ingreso.registrar_salida(salida), Ok(()));
         assert_eq!(ingreso.salida(), Some(salida));
         assert!(!ingreso.esta_abierto(), "ya salió");
         assert_eq!(
-            ingreso.registrar_salida(salida, None),
+            ingreso.registrar_salida(salida),
             Err(ErrorSalida::YaSalio),
             "no sale dos veces"
         );

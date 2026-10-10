@@ -16,6 +16,7 @@ use limen_dominio::presencia::{Identidad, Via, YaEstaAdentro};
 
 use super::consultas::{ErrorConsulta, limitar};
 use super::gafetes::situacion_para_prestar;
+use super::hora::sellar;
 use crate::errores::ErrorCaso;
 use crate::puertos::{
     Consultas, FabricaUnidadDeTrabajo, GeneradorIds, RegistroHechos, Reloj,
@@ -111,15 +112,15 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarEntrada<F, R
             None => None,
         };
         let hechos = HechosEntrada {
-            ultimo_movimiento: uow.reloj().ultimo_movimiento().await?,
             adentro_por: uow
                 .presencias()
                 .via_adentro(&Identidad::from(contratista.cedula()))
                 .await?,
             situacion_gafete,
         };
+        let hora = sellar(&mut uow, &self.reloj).await?;
         let marca = Marca {
-            en: self.reloj.ahora(),
+            en: hora.en,
             operador: sesion.operador(),
         };
         let datos = DatosEntrada {
@@ -142,6 +143,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarEntrada<F, R
         uow.hechos().anotar(Hecho::entrada_contratista(
             HechoId::desde_uuid(self.ids.nuevo()),
             &ingreso,
+            hora.into(),
         ));
         uow.presencias().anotar_entrada(
             &Identidad::from(ingreso.cedula()),
@@ -209,18 +211,18 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarSalida<F, R,
         mut uow: U,
         mut ingreso: IngresoContratista,
     ) -> Result<(), ErrorDeSalida> {
-        let ultimo_movimiento = uow.reloj().ultimo_movimiento().await?;
+        let hora = sellar(&mut uow, &self.reloj).await?;
         let marca = Marca {
-            en: self.reloj.ahora(),
+            en: hora.en,
             operador: sesion.operador(),
         };
         ingreso
-            .registrar_salida(marca, ultimo_movimiento)
+            .registrar_salida(marca)
             .map_err(ErrorCaso::Negocio)?;
 
         uow.ingresos().guardar(&ingreso);
         if let Some(hecho) =
-            Hecho::salida_contratista(HechoId::desde_uuid(self.ids.nuevo()), &ingreso)
+            Hecho::salida_contratista(HechoId::desde_uuid(self.ids.nuevo()), &ingreso, hora.into())
         {
             uow.hechos().anotar(hecho);
         }

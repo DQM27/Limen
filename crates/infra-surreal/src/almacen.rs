@@ -86,7 +86,7 @@ mod tests {
     };
     use limen_dominio::auditoria::CambioCampo;
     use limen_dominio::empresa::EmpresaId;
-    use limen_dominio::hecho::{Hecho, HechoId, Salida, Suceso};
+    use limen_dominio::hecho::{CalidadHora, Hecho, HechoId, Salida, Suceso};
     use limen_dominio::movimiento::Marca;
     use limen_dominio::operador::OperadorId;
     use limen_dominio::presencia::Via;
@@ -111,6 +111,10 @@ mod tests {
                 registro: Uuid::from_u128(5),
                 marca: Marca { en: en(), operador },
             }),
+            CalidadHora {
+                confiable: true,
+                hora_equipo: en(),
+            },
         ));
         uow.auditoria().anotar(EntradaAuditoria {
             id_entrada: Uuid::from_u128(2),
@@ -159,7 +163,8 @@ mod tests {
                 "UPSERT {hecho} CONTENT {{ tipo: 'SALIDA', via: 'PROVEEDOR', \
                  registro: u'00000000-0000-0000-0000-000000000005', \
                  en: d'2026-10-09T17:00:00Z', \
-                 operador: u'00000000-0000-0000-0000-000000000009' }};"
+                 operador: u'00000000-0000-0000-0000-000000000009', \
+                 hora_confiable: true, hora_equipo: d'2026-10-09T17:00:00Z' }};"
             ),
             format!("DELETE {hecho};"),
             "DELETE hecho;".to_owned(),

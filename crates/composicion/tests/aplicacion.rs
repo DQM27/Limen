@@ -25,7 +25,7 @@ mod tests {
     use limen_dominio::tipo_ingreso::TipoIngreso;
     use limen_dominio::usuario::ErrorInicioSesion;
     use limen_infra_memoria::{AlmacenMemoria, ContrasenasFalsas, IdsSecuenciales, RelojFijo};
-    use limen_infra_plataforma::{ContrasenasArgon2, IdsV7, RelojCostaRica};
+    use limen_infra_plataforma::{ContrasenasArgon2, IdsV7, RelojConfiable};
     use limen_infra_surreal::AlmacenSurreal;
     use uuid::Uuid;
 
@@ -338,7 +338,7 @@ mod tests {
         let almacen = AlmacenSurreal::en_memoria().await.unwrap();
         let app = AplicacionLimen::nueva(
             &almacen,
-            &RelojCostaRica,
+            &RelojConfiable::new(None),
             &IdsV7,
             &ContrasenasArgon2::new().unwrap(),
         );
@@ -350,7 +350,7 @@ mod tests {
         let almacen = AlmacenSurreal::en_memoria().await.unwrap();
         let app = AplicacionLimen::nueva(
             &almacen,
-            &RelojCostaRica,
+            &RelojConfiable::new(None),
             &IdsV7,
             &ContrasenasArgon2::new().unwrap(),
         );
@@ -401,7 +401,9 @@ mod tests {
             ruta_base: carpeta.clone(),
         };
         {
-            let app = AplicacionLimen::abrir(&config).await.unwrap();
+            let app = AplicacionLimen::abrir(&config, &RelojConfiable::new(None))
+                .await
+                .unwrap();
             app.empresas
                 .registrar
                 .ejecutar(&sesion(), "acme")
@@ -412,7 +414,7 @@ mod tests {
         // siga tomado.
         let mut app = None;
         for _ in 0..100 {
-            match AplicacionLimen::abrir(&config).await {
+            match AplicacionLimen::abrir(&config, &RelojConfiable::new(None)).await {
                 Ok(abierta) => {
                     app = Some(abierta);
                     break;
@@ -451,7 +453,9 @@ mod tests {
         let config = Config {
             ruta_base: archivo.join("base"),
         };
-        let error = AplicacionLimen::abrir(&config).await.unwrap_err();
+        let error = AplicacionLimen::abrir(&config, &RelojConfiable::new(None))
+            .await
+            .unwrap_err();
         assert!(
             error
                 .to_string()

@@ -83,11 +83,16 @@ No hay una norma única para esto, pero las fuentes coinciden en lo esencial
 
 | Clase | Ejemplos | Sin conexión |
 |---|---|---|
-| **Locales:** se deciden con los datos de este equipo | formato de cédula y nombre, PRAIND vencido, acceso denegado, el gafete existe y está disponible según este equipo, este equipo ya tiene a la persona adentro, reloj | **Siempre se aplican**, igual que con conexión. Es lo que ya hace el núcleo |
+| **Locales:** se deciden con los datos de este equipo | formato de cédula y nombre, PRAIND vencido, acceso denegado, el gafete existe y está disponible según este equipo, este equipo ya tiene a la persona adentro | **Siempre se aplican**, igual que con conexión. Es lo que ya hace el núcleo |
 | **Entre equipos:** dependen de lo último que hicieron los demás | la persona está adentro en otro equipo o sitio, el gafete se prestó en otro equipo, a la persona le negaron el acceso hace minutos | **No bloquean.** Se registra de forma provisional y se verifica al sincronizar |
 
 Lo que antes bloqueaba (`SinVerificarEnLaNube`) pasa a ser **un aviso y una verificación
 posterior**, no una puerta cerrada.
+
+El reloj tampoco bloquea (regla E5): sin red, la hora sale del último ancla o del reloj
+del equipo corregido con el último desfase medido, y si no se pudo comprobar el hecho
+queda marcado como de hora no confiable. Al sincronizar, esa marca se suma al indicador
+de incidente del registro.
 
 ### 4.2 El registro provisional
 

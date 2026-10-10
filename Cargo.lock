@@ -3190,6 +3190,7 @@ dependencies = [
  "chrono-tz",
  "limen-aplicacion",
  "limen-dominio",
+ "log",
  "password-hash",
  "uuid",
 ]

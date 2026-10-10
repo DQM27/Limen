@@ -8,7 +8,7 @@ use limen_aplicacion::puertos::{
 use limen_dominio::cedula::Cedula;
 use limen_dominio::empresa_proveedora::EmpresaProveedoraId;
 use limen_dominio::gafete::NumeroGafete;
-use limen_dominio::hecho::{Hecho, HechoId};
+use limen_dominio::hecho::{CalidadHora, Hecho, HechoId};
 use limen_dominio::ingreso_contratista::{
     EntregaGafete, IngresoContratista, IngresoGuardado, IngresoId,
 };
@@ -30,6 +30,23 @@ use uuid::Uuid;
 use crate::id_contratista;
 
 // --- Datos de ejemplo ---
+
+/// Hora comprobada al sellar (las entradas de ejemplo).
+fn confiable() -> CalidadHora {
+    CalidadHora {
+        confiable: true,
+        hora_equipo: "2026-10-09T08:00:01Z".parse().unwrap(),
+    }
+}
+
+/// Hora dudosa: el reloj del equipo iba 11 minutos adelantado (las salidas
+/// de ejemplo), para comprobar que la marca vuelve tal cual.
+fn dudosa() -> CalidadHora {
+    CalidadHora {
+        confiable: false,
+        hora_equipo: "2026-10-09T17:11:00Z".parse().unwrap(),
+    }
+}
 
 fn marca(texto: &str, operador: u128) -> Marca {
     let en: DateTime<Utc> = texto.parse().unwrap();
@@ -110,29 +127,30 @@ fn hechos_de_las_cuatro_vias() -> Vec<(Uuid, Vec<Hecho>)> {
         (
             Uuid::from_u128(5001),
             vec![
-                Hecho::entrada_contratista(id_hecho(1), &ingreso_contratista(None)),
-                Hecho::salida_contratista(id_hecho(2), &ingreso_contratista(salida)).unwrap(),
+                Hecho::entrada_contratista(id_hecho(1), &ingreso_contratista(None), confiable()),
+                Hecho::salida_contratista(id_hecho(2), &ingreso_contratista(salida), dudosa())
+                    .unwrap(),
             ],
         ),
         (
             Uuid::from_u128(6001),
             vec![
-                Hecho::entrada_proveedor(id_hecho(3), &ingreso_proveedor(None)),
-                Hecho::salida_proveedor(id_hecho(4), &ingreso_proveedor(salida)).unwrap(),
+                Hecho::entrada_proveedor(id_hecho(3), &ingreso_proveedor(None), confiable()),
+                Hecho::salida_proveedor(id_hecho(4), &ingreso_proveedor(salida), dudosa()).unwrap(),
             ],
         ),
         (
             Uuid::from_u128(7001),
             vec![
-                Hecho::entrada_correo(id_hecho(5), &ingreso_correo(None)),
-                Hecho::salida_correo(id_hecho(6), &ingreso_correo(salida)).unwrap(),
+                Hecho::entrada_correo(id_hecho(5), &ingreso_correo(None), confiable()),
+                Hecho::salida_correo(id_hecho(6), &ingreso_correo(salida), dudosa()).unwrap(),
             ],
         ),
         (
             Uuid::from_u128(8001),
             vec![
-                Hecho::entrega_kof(id_hecho(7), &prestamo_kof(None)),
-                Hecho::devolucion_kof(id_hecho(8), &prestamo_kof(salida)).unwrap(),
+                Hecho::entrega_kof(id_hecho(7), &prestamo_kof(None), confiable()),
+                Hecho::devolucion_kof(id_hecho(8), &prestamo_kof(salida), dudosa()).unwrap(),
             ],
         ),
     ]
@@ -174,6 +192,7 @@ pub async fn un_hecho_sin_confirmar_no_queda<F: FabricaUnidadDeTrabajo + Consult
     uow.hechos().anotar(Hecho::entrada_contratista(
         id_hecho(1),
         &ingreso_contratista(None),
+        confiable(),
     ));
     drop(uow);
     assert_eq!(
@@ -188,7 +207,7 @@ pub async fn un_hecho_nunca_se_reemplaza_y_el_intento_no_aplica_nada<
 >(
     fabrica: F,
 ) {
-    let original = Hecho::entrada_contratista(id_hecho(1), &ingreso_contratista(None));
+    let original = Hecho::entrada_contratista(id_hecho(1), &ingreso_contratista(None), confiable());
     let mut uow = fabrica.nueva();
     uow.hechos().anotar(original.clone());
     uow.confirmar().await.unwrap();
@@ -196,11 +215,15 @@ pub async fn un_hecho_nunca_se_reemplaza_y_el_intento_no_aplica_nada<
     // Otro hecho con el mismo ID, junto con uno nuevo en la misma Unit of
     // Work: la base rechaza la transacción entera.
     let mut uow = fabrica.nueva();
-    uow.hechos()
-        .anotar(Hecho::entrada_correo(id_hecho(2), &ingreso_correo(None)));
+    uow.hechos().anotar(Hecho::entrada_correo(
+        id_hecho(2),
+        &ingreso_correo(None),
+        confiable(),
+    ));
     uow.hechos().anotar(Hecho::entrada_proveedor(
         id_hecho(1),
         &ingreso_proveedor(None),
+        confiable(),
     ));
     let resultado = uow.confirmar().await;
     assert!(

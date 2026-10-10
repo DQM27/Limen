@@ -5,16 +5,17 @@
 //! (el primer motivo que falla es el que se informa):
 //! 1. el medio: en vehículo la placa es obligatoria (E2);
 //! 2. la empresa proveedora existe (H1);
-//! 3. el reloj no retrocedió respecto al último movimiento (E5);
-//! 4. la persona no está adentro por ninguna vía (H3, A7). Pesa más que el
+//! 3. la persona no está adentro por ninguna vía (H3, A7). Pesa más que el
 //!    veto: si está adentro, lo que corresponde es registrar su salida;
-//! 5. la cédula no está vetada (A8);
-//! 6. el gafete de proveedor: obligatorio, registrado, disponible y libre
+//! 4. la cédula no está vetada (A8);
+//! 5. el gafete de proveedor: obligatorio, registrado, disponible y libre
 //!    (H3, E3).
+//!
+//! El reloj no detiene la entrada (E5): la marca llega con la hora ya
+//! sellada por [`crate::reloj::sellar_hora`].
 
 use std::fmt;
 
-use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::cedula::Cedula;
@@ -23,7 +24,6 @@ use crate::gafete::{ErrorPrestamoGafete, NumeroGafete, SituacionGafete, verifica
 use crate::medio::{ErrorMedio, Medio, TipoMedio};
 use crate::movimiento::{ErrorSalida, Marca, cerrar};
 use crate::presencia::{Via, YaEstaAdentro, verificar_afuera};
-use crate::reloj::{RelojAtrasado, verificar_reloj};
 use crate::visitante::{ErrorVisitante, PersonaVetada, Visitante, verificar_veto};
 
 /// Identificador global de un ingreso de proveedor (UUID v7).
@@ -60,7 +60,6 @@ pub struct DatosEntradaProveedor<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct HechosEntradaProveedor {
     pub empresa_existe: bool,
-    pub ultimo_movimiento: Option<DateTime<Utc>>,
     /// Por qué vía está adentro la persona (por su cédula), si lo está.
     pub adentro_por: Option<Via>,
     /// La cédula tiene el acceso denegado (A8).
@@ -78,8 +77,6 @@ pub enum ErrorIngresoProveedor {
     #[error("La empresa proveedora no existe")]
     EmpresaNoExiste,
     #[error("{0}")]
-    Reloj(RelojAtrasado),
-    #[error("{0}")]
     YaEstaAdentro(YaEstaAdentro),
     #[error("{0}")]
     AccesoDenegado(PersonaVetada),
@@ -93,7 +90,6 @@ impl ErrorIngresoProveedor {
             Self::Visitante(error) => error.codigo(),
             Self::Medio(error) => error.codigo(),
             Self::EmpresaNoExiste => "empresa_proveedora_no_existe",
-            Self::Reloj(error) => error.codigo(),
             Self::YaEstaAdentro(error) => error.codigo(),
             Self::AccesoDenegado(error) => error.codigo(),
             Self::Gafete(error) => error.codigo(),
@@ -137,8 +133,6 @@ impl IngresoProveedor {
         if !hechos.empresa_existe {
             return Err(ErrorIngresoProveedor::EmpresaNoExiste);
         }
-        verificar_reloj(entrada.en, hechos.ultimo_movimiento)
-            .map_err(ErrorIngresoProveedor::Reloj)?;
         verificar_afuera(hechos.adentro_por).map_err(ErrorIngresoProveedor::YaEstaAdentro)?;
         verificar_veto(hechos.vetada).map_err(ErrorIngresoProveedor::AccesoDenegado)?;
         verificar_prestamo(hechos.situacion_gafete).map_err(ErrorIngresoProveedor::Gafete)?;
@@ -153,13 +147,9 @@ impl IngresoProveedor {
         })
     }
 
-    /// Registra la salida (E4, E5). El gafete queda libre con ella.
-    pub fn registrar_salida(
-        &mut self,
-        salida: Marca,
-        ultimo_movimiento: Option<DateTime<Utc>>,
-    ) -> Result<(), ErrorSalida> {
-        cerrar(self.entrada, &mut self.salida, salida, ultimo_movimiento)
+    /// Registra la salida (E4). El gafete queda libre con ella.
+    pub fn registrar_salida(&mut self, salida: Marca) -> Result<(), ErrorSalida> {
+        cerrar(self.entrada, &mut self.salida, salida)
     }
 
     pub fn restaurar(guardado: IngresoProveedorGuardado) -> Self {
@@ -248,7 +238,6 @@ mod tests {
     fn hechos() -> HechosEntradaProveedor {
         HechosEntradaProveedor {
             empresa_existe: true,
-            ultimo_movimiento: None,
             adentro_por: None,
             vetada: false,
             situacion_gafete: LIBRE,
@@ -305,16 +294,6 @@ mod tests {
         assert_eq!(
             entrar(datos(), sin_empresa),
             Err(ErrorIngresoProveedor::EmpresaNoExiste)
-        );
-    }
-
-    #[test]
-    fn no_entra_con_el_reloj_atrasado() {
-        let mut atrasado = hechos();
-        atrasado.ultimo_movimiento = Some("2026-10-09T15:00:00Z".parse().unwrap());
-        assert_eq!(
-            entrar(datos(), atrasado),
-            Err(ErrorIngresoProveedor::Reloj(RelojAtrasado))
         );
     }
 
@@ -394,7 +373,6 @@ mod tests {
         sin_placa.placa = None;
         let todo_mal = HechosEntradaProveedor {
             empresa_existe: false,
-            ultimo_movimiento: Some("2026-10-09T15:00:00Z".parse().unwrap()),
             adentro_por: Some(Via::Correo),
             vetada: true,
             situacion_gafete: SituacionGafete::NoRegistrado,
@@ -409,15 +387,15 @@ mod tests {
     fn la_salida_sigue_las_reglas_comunes() {
         let mut ingreso = entrar(datos(), hechos()).unwrap();
         assert_eq!(
-            ingreso.registrar_salida(marca("2026-10-09T13:00:00Z"), None),
+            ingreso.registrar_salida(marca("2026-10-09T13:00:00Z")),
             Err(ErrorSalida::AnteriorALaEntrada)
         );
         ingreso
-            .registrar_salida(marca("2026-10-09T18:00:00Z"), None)
+            .registrar_salida(marca("2026-10-09T18:00:00Z"))
             .unwrap();
         assert!(!ingreso.esta_abierto(), "ya salió");
         assert_eq!(
-            ingreso.registrar_salida(marca("2026-10-09T19:00:00Z"), None),
+            ingreso.registrar_salida(marca("2026-10-09T19:00:00Z")),
             Err(ErrorSalida::YaSalio)
         );
     }

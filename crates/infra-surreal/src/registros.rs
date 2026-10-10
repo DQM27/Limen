@@ -12,7 +12,7 @@ use limen_dominio::contratista::{Contratista, ContratistaGuardado, ContratistaId
 use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
 use limen_dominio::gafete::{EstadoGafete, Gafete, NumeroGafete, Portador, TipoGafete};
-use limen_dominio::hecho::{Hecho, HechoId, Salida, Suceso};
+use limen_dominio::hecho::{CalidadHora, Hecho, HechoId, Salida, Suceso};
 use limen_dominio::ingreso_contratista::{
     EntregaGafete, IngresoContratista, IngresoGuardado, IngresoId,
 };
@@ -896,6 +896,10 @@ pub struct HechoDatos {
     pub registro: Uuid,
     pub en: DateTime<Utc>,
     pub operador: Uuid,
+    /// Si la hora era confiable al sellarla (E5).
+    pub hora_confiable: bool,
+    /// La hora cruda del reloj del equipo al sellarla.
+    pub hora_equipo: DateTime<Utc>,
     pub ingreso_contratista: Option<IngresoDatos>,
     pub ingreso_proveedor: Option<IngresoProveedorDatos>,
     pub ingreso_correo: Option<IngresoCorreoDatos>,
@@ -910,6 +914,10 @@ pub struct HechoLeido {
     pub registro: Uuid,
     pub en: DateTime<Utc>,
     pub operador: Uuid,
+    /// Si la hora era confiable al sellarla (E5).
+    pub hora_confiable: bool,
+    /// La hora cruda del reloj del equipo al sellarla.
+    pub hora_equipo: DateTime<Utc>,
     pub ingreso_contratista: Option<IngresoDatos>,
     pub ingreso_proveedor: Option<IngresoProveedorDatos>,
     pub ingreso_correo: Option<IngresoCorreoDatos>,
@@ -925,6 +933,8 @@ impl From<&Hecho> for HechoDatos {
             registro: hecho.registro(),
             en: marca.en,
             operador: marca.operador.uuid(),
+            hora_confiable: hecho.hora().confiable,
+            hora_equipo: hecho.hora().hora_equipo,
             ingreso_contratista: None,
             ingreso_proveedor: None,
             ingreso_correo: None,
@@ -1032,7 +1042,11 @@ impl TryFrom<HechoLeido> for Hecho {
                 ));
             }
         };
-        Ok(Self::restaurar(id, suceso))
+        let hora = CalidadHora {
+            confiable: datos.hora_confiable,
+            hora_equipo: datos.hora_equipo,
+        };
+        Ok(Self::restaurar(id, suceso, hora))
     }
 }
 

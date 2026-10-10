@@ -6,14 +6,14 @@
 //! `ProvisionalKof`) y lo devuelve al irse. **Es su entrada y su salida**:
 //! mientras tiene el provisional está adentro (aparece en la lista de
 //! quienes están adentro, con la vía [`Via::Kof`]) y entregarlo o devolverlo
-//! es un movimiento que respeta el reloj del equipo (E5).
+//! es un movimiento, con la hora sellada como cualquier otro (E5, ver
+//! [`crate::reloj::sellar_hora`]).
 //!
 //! Al entregar se revisa, en este orden:
-//! 1. el reloj no retrocedió respecto al último movimiento (E5);
-//! 2. la persona está activa (K2);
-//! 3. no tiene ya un provisional sin devolver, es decir, no está adentro
+//! 1. la persona está activa (K2);
+//! 2. no tiene ya un provisional sin devolver, es decir, no está adentro
 //!    (K3, A7);
-//! 4. el gafete existe en el inventario, está disponible y nadie más lo
+//! 3. el gafete existe en el inventario, está disponible y nadie más lo
 //!    tiene (K1, K3).
 //!
 //! El préstamo guarda el código y el nombre de la persona tal como eran al
@@ -29,7 +29,6 @@ use crate::movimiento::Marca;
 use crate::nombre::NombrePersona;
 use crate::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
 use crate::presencia::{Identidad, Via};
-use crate::reloj::{RelojAtrasado, verificar_reloj};
 
 /// Identificador global de un préstamo de gafete provisional (UUID v7).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -54,7 +53,6 @@ impl fmt::Display for PrestamoKofId {
 /// Lo que el caso de uso averiguó antes de pedir la decisión.
 #[derive(Debug, Clone, Copy)]
 pub struct HechosEntregaKof {
-    pub ultimo_movimiento: Option<DateTime<Utc>>,
     /// La persona ya tiene un provisional sin devolver.
     pub ya_tiene_prestamo: bool,
     /// Situación del gafete provisional indicado.
@@ -63,8 +61,6 @@ pub struct HechosEntregaKof {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum ErrorPrestamoKof {
-    #[error("{0}")]
-    Reloj(RelojAtrasado),
     #[error("La persona está inactiva: no se le puede prestar un gafete")]
     PersonalInactivo,
     #[error("Esta persona ya tiene un gafete provisional sin devolver")]
@@ -76,7 +72,6 @@ pub enum ErrorPrestamoKof {
 impl ErrorPrestamoKof {
     pub const fn codigo(self) -> &'static str {
         match self {
-            Self::Reloj(error) => error.codigo(),
             Self::PersonalInactivo => "personal_kof_inactivo",
             Self::YaTienePrestamo => "personal_kof_con_prestamo",
             Self::Gafete(error) => error.codigo(),
@@ -88,8 +83,6 @@ impl ErrorPrestamoKof {
 pub enum ErrorDevolucionKof {
     #[error("Este gafete provisional ya fue devuelto")]
     YaDevuelto,
-    #[error("{0}")]
-    Reloj(RelojAtrasado),
     #[error("La devolución no puede ser anterior a la entrega")]
     AnteriorALaEntrega,
 }
@@ -98,7 +91,6 @@ impl ErrorDevolucionKof {
     pub const fn codigo(self) -> &'static str {
         match self {
             Self::YaDevuelto => "prestamo_kof_ya_devuelto",
-            Self::Reloj(error) => error.codigo(),
             Self::AnteriorALaEntrega => "devolucion_anterior_a_la_entrega",
         }
     }
@@ -135,7 +127,6 @@ impl PrestamoKof {
         hechos: HechosEntregaKof,
         entrega: Marca,
     ) -> Result<Self, ErrorPrestamoKof> {
-        verificar_reloj(entrega.en, hechos.ultimo_movimiento).map_err(ErrorPrestamoKof::Reloj)?;
         if !personal.activo() {
             return Err(ErrorPrestamoKof::PersonalInactivo);
         }
@@ -155,15 +146,10 @@ impl PrestamoKof {
     }
 
     /// Registra la devolución. El gafete queda libre con ella.
-    pub fn devolver(
-        &mut self,
-        devolucion: Marca,
-        ultimo_movimiento: Option<DateTime<Utc>>,
-    ) -> Result<(), ErrorDevolucionKof> {
+    pub fn devolver(&mut self, devolucion: Marca) -> Result<(), ErrorDevolucionKof> {
         if self.devolucion.is_some() {
             return Err(ErrorDevolucionKof::YaDevuelto);
         }
-        verificar_reloj(devolucion.en, ultimo_movimiento).map_err(ErrorDevolucionKof::Reloj)?;
         if devolucion.en < self.entrega.en {
             return Err(ErrorDevolucionKof::AnteriorALaEntrega);
         }
@@ -264,7 +250,6 @@ mod tests {
 
     fn hechos() -> HechosEntregaKof {
         HechosEntregaKof {
-            ultimo_movimiento: None,
             ya_tiene_prestamo: false,
             situacion_gafete: LIBRE,
         }
@@ -345,7 +330,6 @@ mod tests {
     #[test]
     fn inactiva_pesa_mas_que_el_prestamo_previo_y_este_mas_que_el_gafete() {
         let todo_mal = HechosEntregaKof {
-            ultimo_movimiento: None,
             ya_tiene_prestamo: true,
             situacion_gafete: SituacionGafete::NoRegistrado,
         };
@@ -363,48 +347,15 @@ mod tests {
     fn la_devolucion_cierra_una_sola_vez_y_no_antes_de_la_entrega() {
         let mut prestamo = entregar(&persona(true), hechos()).unwrap();
         assert_eq!(
-            prestamo.devolver(marca("2026-10-09T07:00:00Z"), None),
+            prestamo.devolver(marca("2026-10-09T07:00:00Z")),
             Err(ErrorDevolucionKof::AnteriorALaEntrega)
         );
         assert!(prestamo.esta_abierto(), "la devolución rechazada no cierra");
-        prestamo
-            .devolver(marca("2026-10-09T17:00:00Z"), None)
-            .unwrap();
+        prestamo.devolver(marca("2026-10-09T17:00:00Z")).unwrap();
         assert!(!prestamo.esta_abierto(), "devuelto");
         assert_eq!(
-            prestamo.devolver(marca("2026-10-09T18:00:00Z"), None),
+            prestamo.devolver(marca("2026-10-09T18:00:00Z")),
             Err(ErrorDevolucionKof::YaDevuelto)
-        );
-    }
-
-    #[test]
-    fn entregar_y_devolver_respetan_el_reloj_del_equipo() {
-        let atrasado = Some("2026-10-09T09:00:00Z".parse().unwrap());
-        let mut con_reloj_atrasado = hechos();
-        con_reloj_atrasado.ultimo_movimiento = atrasado;
-        assert_eq!(
-            entregar(&persona(true), con_reloj_atrasado),
-            Err(ErrorPrestamoKof::Reloj(RelojAtrasado)),
-            "la entrega es de las 08:00 y el último movimiento fue a las 09:00"
-        );
-        let mut prestamo = entregar(&persona(true), hechos()).unwrap();
-        assert_eq!(
-            prestamo.devolver(
-                marca("2026-10-09T17:00:00Z"),
-                Some("2026-10-09T18:00:00Z".parse().unwrap())
-            ),
-            Err(ErrorDevolucionKof::Reloj(RelojAtrasado))
-        );
-        assert!(prestamo.esta_abierto(), "no se cerró");
-    }
-
-    #[test]
-    fn el_reloj_se_revisa_antes_que_la_persona_inactiva() {
-        let mut todo_mal = hechos();
-        todo_mal.ultimo_movimiento = Some("2026-10-09T09:00:00Z".parse().unwrap());
-        assert_eq!(
-            entregar(&persona(false), todo_mal),
-            Err(ErrorPrestamoKof::Reloj(RelojAtrasado))
         );
     }
 
@@ -430,14 +381,6 @@ mod tests {
         assert_eq!(
             ErrorDevolucionKof::YaDevuelto.codigo(),
             "prestamo_kof_ya_devuelto"
-        );
-        assert_eq!(
-            ErrorPrestamoKof::Reloj(RelojAtrasado).codigo(),
-            "reloj_atrasado"
-        );
-        assert_eq!(
-            ErrorDevolucionKof::Reloj(RelojAtrasado).codigo(),
-            "reloj_atrasado"
         );
     }
 }

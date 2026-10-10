@@ -141,7 +141,7 @@ impl CampoDelError for ErrorIngreso {
             Self::Medio(error) => error.campo(),
             Self::Gafete(error) => error.campo(),
             Self::GafeteRequerido => Some(GAFETE),
-            Self::Reloj(_) | Self::YaEstaAdentro(_) | Self::AccesoDenegado(_) => None,
+            Self::YaEstaAdentro(_) | Self::AccesoDenegado(_) => None,
         }
     }
 }
@@ -153,7 +153,7 @@ impl CampoDelError for ErrorIngresoProveedor {
             Self::Medio(error) => error.campo(),
             Self::Gafete(error) => error.campo(),
             Self::EmpresaNoExiste => Some(EMPRESA),
-            Self::Reloj(_) | Self::YaEstaAdentro(_) | Self::AccesoDenegado(_) => None,
+            Self::YaEstaAdentro(_) | Self::AccesoDenegado(_) => None,
         }
     }
 }
@@ -165,7 +165,7 @@ impl CampoDelError for ErrorIngresoCorreo {
             Self::Motivo(error) => error.campo(),
             Self::Medio(error) => error.campo(),
             Self::Gafete(error) => error.campo(),
-            Self::Reloj(_) | Self::YaEstaAdentro(_) | Self::AccesoDenegado(_) => None,
+            Self::YaEstaAdentro(_) | Self::AccesoDenegado(_) => None,
         }
     }
 }
@@ -175,7 +175,7 @@ impl CampoDelError for ErrorPrestamoKof {
         match self {
             Self::Gafete(error) => error.campo(),
             Self::PersonalInactivo => Some(PERSONA),
-            Self::Reloj(_) | Self::YaTienePrestamo => None,
+            Self::YaTienePrestamo => None,
         }
     }
 }

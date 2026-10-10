@@ -216,7 +216,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn no_presta_un_gafete_ya_prestado_ni_con_el_reloj_atrasado() {
+    async fn no_presta_un_gafete_ya_prestado_pero_el_reloj_atrasado_no_detiene() {
         let almacen = preparado().await;
         entrada(&almacen)
             .ejecutar(&sesion(), &comando())
@@ -233,12 +233,16 @@ mod tests {
 
         let almacen = preparado().await;
         almacen.fijar_ultimo_movimiento(instante("2026-10-09T18:00:00Z"));
+        entrada(&almacen)
+            .ejecutar(&sesion(), &comando())
+            .await
+            .unwrap();
         assert!(
-            matches!(
-                entrada(&almacen).ejecutar(&sesion(), &comando()).await,
-                Err(ErrorCaso::Negocio(ErrorIngresoCorreo::Reloj(_)))
-            ),
-            "reloj atrasado"
+            almacen
+                .hechos()
+                .last()
+                .is_some_and(|hecho| !hecho.hora().confiable),
+            "la hora queda marcada para revisarla"
         );
     }
 
