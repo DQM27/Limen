@@ -1,0 +1,112 @@
+<section class="tabla" role="region" [attr.aria-label]="etiqueta()">
+  <div class="herramientas">
+    <div class="grupo">
+      <ng-content select="[controles]" />
+      <div class="buscador">
+        <mat-icon aria-hidden="true">search</mat-icon>
+        <input
+          type="search"
+          autocomplete="off"
+          [placeholder]="marcador()"
+          [attr.aria-label]="'Buscar en ' + etiqueta()"
+          [value]="filtro()"
+          (input)="escribirFiltro($event)"
+        />
+      </div>
+    </div>
+
+    <div class="grupo">
+      <ng-content select="[acciones]" />
+      <p class="conteo" role="status" aria-live="polite">{{ conteo() }}</p>
+
+      <div class="segmentado" role="group" aria-label="Filtros, anchos y columnas">
+        @if (filtrosPorColumna()) {
+          <button
+            type="button"
+            [attr.aria-pressed]="filtrosVisibles()"
+            [attr.aria-label]="filtrosVisibles() ? 'Ocultar filtros' : 'Mostrar filtros'"
+            [matTooltip]="filtrosVisibles() ? 'Ocultar filtros' : 'Mostrar filtros'"
+            (click)="alternarFiltros()"
+          >
+            <mat-icon aria-hidden="true">filter_alt</mat-icon>
+          </button>
+        }
+        <button
+          type="button"
+          aria-label="Ajustar anchos al contenido"
+          matTooltip="Ajustar anchos al contenido"
+          (click)="ajustarAnchos()"
+        >
+          <mat-icon aria-hidden="true">swap_horiz</mat-icon>
+        </button>
+        <button
+          type="button"
+          aria-label="Restablecer anchos"
+          matTooltip="Restablecer anchos"
+          (click)="restablecerAnchos()"
+        >
+          <mat-icon aria-hidden="true">restart_alt</mat-icon>
+        </button>
+        <button
+          type="button"
+          aria-label="Columnas visibles"
+          matTooltip="Columnas visibles"
+          [matMenuTriggerFor]="menuColumnas"
+        >
+          <mat-icon aria-hidden="true">view_column</mat-icon>
+        </button>
+      </div>
+
+      <mat-menu #menuColumnas="matMenu" class="menu-columnas" aria-label="Columnas visibles">
+        @for (columna of columnasDelMenu(); track columna.clave) {
+          <button
+            mat-menu-item
+            type="button"
+            role="menuitemcheckbox"
+            [attr.aria-checked]="!ocultas().has(columna.clave)"
+            (click)="alternarColumna(columna.clave); $event.stopPropagation()"
+          >
+            <mat-icon aria-hidden="true">{{
+              ocultas().has(columna.clave) ? 'check_box_outline_blank' : 'check_box'
+            }}</mat-icon>
+            <span>{{ columna.titulo }}</span>
+          </button>
+        }
+      </mat-menu>
+    </div>
+  </div>
+
+  <div class="rejilla">
+    <ag-grid-angular
+      [theme]="tema"
+      [columnDefs]="columnasConVisibilidad()"
+      [defaultColDef]="columnaPorDefecto()"
+      [columnTypes]="tiposDeColumna"
+      [rowData]="filas()"
+      [getRowId]="obtenerIdFila()"
+      [getRowClass]="obtenerClaseFila()"
+      [quickFilterText]="filtro()"
+      [quickFilterParser]="analizarBusqueda"
+      [quickFilterMatcher]="coincideBusqueda"
+      [localeText]="textos"
+      [loading]="cargando()"
+      [overlayNoRowsTemplate]="mensajeVacio()"
+      [rowSelection]="seleccion()"
+      [rowHeight]="36"
+      [headerHeight]="38"
+      [accentedSort]="true"
+      [columnHoverHighlight]="true"
+      [maintainColumnOrder]="true"
+      [enableCellTextSelection]="true"
+      tooltipShowMode="whenTruncated"
+      [tooltipShowDelay]="400"
+      (gridReady)="alIniciar($event)"
+      (modelUpdated)="alActualizarFilas($event)"
+      (columnMoved)="alMoverColumna($event)"
+      (columnResized)="alRedimensionarColumna($event)"
+      (sortChanged)="guardarOrden()"
+      (selectionChanged)="alCambiarSeleccion($event)"
+      (rowDoubleClicked)="alDobleClic($event.data)"
+    />
+  </div>
+</section>

@@ -1,0 +1,9 @@
+# Finales de línea LF en todo el repositorio, también al hacer checkout en
+# Windows (la CI y los equipos de desarrollo). Sin esto, git convierte a
+# CRLF en Windows y prettier (que exige LF) marca todo el frontend.
+* text=auto eol=lf
+
+# Binarios: nunca se tocan.
+*.png binary
+*.ico binary
+*.icns binary

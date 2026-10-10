@@ -1,0 +1,134 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+// Enlace para teclado: invisible hasta que recibe el foco.
+.saltar {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1000;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+  transform: translateY(-200%);
+
+  &:focus {
+    transform: translateY(0);
+  }
+}
+
+// La barra y el contenido comparten una fila: cuando la barra cambia de ancho,
+// el contenido ocupa el resto solo (nada se mide ni se fija a mano).
+.carcasa {
+  display: flex;
+  height: 100%;
+}
+
+.barra {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 248px;
+  border-right: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mat-sys-surface-container-low);
+  transition: width 150ms ease;
+
+  // Ítems compactos, con esquinas suaves y separados del borde.
+  --mat-list-list-item-container-shape: 8px;
+  --mat-list-active-indicator-shape: 8px;
+  --mat-list-active-indicator-color: var(--mat-sys-secondary-container);
+  --mat-list-list-item-one-line-container-height: 44px;
+  --mat-list-list-item-label-text-size: 14px;
+  --mat-list-list-item-label-text-weight: 500;
+  --mat-list-list-item-leading-icon-size: 22px;
+
+  &.reducida {
+    width: 72px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+.barra-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 56px;
+  padding: 0 8px 0 24px;
+
+  .reducida & {
+    justify-content: center;
+    padding: 0;
+  }
+}
+
+.marca {
+  font: var(--mat-sys-title-medium);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+nav {
+  flex: 1;
+  overflow-y: auto;
+}
+
+mat-nav-list {
+  display: block;
+  padding: 8px 12px;
+}
+
+// Lo que todavía no existe se ve como texto atenuado, no como un botón apagado.
+.proximamente {
+  --mat-list-list-item-container-color: transparent;
+  --mat-list-list-item-hover-state-layer-opacity: 0;
+  --mat-list-list-item-disabled-state-layer-opacity: 0;
+  background: transparent;
+  color: var(--mat-sys-on-surface-variant);
+  opacity: 0.65;
+  cursor: default;
+}
+
+.barra-pie {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+  color: var(--mat-sys-on-surface-variant);
+
+  .reducida & {
+    justify-content: center;
+    padding: 16px 0;
+  }
+}
+
+.operador {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--mat-sys-body-medium);
+}
+
+// El contenido aprovecha todo lo que deja la barra, con un margen mínimo:
+// las pantallas de tabla no pierden espacio en bordes.
+main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-width: 0;
+  height: 100%;
+  padding: 8px 12px;
+
+  &:focus {
+    outline: none;
+  }
+}

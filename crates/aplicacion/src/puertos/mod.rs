@@ -7,13 +7,16 @@
 
 mod auditoria;
 mod consultas;
+mod hechos;
 mod persistencia;
 mod reloj;
 
 pub use auditoria::{AccionAuditada, EntradaAuditoria, RegistroAuditado, RegistroAuditoria};
 pub use consultas::{
-    CambioHistorial, Consultas, EntradaHistorial, IngresoAbierto, PersonaAdentro, ResumenGafete,
+    CambioHistorial, Consultas, EntradaHistorial, FilaContratista, IngresoAbierto,
+    MovimientoHistorial, PersonaAdentro, ResumenGafete,
 };
+pub use hechos::RegistroHechos;
 pub use persistencia::{
     ErrorPersistencia, FabricaUnidadDeTrabajo, RepositorioContratistas, RepositorioEmpresas,
     RepositorioEmpresasProveedoras, RepositorioGafetes, RepositorioIngresos,

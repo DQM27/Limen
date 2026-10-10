@@ -19,6 +19,11 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # El cascarón de Tauri (`limen-escritorio`) necesita el frontend ya
+  # compilado y, en Linux, las bibliotecas de WebKitGTK: lo verifica sólo el
+  # trabajo `escritorio`, en Windows (donde corren los equipos de la
+  # portería). Los demás trabajos lo excluyen.
+  SIN_CASCARON: --workspace --exclude limen-escritorio
 
 jobs:
   formato:
@@ -44,7 +49,8 @@ jobs:
       - name: Rust del proyecto
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-      - run: cargo clippy --locked --all-targets --all -- -D warnings
+      - run: cargo clippy --locked --all-targets $SIN_CASCARON -- -D warnings
+        shell: bash
 
   # En Linux y en Windows: los equipos de la portería son Windows, y varias
   # pruebas (bloqueo de archivos, rutas) se comportan distinto en cada uno.
@@ -62,7 +68,8 @@ jobs:
       - name: Rust del proyecto
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-      - run: cargo test --locked --all
+      - run: cargo test --locked $SIN_CASCARON
+        shell: bash
 
   documentacion:
     name: Documentación (rustdoc sin avisos)
@@ -76,7 +83,8 @@ jobs:
       - name: Rust del proyecto
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-      - run: cargo doc --locked --no-deps --all
+      - run: cargo doc --locked --no-deps $SIN_CASCARON
+        shell: bash
 
   # Vulnerabilidades conocidas en las dependencias. Los avisos que no se
   # pueden arreglar desde aquí están justificados en `.cargo/audit.toml`.
@@ -93,12 +101,40 @@ jobs:
           tool: cargo-audit
       - run: cargo audit
 
+  # La app de escritorio: el frontend (Angular) y el cascarón de Tauri, que
+  # incrusta el frontend compilado. En Windows, como los equipos reales.
+  escritorio:
+    name: App de escritorio (Angular + Tauri)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: apps/escritorio
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - run: npm ci
+      - name: Formato (prettier)
+        run: npx prettier --check "src/**/*.{ts,html,scss}"
+      - name: Pruebas (vitest)
+        run: npx ng test --no-watch
+      - name: Compilar el frontend
+        run: npm run build
+      - name: Rust del proyecto
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - name: Clippy del cascarón
+        run: cargo clippy --locked --all-targets -p limen-escritorio -- -D warnings
+
   # Un solo resultado para exigir en la protección de `main`: si mañana se
   # agrega o renombra un trabajo, la protección no hay que tocarla.
   verificado:
     name: CI verde
     if: always()
-    needs: [formato, clippy, pruebas, documentacion, auditoria]
+    needs: [formato, clippy, pruebas, documentacion, auditoria, escritorio]
     runs-on: ubuntu-latest
     steps:
       - name: Todos los trabajos pasaron

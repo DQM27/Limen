@@ -10,8 +10,8 @@ use crate::almacen::AlmacenSurreal;
 use crate::error::{al_confirmar, tecnica};
 use crate::repositorios::{
     AuditoriaSurreal, ContratistasSurreal, EmpresasProveedorasSurreal, EmpresasSurreal, Escritura,
-    GafetesSurreal, IngresosCorreoSurreal, IngresosProveedorSurreal, IngresosSurreal,
-    PersonalKofSurreal, PresenciasSurreal, PrestamosKofSurreal, RelojSurreal,
+    GafetesSurreal, HechosSurreal, IngresosCorreoSurreal, IngresosProveedorSurreal,
+    IngresosSurreal, PersonalKofSurreal, PresenciasSurreal, PrestamosKofSurreal, RelojSurreal,
 };
 
 impl FabricaUnidadDeTrabajo for AlmacenSurreal {
@@ -33,6 +33,7 @@ impl FabricaUnidadDeTrabajo for AlmacenSurreal {
             prestamos_kof: PrestamosKofSurreal::new(db.clone()),
             reloj: RelojSurreal::new(db.clone()),
             auditoria: AuditoriaSurreal::default(),
+            hechos: HechosSurreal::default(),
         }
     }
 }
@@ -52,6 +53,7 @@ pub struct UowSurreal {
     prestamos_kof: PrestamosKofSurreal,
     reloj: RelojSurreal,
     auditoria: AuditoriaSurreal,
+    hechos: HechosSurreal,
 }
 
 impl UnidadDeTrabajo for UowSurreal {
@@ -67,6 +69,7 @@ impl UnidadDeTrabajo for UowSurreal {
     type PrestamosKof = PrestamosKofSurreal;
     type Reloj = RelojSurreal;
     type Auditoria = AuditoriaSurreal;
+    type Hechos = HechosSurreal;
 
     fn contratistas(&mut self) -> &mut ContratistasSurreal {
         &mut self.contratistas
@@ -116,6 +119,10 @@ impl UnidadDeTrabajo for UowSurreal {
         &mut self.auditoria
     }
 
+    fn hechos(&mut self) -> &mut HechosSurreal {
+        &mut self.hechos
+    }
+
     async fn confirmar(self) -> Result<(), ErrorPersistencia> {
         // El orden importa: las empresas antes que los contratistas (uno
         // nuevo puede apuntar a una empresa creada en la misma transacción),
@@ -133,6 +140,7 @@ impl UnidadDeTrabajo for UowSurreal {
             self.prestamos_kof.pendientes,
             self.reloj.pendientes,
             self.auditoria.pendientes,
+            self.hechos.pendientes,
         ]
         .into_iter()
         .flatten()

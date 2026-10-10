@@ -203,13 +203,13 @@ mod tests {
             )))
         );
 
-        RegistrarSalida::new(almacen.clone(), reloj())
+        RegistrarSalida::new(almacen.clone(), reloj(), ids.clone())
             .por_gafete(&sesion(), 7)
             .await
             .unwrap();
         // Ya salió: el gafete quedó libre y la persona puede volver a entrar.
         assert_eq!(
-            RegistrarSalida::new(almacen.clone(), reloj())
+            RegistrarSalida::new(almacen.clone(), reloj(), ids.clone())
                 .por_gafete(&sesion(), 7)
                 .await,
             Err(ErrorCaso::NoEncontrado),
@@ -291,7 +291,7 @@ mod tests {
         };
 
         entrar.ejecutar(&sesion(), &proveedor).await.unwrap();
-        RegistrarSalidaProveedor::new(almacen.clone(), reloj())
+        RegistrarSalidaProveedor::new(almacen.clone(), reloj(), ids.clone())
             .por_gafete(&sesion(), 3)
             .await
             .unwrap();
@@ -362,7 +362,7 @@ mod tests {
             ))),
             "ya está adentro"
         );
-        RegistrarSalidaCorreo::new(almacen.clone(), reloj())
+        RegistrarSalidaCorreo::new(almacen.clone(), reloj(), ids.clone())
             .por_gafete(&sesion(), 2)
             .await
             .unwrap();
@@ -399,7 +399,7 @@ mod tests {
             entregar.ejecutar(&sesion(), ana, 3).await,
             Err(ErrorCaso::Negocio(ErrorPrestamoKof::YaTienePrestamo))
         );
-        DevolverGafeteKof::new(almacen.clone(), reloj())
+        DevolverGafeteKof::new(almacen.clone(), reloj(), ids.clone())
             .por_gafete(&sesion(), 2)
             .await
             .unwrap();

@@ -19,7 +19,7 @@ use std::path::PathBuf;
 
 use limen_aplicacion::casos_de_uso::consultas::{
     BuscarContratistas, BuscarEmpresas, BuscarEmpresasProveedoras, BuscarPersonalKof,
-    HistorialDeCambios, ListarGafetes, PraindPorVencer, QuienesEstanAdentro,
+    HistorialDeCambios, ListarContratistas, ListarGafetes, PraindPorVencer, QuienesEstanAdentro,
 };
 use limen_aplicacion::casos_de_uso::contratistas::{
     ConsultarContratista, EditarContratista, RegistrarContratista,
@@ -85,6 +85,7 @@ grupo! {
         consultar: ConsultarContratista<F, R>,
         buscar: BuscarContratistas<F>,
         praind_por_vencer: PraindPorVencer<F, R>,
+        listar: ListarContratistas<F, R>,
     }
 }
 
@@ -101,7 +102,7 @@ grupo! {
     /// Ingreso y salida de contratistas.
     Ingresos {
         entrada: RegistrarEntrada<F, R, G>,
-        salida: RegistrarSalida<F, R>,
+        salida: RegistrarSalida<F, R, G>,
     }
 }
 
@@ -112,7 +113,7 @@ grupo! {
         renombrar_empresa: RenombrarEmpresaProveedora<F, R, G>,
         buscar_empresas: BuscarEmpresasProveedoras<F>,
         entrada: RegistrarEntradaProveedor<F, R, G>,
-        salida: RegistrarSalidaProveedor<F, R>,
+        salida: RegistrarSalidaProveedor<F, R, G>,
     }
 }
 
@@ -120,7 +121,7 @@ grupo! {
     /// Ingreso por correo.
     Correo {
         entrada: RegistrarEntradaCorreo<F, R, G>,
-        salida: RegistrarSalidaCorreo<F, R>,
+        salida: RegistrarSalidaCorreo<F, R, G>,
     }
 }
 
@@ -131,7 +132,7 @@ grupo! {
         editar: EditarPersonalKof<F, R, G>,
         buscar: BuscarPersonalKof<F>,
         entregar_gafete: EntregarGafeteKof<F, R, G>,
-        devolver_gafete: DevolverGafeteKof<F, R>,
+        devolver_gafete: DevolverGafeteKof<F, R, G>,
     }
 }
 
@@ -181,6 +182,7 @@ where
                 consultar: ConsultarContratista::new(a(), r()),
                 buscar: BuscarContratistas::new(a()),
                 praind_por_vencer: PraindPorVencer::new(a(), r()),
+                listar: ListarContratistas::new(a(), r()),
             },
             gafetes: Gafetes {
                 registrar: RegistrarGafetes::new(a(), r(), i()),
@@ -189,25 +191,25 @@ where
             },
             ingresos: Ingresos {
                 entrada: RegistrarEntrada::new(a(), r(), i()),
-                salida: RegistrarSalida::new(a(), r()),
+                salida: RegistrarSalida::new(a(), r(), i()),
             },
             proveedores: Proveedores {
                 registrar_empresa: RegistrarEmpresaProveedora::new(a(), r(), i()),
                 renombrar_empresa: RenombrarEmpresaProveedora::new(a(), r(), i()),
                 buscar_empresas: BuscarEmpresasProveedoras::new(a()),
                 entrada: RegistrarEntradaProveedor::new(a(), r(), i()),
-                salida: RegistrarSalidaProveedor::new(a(), r()),
+                salida: RegistrarSalidaProveedor::new(a(), r(), i()),
             },
             correo: Correo {
                 entrada: RegistrarEntradaCorreo::new(a(), r(), i()),
-                salida: RegistrarSalidaCorreo::new(a(), r()),
+                salida: RegistrarSalidaCorreo::new(a(), r(), i()),
             },
             kof: Kof {
                 registrar: RegistrarPersonalKof::new(a(), r(), i()),
                 editar: EditarPersonalKof::new(a(), r(), i()),
                 buscar: BuscarPersonalKof::new(a()),
                 entregar_gafete: EntregarGafeteKof::new(a(), r(), i()),
-                devolver_gafete: DevolverGafeteKof::new(a(), r()),
+                devolver_gafete: DevolverGafeteKof::new(a(), r(), i()),
             },
             quienes_estan_adentro: QuienesEstanAdentro::new(a()),
             historial: HistorialDeCambios::new(a()),

@@ -1,0 +1,77 @@
+@use '@angular/material' as mat;
+
+// Tema de Angular Material 3, claro u oscuro según el sistema. Sin fuentes
+// externas (la CSP sólo permite las del propio paquete): se usa la del sistema.
+html {
+  color-scheme: light dark;
+  @include mat.theme(
+    (
+      color: (
+        primary: mat.$azure-palette,
+        theme-type: color-scheme,
+      ),
+      typography: system-ui,
+      density: 0,
+    )
+  );
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-large);
+}
+
+// Menú de "columnas visibles" de las tablas: fino, como la fila de
+// herramientas. El panel de un menú vive fuera del componente (en la capa
+// flotante), así que su estilo tiene que ser global.
+.menu-columnas.mat-mdc-menu-panel {
+  min-width: 0;
+
+  .mat-mdc-menu-content {
+    padding: 4px 0;
+  }
+
+  .mat-mdc-menu-item {
+    --mat-menu-item-label-text-size: 13px;
+    --mat-menu-item-label-text-line-height: 18px;
+    --mat-menu-item-spacing: 10px;
+    --mat-menu-item-leading-spacing: 12px;
+    --mat-menu-item-trailing-spacing: 16px;
+    --mat-menu-item-icon-size: 18px;
+    min-height: 30px;
+  }
+
+  .mat-mdc-menu-item .mat-icon {
+    width: 18px;
+    height: 18px;
+    margin-right: 8px;
+    font-size: 18px;
+  }
+}
+
+// Texto sólo para lectores de pantalla (el título de una pantalla de tabla no
+// se ve, pero sí se anuncia).
+.solo-lectores {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+// Títulos de página: una sola escala para todas las pantallas.
+h1 {
+  margin: 0 0 8px;
+  font: var(--mat-sys-headline-small);
+}

@@ -5,6 +5,7 @@ use limen_dominio::auditoria::CambioCampo;
 use limen_dominio::empresa::{ErrorEmpresa, HechosEmpresa, NombreEmpresa};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
 use limen_dominio::gafete::{ErrorPrestamoGafete, NumeroGafete, TipoGafete};
+use limen_dominio::hecho::{Hecho, HechoId};
 use limen_dominio::ingreso_proveedor::{
     DatosEntradaProveedor, ErrorIngresoProveedor, HechosEntradaProveedor, IngresoProveedor,
     IngresoProveedorId,
@@ -19,7 +20,7 @@ use super::veto::cedula_vetada;
 use crate::errores::ErrorCaso;
 use crate::puertos::{
     AccionAuditada, EntradaAuditoria, FabricaUnidadDeTrabajo, GeneradorIds, RegistroAuditado,
-    RegistroAuditoria, Reloj, RepositorioEmpresasProveedoras, RepositorioGafetes,
+    RegistroAuditoria, RegistroHechos, Reloj, RepositorioEmpresasProveedoras, RepositorioGafetes,
     RepositorioIngresosProveedor, RepositorioPresencias, RepositorioReloj, Restriccion,
     UnidadDeTrabajo,
 };
@@ -236,6 +237,10 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarEntradaProve
         .map_err(ErrorCaso::Negocio)?;
 
         uow.ingresos_proveedor().guardar(&ingreso);
+        uow.hechos().anotar(Hecho::entrada_proveedor(
+            HechoId::desde_uuid(self.ids.nuevo()),
+            &ingreso,
+        ));
         uow.presencias().anotar_entrada(
             &Identidad::from(ingreso.cedula()),
             Via::Proveedor,
@@ -254,14 +259,19 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarEntradaProve
 /// Registra la salida de un proveedor: por el ingreso (desde la lista de
 /// quienes están adentro) o por el número del gafete que devuelve.
 #[derive(Debug)]
-pub struct RegistrarSalidaProveedor<F, R> {
+pub struct RegistrarSalidaProveedor<F, R, G> {
     fabrica: F,
     reloj: R,
+    ids: G,
 }
 
-impl<F: FabricaUnidadDeTrabajo, R: Reloj> RegistrarSalidaProveedor<F, R> {
-    pub const fn new(fabrica: F, reloj: R) -> Self {
-        Self { fabrica, reloj }
+impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarSalidaProveedor<F, R, G> {
+    pub const fn new(fabrica: F, reloj: R, ids: G) -> Self {
+        Self {
+            fabrica,
+            reloj,
+            ids,
+        }
     }
 
     pub async fn ejecutar(
@@ -310,6 +320,11 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj> RegistrarSalidaProveedor<F, R> {
             .map_err(ErrorCaso::Negocio)?;
 
         uow.ingresos_proveedor().guardar(&ingreso);
+        if let Some(hecho) =
+            Hecho::salida_proveedor(HechoId::desde_uuid(self.ids.nuevo()), &ingreso)
+        {
+            uow.hechos().anotar(hecho);
+        }
         uow.presencias()
             .anotar_salida(&Identidad::from(ingreso.cedula()));
         uow.gafetes()

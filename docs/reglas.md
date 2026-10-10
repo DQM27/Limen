@@ -30,7 +30,7 @@ Estado: ✅ implementada en `crates/dominio` · ⏳ acordada, pendiente de imple
 | B8 | Al editar, el vencimiento sólo se revisa si cambió la fecha (para poder quitar el acceso o corregir el nombre de alguien con el PRAIND vencido). | ✅ |
 | B9 | No se cambia la cédula de alguien que está adentro. | ✅ |
 | B10 | Sólo PRAIND recibe gafete físico; para IN HOUSE su credencial ya es el gafete. | ✅ |
-| B11 | Todo cambio queda en la auditoría, en todos los campos, con el antes y el después. | ✅ |
+| B11 | Todo cambio queda en la auditoría, en todos los campos, con el antes y el después. La auditoría no se edita ni se borra (lo impide la base). | ✅ |
 | B12 | Contratistas y empresas son globales: un cambio se ve en todos los sitios. | ⏳ |
 
 ## C. Empresas
@@ -68,6 +68,7 @@ reconstruir cómo estaba el contratista el día que entró.
 | E8 | **Nunca se bloquea un registro por falta de red.** Sin conexión se registra de forma provisional con las reglas locales; al sincronizar, si hubo choque entre equipos (E1, gafete prestado dos veces, entró estando vetado), el registro **no se borra**: queda marcado como incidente. Ver [`operacion-sin-conexion.md`](operacion-sin-conexion.md). | ⏳ |
 | E9 | Un registro en conflicto queda marcado con un indicador de incidente (sin flujo ni tabla aparte). Cualquier operador puede marcarlo como revisado dejando una nota, auditado. Un doble ingreso abre una revisión interna de quién no registró la salida anterior. Nunca se borra el hecho. | ⏳ |
 | E10 | Si alguien vetado (A8) entra mientras el equipo estaba sin conexión, al sincronizar se alerta en el punto de acceso y en el panel. | ⏳ |
+| E11 | Cada entrada y salida (las cuatro vías; para el personal KOF, la entrega y la devolución del provisional) queda como un **hecho** que nunca se edita ni se borra. Se guarda junto con el movimiento o no se guarda ninguno; lo que quedó mal se corrige con otro hecho. | ✅ |
 
 ## F. Gafetes
 

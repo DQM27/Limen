@@ -36,11 +36,13 @@ use limen_dominio::tipo_ingreso::TipoIngreso;
 use uuid::Uuid;
 
 mod consultas;
+mod hechos;
 mod kof;
 mod movimientos;
 mod proveedores;
 
 pub use consultas::*;
+pub use hechos::*;
 pub use kof::*;
 pub use movimientos::*;
 pub use proveedores::*;
@@ -104,6 +106,13 @@ macro_rules! bateria_de_contrato {
             el_historial_va_en_orden_y_solo_trae_el_registro_pedido,
             listar_gafetes_trae_los_del_tipo_con_su_estado_y_si_estan_prestados,
             contratistas_con_praind_hasta_filtra_ordena_y_respeta_el_limite,
+            listar_contratistas_trae_la_empresa_y_ordena_por_nombre_y_cedula,
+            historial_de_ingresos_junta_las_cuatro_vias_y_trae_cada_fila,
+            historial_de_ingresos_filtra_por_rango_y_respeta_el_limite,
+            // Hechos (`hechos`).
+            los_hechos_de_las_cuatro_vias_se_guardan_y_se_leen_tal_cual,
+            un_hecho_sin_confirmar_no_queda,
+            un_hecho_nunca_se_reemplaza_y_el_intento_no_aplica_nada,
         );
     };
     (@pruebas $fabrica:expr; $($prueba:ident),+ $(,)?) => {

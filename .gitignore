@@ -3,3 +3,11 @@
 .DS_Store
 .idea/
 .vscode/
+
+# Datos reales del cliente, sólo para desarrollo local (con su autorización).
+# NUNCA se suben al repositorio, que es público. Limen usa .surql para su
+# esquema, así que ningún .sql legítimo se pierde con esta regla.
+datos-privados/
+*.sql
+*.dump
+*.csv

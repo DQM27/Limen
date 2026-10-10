@@ -2,7 +2,7 @@
 //! sistema y genera IDs al azar. El dominio y la aplicación los reciben por
 //! los puertos `Reloj` y `GeneradorIds`.
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, NaiveDate, NaiveTime, TimeZone, Utc};
 use chrono_tz::America::Costa_Rica;
 use limen_aplicacion::puertos::{GeneradorIds, Reloj};
 use uuid::Uuid;
@@ -28,6 +28,19 @@ impl Reloj for RelojCostaRica {
     fn hoy(&self) -> NaiveDate {
         Self::fecha_en_costa_rica(self.ahora())
     }
+
+    fn inicio_del_dia(&self, fecha: NaiveDate) -> DateTime<Utc> {
+        let medianoche = fecha.and_time(NaiveTime::MIN);
+        Costa_Rica
+            .from_local_datetime(&medianoche)
+            .earliest()
+            .map_or_else(
+                // Costa Rica no tiene horario de verano: nunca falta ni se
+                // repite la medianoche. Por si la base de zonas cambiara.
+                || Utc.from_utc_datetime(&medianoche),
+                |local| local.with_timezone(&Utc),
+            )
+    }
 }
 
 /// IDs UUID v7: únicos entre equipos y ordenados por el momento en que se
@@ -49,6 +62,25 @@ mod tests {
 
     fn utc(texto: &str) -> DateTime<Utc> {
         texto.parse().unwrap()
+    }
+
+    #[test]
+    fn el_dia_de_costa_rica_empieza_a_las_seis_de_la_manana_utc() {
+        let dia = NaiveDate::from_ymd_opt(2026, 10, 9).unwrap();
+        assert_eq!(
+            RelojCostaRica.inicio_del_dia(dia),
+            utc("2026-10-09T06:00:00Z")
+        );
+        // Y el día siguiente empieza 24 horas después (sin horario de verano).
+        assert_eq!(
+            RelojCostaRica.inicio_del_dia(dia.succ_opt().unwrap()),
+            utc("2026-10-10T06:00:00Z")
+        );
+        // El instante recién antes del inicio todavía es el día anterior.
+        assert_eq!(
+            RelojCostaRica::fecha_en_costa_rica(utc("2026-10-09T05:59:59Z")),
+            dia.pred_opt().unwrap()
+        );
     }
 
     #[test]

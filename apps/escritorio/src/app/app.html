@@ -1,0 +1,78 @@
+<a class="saltar" href="#contenido" (click)="irAlContenido($event)">Saltar al contenido</a>
+
+<div class="carcasa">
+  <aside class="barra" [class.reducida]="!expandida()">
+    <div class="barra-cabecera">
+      @if (expandida()) {
+        <span class="marca">Limen</span>
+      }
+      <button
+        mat-icon-button
+        type="button"
+        aria-controls="menu-principal"
+        [attr.aria-expanded]="expandida()"
+        [attr.aria-label]="expandida() ? 'Reducir el menú' : 'Expandir el menú'"
+        (click)="alternar()"
+      >
+        <mat-icon>{{ expandida() ? 'menu_open' : 'menu' }}</mat-icon>
+      </button>
+    </div>
+
+    <nav id="menu-principal" aria-label="Secciones">
+      <mat-nav-list>
+        @for (seccion of secciones; track seccion.etiqueta) {
+          @if (seccion.ruta) {
+            <a
+              mat-list-item
+              [routerLink]="seccion.ruta"
+              routerLinkActive
+              #activa="routerLinkActive"
+              [activated]="activa.isActive"
+              [attr.aria-current]="activa.isActive ? 'page' : null"
+              [matTooltip]="expandida() ? '' : seccion.etiqueta"
+              matTooltipPosition="right"
+              [attr.aria-label]="expandida() ? null : seccion.etiqueta"
+            >
+              <mat-icon matListItemIcon aria-hidden="true">{{ seccion.icono }}</mat-icon>
+              @if (expandida()) {
+                <span matListItemTitle>{{ seccion.etiqueta }}</span>
+              }
+            </a>
+          } @else {
+            <a
+              mat-list-item
+              class="proximamente"
+              role="link"
+              [disabled]="true"
+              [matTooltip]="seccion.etiqueta + ' · próximamente'"
+              matTooltipPosition="right"
+              [attr.aria-label]="seccion.etiqueta + ', próximamente'"
+            >
+              <mat-icon matListItemIcon aria-hidden="true">{{ seccion.icono }}</mat-icon>
+              @if (expandida()) {
+                <span matListItemTitle>{{ seccion.etiqueta }}</span>
+              }
+            </a>
+          }
+        }
+      </mat-nav-list>
+    </nav>
+
+    <div class="barra-pie" aria-live="polite">
+      <mat-icon aria-hidden="true">person</mat-icon>
+      @if (expandida()) {
+        <span class="operador">
+          @if (operador(); as actual) {
+            {{ actual.nombre }}
+          } @else if (!enTauri) {
+            Modo navegador
+          }
+        </span>
+      }
+    </div>
+  </aside>
+
+  <main id="contenido" tabindex="-1">
+    <router-outlet />
+  </main>
+</div>

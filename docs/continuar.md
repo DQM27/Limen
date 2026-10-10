@@ -1,62 +1,77 @@
 # Para continuar donde se quedó
 
 Lee primero [`AGENTS.md`](../AGENTS.md) (reglas del dueño y de arquitectura) y, si hace
-falta el detalle, [`arquitectura.md`](arquitectura.md) y [`reglas.md`](reglas.md).
+falta el detalle, [`arquitectura.md`](arquitectura.md), [`reglas.md`](reglas.md) y
+[`importador-lattis.md`](importador-lattis.md).
 
 ## Dónde quedó todo
 
-El **núcleo** de Limen está terminado y subido a `main`: dominio, aplicación, los dos
-adaptadores de persistencia (memoria y SurrealDB), la composición, el buscador y las
-consultas de lectura. 373 pruebas en verde, clippy limpio y CI en verde.
+- **Núcleo** terminado: dominio, aplicación, persistencia (memoria y SurrealDB),
+  composición, buscador y consultas de lectura. Además, el historial de ingresos por
+  rango de fechas y los accesos rápidos de fecha (`dominio/rango_fechas.rs`).
+- **Hechos inmutables** (regla E11, sección 9.1 de `arquitectura.md`): cada entrada y
+  salida, por las cuatro vías, queda en la tabla `hecho` en la misma transacción que el
+  estado. La base no deja editar ni borrar `hecho` ni `auditoria` (`READONLY` y un
+  `DEFINE EVENT`). Es la base de la sincronización.
+- **App de escritorio** (Tauri 2 + Angular 22 + Angular Material + AG Grid Community):
+  - `apps/escritorio/comandos`: la lógica de los comandos (JSON, un solo error para la
+    interfaz, operador provisional). Se prueba con la base en memoria.
+  - `apps/escritorio/src-tauri`: cascarón de Tauri, sin lógica ni pruebas propias (un
+    ejecutable de pruebas que enlaza Tauri no arranca en Windows).
+  - Frontend: barra lateral, `compartido/tabla` (la grilla base de toda la app, con el
+    diseño unificado) y la pantalla de Contratistas.
+- **Importador de Lattis** (`herramientas/importador-lattis`): carga un volcado SQL en la
+  base de Limen. Los datos reales viven en `datos-privados/` (ignorada por git) y **nunca
+  se suben**: el repositorio es público.
 
-Funciona de punta a punta, sin pantalla: empresas, contratistas, gafetes, ingreso y
-salida por las cuatro vías (contratista, proveedor, correo, personal KOF), la lista de
-"dentro", el historial de cambios y el PRAIND por vencer.
+## Ramas y PR (nada va a `main` sin PR y CI en verde)
 
-Verifica que todo está bien antes de empezar (en la raíz del repositorio):
+Las ramas están apiladas, en este orden: `fix/pruebas-en-windows` (PR #1) →
+`ci/endurecer` (PR #2) → `feat/app-escritorio` → `feat/contratistas-grilla` →
+`feat/hechos` (la de trabajo actual: hechos inmutables). `feat/importador-lattis` sale
+de `feat/app-escritorio`.
 
-```text
-cargo fmt --all -- --check
-cargo clippy --all-targets --all -- -D warnings
-cargo test --all
-```
+**Ojo:** el PR #1 ya está en `main`, pero el #2 se fusionó en `fix/pruebas-en-windows`
+*después* de que esa rama entrara a `main`, así que el endurecimiento de la CI **no llegó
+a `main`**: hay que abrir un PR nuevo de `ci/endurecer` contra `main` (el dueño hace el
+merge). Después se rebasa el resto sobre `main` y se abren sus PR. Falta proteger `main`
+en GitHub (exigir PR y el resultado `CI verde`).
 
-## Lo que sigue: la app de escritorio (Tauri + React)
+## Lo que sigue
 
-La sesión anterior corría en la nube y no podía abrir ventanas. **Tú sí puedes**: aquí
-se compila y se corre con `cargo tauri dev`.
+1. **Historial, segunda mitad.** Conectar `ListarHistorial` y `AtajosDeFecha` en
+   `composicion`, en `apps/escritorio/comandos` (DTO + comandos `listar_historial` y
+   `atajos_de_fecha`) y en `src-tauri`. Luego la pantalla en Angular sobre la grilla base,
+   con un selector de rango de fechas (botón con la etiqueta corta, panel con los accesos
+   rápidos que da el núcleo y fechas Desde/Hasta; el modelo es el de Lattis) y las
+   exportaciones: CSV, Excel y PDF (necesitan un comando de Rust que guarde el archivo y
+   el plugin de diálogo de Tauri).
+2. **Formulario de "Nuevo contratista"** (diálogo de Material, con el error del núcleo
+   junto a cada campo por su `codigo`) y el botón en la fila de herramientas de la grilla.
+3. ✅ **CI para Node y Tauri**: el trabajo `escritorio` (Windows) instala, revisa el
+   formato, prueba y compila Angular, y pasa clippy al cascarón; los demás trabajos
+   excluyen `limen-escritorio`. Falta activar CodeQL para el JavaScript.
+4. Otras pantallas de la barra lateral (Dentro, Proveedores, Correo, Personal KOF,
+   Gafetes), el inicio de sesión real (bloque L) y la nube, en ese orden.
 
-Orden acordado con el dueño:
+## Cómo trabajar en esta máquina
 
-1. **Librería con la lógica de los comandos** (un crate en `apps/escritorio/`): recibe
-   la `AplicacionLimen` de `crates/composicion`, convierte los datos a JSON (el dominio no
-   es serializable a propósito) y traduce los errores con `ErrorCaso::para_interfaz`.
-   Se prueba con la base en memoria, sin necesitar Tauri.
-2. **Esqueleto de la app:** cascarón de Tauri mínimo (sólo registra los comandos y abre la
-   base con `AplicacionLimen::abrir`) y el frontend en React + TypeScript + Vite + Vitest.
-   Las dependencias van hacia adentro: `apps → composicion → …` (sección 3 de la
-   arquitectura). Ningún `if` de negocio en la interfaz.
-3. **Primera pantalla: "Dentro"**, con las cuatro vías juntas (útil en una emergencia) y
-   la salida desde la misma lista; y el buscador de contratistas.
-4. **Registrar un contratista y su entrada.**
-
-Agrega también al CI (`.github/workflows/ci.yml`) un trabajo que instale las bibliotecas
-de Tauri y compile el cascarón, para que se verifique en cada subida.
-
-### Decisión provisional que hay que respetar
-
-Los usuarios se crean en el panel (nube), que todavía no existe (bloque L). Mientras
-tanto la app pide **un operador provisional en la primera ejecución** y lo guarda
-localmente. Márcalo como temporal en el código y en `reglas.md`.
-
-## Huecos conocidos (se resuelven al llegar a su pantalla)
-
-- Listados con filtros y páginas: la grilla de contratistas y el historial de ingresos
-  todavía no existen como consulta.
-- Almacén clave-valor para la configuración del equipo: se define cuando una pantalla
-  diga qué necesita.
-- La nube, la sincronización y el aviso de "sin conexión" van después de las pantallas
-  (lee `operacion-sin-conexion.md` antes de tocarlas).
+- No hay Visual Studio: compilar con el toolchain GNU. En PowerShell:
+  `$env:RUSTUP_TOOLCHAIN='1.99.0-x86_64-pc-windows-gnu'` (no se toca
+  `rust-toolchain.toml`, que usa la CI en Linux). El `link` de Git Bash rompe MSVC.
+- Verificar antes de cada commit: `cargo fmt --all -- --check`,
+  `cargo clippy --all-targets --all -- -D warnings`, `cargo test --all`; y en
+  `apps/escritorio`: `npx prettier --check "src/**/*.{ts,html,scss}"`, `npx ng test
+  --no-watch` y `npm run build`.
+- Las pruebas de Angular corren aisladas (`"isolate": true` en `angular.json`): cada
+  archivo simula `@tauri-apps/api/core` a su manera, y sin aislamiento los simulacros de
+  un archivo pisaban los de otro (fallaban juntos y pasaban solos).
+- Angular 22 pide Node 22.22.3 o más nuevo (la CI usa Node 24).
+- La app en desarrollo: `npx tauri dev` dentro de `apps/escritorio`. Los paquetes npm de
+  Tauri deben coincidir en versión menor con el crate de Rust (hoy 2.11).
+- Cerrar la app antes de importar datos: la base queda tomada mientras esté abierta.
+- Si un cambio de Rust deja el código a medias, `tauri dev` se detiene solo (vigila los
+  crates): se relanza al terminar.
 
 ## Reglas del dueño que no se negocian
 
@@ -65,6 +80,9 @@ localmente. Márcalo como temporal en el código y en `reglas.md`.
   "puesto de control", "portería" o "punto de acceso".
 - Cada cambio exitoso: commit bien documentado **y subido**. Los commits van sólo a nombre
   de Daniel Quintana, sin líneas `Co-Authored-By` ni atribuciones a asistentes.
+- La interfaz **no decide nada**: sólo muestra y envía; toda regla vive en el dominio.
 - Corre `clippy --all-targets` **antes** de cada commit, no sólo las pruebas.
 - Después de subir, confirma que el CI de GitHub quedó en verde.
-- No crear pull requests si no se piden.
+- **Nada se mergea a `main` sin un PR con su CI**; los PR se abren cuando el dueño lo
+  indica o tras fusionar los pendientes.
+- Los datos reales del cliente nunca entran al repositorio.

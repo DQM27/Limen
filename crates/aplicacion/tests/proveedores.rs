@@ -68,8 +68,10 @@ mod tests {
         RegistrarEntradaProveedor::new(almacen.clone(), reloj_a(ENTRADA), almacen.ids())
     }
 
-    fn salida(almacen: &AlmacenMemoria) -> RegistrarSalidaProveedor<AlmacenMemoria, RelojFijo> {
-        RegistrarSalidaProveedor::new(almacen.clone(), reloj_a(SALIDA))
+    fn salida(
+        almacen: &AlmacenMemoria,
+    ) -> RegistrarSalidaProveedor<AlmacenMemoria, RelojFijo, IdsSecuenciales> {
+        RegistrarSalidaProveedor::new(almacen.clone(), reloj_a(SALIDA), almacen.ids())
     }
 
     /// Almacén con la empresa proveedora GAS ZETA y los gafetes de
@@ -473,9 +475,13 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(
-            RegistrarSalidaProveedor::new(almacen.clone(), reloj_a("2026-10-09T13:00:00Z"))
-                .ejecutar(&sesion(), id)
-                .await,
+            RegistrarSalidaProveedor::new(
+                almacen.clone(),
+                reloj_a("2026-10-09T13:00:00Z"),
+                almacen.ids()
+            )
+            .ejecutar(&sesion(), id)
+            .await,
             Err(ErrorCaso::Negocio(ErrorSalida::Reloj(RelojAtrasado))),
             "la hora es anterior al último movimiento"
         );
@@ -484,5 +490,35 @@ mod tests {
             Some(Via::Proveedor),
             "sigue adentro"
         );
+    }
+
+    // --- Hechos ---
+
+    /// Los hechos guardados son exactamente la entrada y la salida de
+    /// `registro`, en ese orden, por la vía indicada.
+    fn entrada_y_salida(almacen: &AlmacenMemoria, via: Via, registro: Uuid) {
+        let hechos = almacen.hechos();
+        let [entro, salio] = hechos.as_slice() else {
+            panic!("se esperaban dos hechos: {hechos:?}");
+        };
+        for hecho in [entro, salio] {
+            assert_eq!(hecho.via(), via, "la vía del hecho");
+            assert_eq!(hecho.registro(), registro, "el registro del hecho");
+            assert_eq!(hecho.marca().operador, sesion().operador(), "quién");
+        }
+        assert!(entro.es_entrada(), "primero la entrada");
+        assert!(!salio.es_entrada(), "después la salida");
+        assert!(entro.id() < salio.id(), "el ID ordena los hechos");
+    }
+
+    #[tokio::test]
+    async fn la_entrada_y_la_salida_dejan_cada_una_su_hecho() {
+        let almacen = preparado().await;
+        let id = entrada(&almacen)
+            .ejecutar(&sesion(), &comando())
+            .await
+            .unwrap();
+        salida(&almacen).ejecutar(&sesion(), id).await.unwrap();
+        entrada_y_salida(&almacen, Via::Proveedor, id.uuid());
     }
 }

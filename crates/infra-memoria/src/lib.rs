@@ -20,15 +20,15 @@ use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, NaiveDate, NaiveTime, TimeDelta, TimeZone, Utc};
 use limen_aplicacion::puertos::{
     CambioHistorial, Consultas, EntradaAuditoria, EntradaHistorial, ErrorPersistencia,
-    FabricaUnidadDeTrabajo, GeneradorIds, IngresoAbierto, PersonaAdentro, RegistroAuditado,
-    RegistroAuditoria, Reloj, RepositorioContratistas, RepositorioEmpresas,
-    RepositorioEmpresasProveedoras, RepositorioGafetes, RepositorioIngresos,
-    RepositorioIngresosCorreo, RepositorioIngresosProveedor, RepositorioPersonalKof,
-    RepositorioPresencias, RepositorioPrestamosKof, RepositorioReloj, Restriccion, ResumenGafete,
-    UnidadDeTrabajo,
+    FabricaUnidadDeTrabajo, FilaContratista, GeneradorIds, IngresoAbierto, MovimientoHistorial,
+    PersonaAdentro, RegistroAuditado, RegistroAuditoria, RegistroHechos, Reloj,
+    RepositorioContratistas, RepositorioEmpresas, RepositorioEmpresasProveedoras,
+    RepositorioGafetes, RepositorioIngresos, RepositorioIngresosCorreo,
+    RepositorioIngresosProveedor, RepositorioPersonalKof, RepositorioPresencias,
+    RepositorioPrestamosKof, RepositorioReloj, Restriccion, ResumenGafete, UnidadDeTrabajo,
 };
 use limen_dominio::busqueda::{Criterio, relevantes};
 use limen_dominio::cedula::Cedula;
@@ -36,6 +36,7 @@ use limen_dominio::contratista::{Contratista, ContratistaId};
 use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
 use limen_dominio::gafete::{Gafete, NumeroGafete, TipoGafete};
+use limen_dominio::hecho::{Hecho, HechoId};
 use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoId};
 use limen_dominio::ingreso_correo::{IngresoCorreo, IngresoCorreoId};
 use limen_dominio::ingreso_proveedor::{IngresoProveedor, IngresoProveedorId};
@@ -64,6 +65,7 @@ struct Contenido {
     kof_con_prestamo: BTreeSet<PersonalKofId>,
     ultimo_movimiento: Option<DateTime<Utc>>,
     auditoria: Vec<EntradaAuditoria>,
+    hechos: BTreeMap<HechoId, Hecho>,
 }
 
 #[derive(Debug, Default)]
@@ -224,6 +226,11 @@ impl AlmacenMemoria {
         self.mirar(|c| c.auditoria.clone())
     }
 
+    /// Todos los hechos guardados, en el orden en que ocurrieron.
+    pub fn hechos(&self) -> Vec<Hecho> {
+        self.mirar(|c| c.hechos.values().cloned().collect())
+    }
+
     /// Cuántas veces se confirmó con éxito una Unit of Work.
     pub fn confirmaciones(&self) -> usize {
         self.bloquear().confirmaciones
@@ -372,6 +379,20 @@ impl Consultas for AlmacenMemoria {
         }))
     }
 
+    fn hechos_de(
+        &self,
+        registro: Uuid,
+    ) -> impl Future<Output = Result<Vec<Hecho>, ErrorPersistencia>> + Send {
+        // El mapa ya está ordenado por el ID del hecho, como en la base.
+        std::future::ready(self.leer(|c| {
+            c.hechos
+                .values()
+                .filter(|hecho| hecho.registro() == registro)
+                .cloned()
+                .collect()
+        }))
+    }
+
     fn listar_gafetes(
         &self,
         tipo: TipoGafete,
@@ -385,6 +406,132 @@ impl Consultas for AlmacenMemoria {
                     prestado: c.prestamos.contains(clave),
                 })
                 .collect()
+        }))
+    }
+
+    fn historial_de_ingresos(
+        &self,
+        desde: Option<DateTime<Utc>>,
+        hasta: Option<DateTime<Utc>>,
+        limite: usize,
+    ) -> impl Future<Output = Result<Vec<MovimientoHistorial>, ErrorPersistencia>> + Send {
+        std::future::ready(self.leer(|c| {
+            let en_el_rango = |entrada: DateTime<Utc>| {
+                desde.is_none_or(|desde| entrada >= desde)
+                    && hasta.is_none_or(|hasta| entrada < hasta)
+            };
+            let mut movimientos = Vec::new();
+            for ingreso in c.ingresos.values().filter(|i| en_el_rango(i.entrada().en)) {
+                let Some(contratista) = c.contratistas.get(&ingreso.contratista()) else {
+                    continue;
+                };
+                movimientos.push(MovimientoHistorial {
+                    ingreso: IngresoAbierto::Contratista(ingreso.id()),
+                    identidad: Identidad::from(ingreso.cedula()),
+                    nombre: contratista.nombre().clone(),
+                    procedencia: c
+                        .empresas
+                        .get(&contratista.empresa())
+                        .map(|empresa| empresa.nombre().to_string())
+                        .unwrap_or_default(),
+                    medio: Some(ingreso.medio().clone()),
+                    gafete: ingreso.gafete(),
+                    entrada: ingreso.entrada().en,
+                    salida: ingreso.salida().map(|marca| marca.en),
+                });
+            }
+            for ingreso in c
+                .ingresos_proveedor
+                .values()
+                .filter(|i| en_el_rango(i.entrada().en))
+            {
+                movimientos.push(MovimientoHistorial {
+                    ingreso: IngresoAbierto::Proveedor(ingreso.id()),
+                    identidad: Identidad::from(ingreso.cedula()),
+                    nombre: ingreso.visitante().nombre().clone(),
+                    procedencia: c
+                        .empresas_proveedoras
+                        .get(&ingreso.empresa())
+                        .map(|empresa| empresa.nombre().to_string())
+                        .unwrap_or_default(),
+                    medio: Some(ingreso.medio().clone()),
+                    gafete: Some(ingreso.gafete()),
+                    entrada: ingreso.entrada().en,
+                    salida: ingreso.salida().map(|marca| marca.en),
+                });
+            }
+            for ingreso in c
+                .ingresos_correo
+                .values()
+                .filter(|i| en_el_rango(i.entrada().en))
+            {
+                movimientos.push(MovimientoHistorial {
+                    ingreso: IngresoAbierto::Correo(ingreso.id()),
+                    identidad: Identidad::from(ingreso.cedula()),
+                    nombre: ingreso.visitante().nombre().clone(),
+                    procedencia: ingreso.motivo().to_string(),
+                    medio: Some(ingreso.medio().clone()),
+                    gafete: Some(ingreso.gafete()),
+                    entrada: ingreso.entrada().en,
+                    salida: ingreso.salida().map(|marca| marca.en),
+                });
+            }
+            for prestamo in c
+                .prestamos_kof
+                .values()
+                .filter(|p| en_el_rango(p.entrega().en))
+            {
+                movimientos.push(MovimientoHistorial {
+                    ingreso: IngresoAbierto::Kof(prestamo.id()),
+                    identidad: prestamo.identidad(),
+                    nombre: prestamo.nombre().clone(),
+                    procedencia: "Personal KOF".to_owned(),
+                    medio: None,
+                    gafete: Some(prestamo.gafete()),
+                    entrada: prestamo.entrega().en,
+                    salida: prestamo.devolucion().map(|marca| marca.en),
+                });
+            }
+            movimientos.sort_by(|a, b| {
+                b.entrada
+                    .cmp(&a.entrada)
+                    .then_with(|| a.identidad.to_string().cmp(&b.identidad.to_string()))
+            });
+            movimientos.truncate(limite);
+            movimientos
+        }))
+    }
+
+    fn listar_contratistas(
+        &self,
+    ) -> impl Future<Output = Result<Vec<FilaContratista>, ErrorPersistencia>> + Send {
+        std::future::ready(self.leer(|c| {
+            let mut filas: Vec<FilaContratista> = c
+                .contratistas
+                .values()
+                .filter_map(|contratista| {
+                    // Nada se borra, así que la empresa siempre existe.
+                    c.empresas
+                        .get(&contratista.empresa())
+                        .map(|empresa| FilaContratista {
+                            contratista: contratista.clone(),
+                            empresa: empresa.nombre().clone(),
+                        })
+                })
+                .collect();
+            filas.sort_by(|a, b| {
+                a.contratista
+                    .nombre()
+                    .as_str()
+                    .cmp(b.contratista.nombre().as_str())
+                    .then_with(|| {
+                        a.contratista
+                            .cedula()
+                            .as_str()
+                            .cmp(b.contratista.cedula().as_str())
+                    })
+            });
+            filas
         }))
     }
 
@@ -465,6 +612,9 @@ impl FabricaUnidadDeTrabajo for AlmacenMemoria {
             auditoria: AuditoriaMemoria {
                 pendientes: Vec::new(),
             },
+            hechos: HechosMemoria {
+                pendientes: Vec::new(),
+            },
         }
     }
 }
@@ -484,6 +634,7 @@ pub struct UowMemoria {
     prestamos_kof: PrestamosKofMemoria,
     reloj: RelojMemoria,
     auditoria: AuditoriaMemoria,
+    hechos: HechosMemoria,
 }
 
 impl UowMemoria {
@@ -558,6 +709,16 @@ impl UowMemoria {
             nuevo.ultimo_movimiento = Some(en);
         }
         nuevo.auditoria.extend(self.auditoria.pendientes);
+        for hecho in self.hechos.pendientes {
+            // Como `CREATE` en la base: un hecho nunca se reemplaza.
+            if nuevo.hechos.contains_key(&hecho.id()) {
+                return Err(ErrorPersistencia::Tecnica(format!(
+                    "el hecho {} ya existe",
+                    hecho.id()
+                )));
+            }
+            nuevo.hechos.insert(hecho.id(), hecho);
+        }
 
         datos.contenido = nuevo;
         datos.confirmaciones += 1;
@@ -667,6 +828,7 @@ impl UnidadDeTrabajo for UowMemoria {
     type PrestamosKof = PrestamosKofMemoria;
     type Reloj = RelojMemoria;
     type Auditoria = AuditoriaMemoria;
+    type Hechos = HechosMemoria;
 
     fn contratistas(&mut self) -> &mut ContratistasMemoria {
         &mut self.contratistas
@@ -714,6 +876,10 @@ impl UnidadDeTrabajo for UowMemoria {
 
     fn auditoria(&mut self) -> &mut AuditoriaMemoria {
         &mut self.auditoria
+    }
+
+    fn hechos(&mut self) -> &mut HechosMemoria {
+        &mut self.hechos
     }
 
     fn confirmar(self) -> impl Future<Output = Result<(), ErrorPersistencia>> + Send {
@@ -1140,6 +1306,17 @@ impl RegistroAuditoria for AuditoriaMemoria {
     }
 }
 
+#[derive(Debug)]
+pub struct HechosMemoria {
+    pendientes: Vec<Hecho>,
+}
+
+impl RegistroHechos for HechosMemoria {
+    fn anotar(&mut self, hecho: Hecho) {
+        self.pendientes.push(hecho);
+    }
+}
+
 /// Reloj detenido en un instante fijo: las pruebas nunca dependen de la
 /// hora real.
 #[derive(Debug, Clone, Copy)]
@@ -1162,7 +1339,17 @@ impl Reloj for RelojFijo {
     fn hoy(&self) -> NaiveDate {
         self.hoy
     }
+
+    /// Costa Rica va seis horas detrás de UTC todo el año.
+    fn inicio_del_dia(&self, fecha: NaiveDate) -> DateTime<Utc> {
+        let medianoche = Utc.from_utc_datetime(&fecha.and_time(NaiveTime::MIN));
+        medianoche
+            + TimeDelta::try_hours(HORAS_DE_COSTA_RICA_DETRAS_DE_UTC)
+                .unwrap_or_else(TimeDelta::zero)
+    }
 }
+
+const HORAS_DE_COSTA_RICA_DETRAS_DE_UTC: i64 = 6;
 
 /// IDs predecibles (1, 2, 3...) para que las pruebas sepan qué esperar.
 #[derive(Debug, Clone, Default)]

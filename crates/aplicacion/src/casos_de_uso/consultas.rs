@@ -1,6 +1,7 @@
 //! Casos de uso de sólo lectura: lo que muestran las pantallas.
 
-use chrono::Days;
+use chrono::{Days, NaiveDate};
+use limen_dominio::acceso::{ResultadoAcceso, verificar_acceso};
 use limen_dominio::busqueda::Criterio;
 use limen_dominio::contratista::Contratista;
 use limen_dominio::empresa::Empresa;
@@ -8,10 +9,12 @@ use limen_dominio::empresa_proveedora::EmpresaProveedora;
 use limen_dominio::gafete::TipoGafete;
 use limen_dominio::personal_kof::PersonalKof;
 use limen_dominio::praind::DIAS_ADVERTENCIA_PRAIND;
+use limen_dominio::rango_fechas::{Atajo, ErrorRango, RangoFechas};
 
 use crate::errores::ErrorCaso;
 use crate::puertos::{
-    Consultas, EntradaHistorial, PersonaAdentro, RegistroAuditado, Reloj, ResumenGafete,
+    Consultas, EntradaHistorial, FilaContratista, MovimientoHistorial, PersonaAdentro,
+    RegistroAuditado, Reloj, ResumenGafete,
 };
 
 /// Cuántos resultados devuelve un buscador como máximo: una lista más larga
@@ -38,6 +41,130 @@ impl<C: Consultas> QuienesEstanAdentro<C> {
 
     pub async fn ejecutar(&self) -> Result<Vec<PersonaAdentro>, ErrorConsulta> {
         Ok(self.consultas.quienes_estan_adentro().await?)
+    }
+}
+
+/// Una fila de la grilla de contratistas y lo que el dominio decide hoy
+/// sobre su acceso (regla D): la pantalla sólo lo muestra, no lo calcula.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ContratistaEnLista {
+    pub fila: FilaContratista,
+    pub acceso: ResultadoAcceso,
+}
+
+/// Cuántos movimientos trae el historial como máximo: más no se leen en una
+/// pantalla, y quien necesite todo acota las fechas.
+pub const MAXIMO_MOVIMIENTOS: usize = 20_000;
+
+pub type ErrorHistorial = ErrorCaso<ErrorRango>;
+
+/// Los movimientos de un rango de fechas.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Historial {
+    /// El rango que se consultó (con los extremos abiertos, si lo estaban).
+    pub rango: RangoFechas,
+    /// Del más reciente al más antiguo.
+    pub movimientos: Vec<MovimientoHistorial>,
+    /// `true` si el rango tenía más de [`MAXIMO_MOVIMIENTOS`]: se muestran los
+    /// más recientes.
+    pub truncado: bool,
+}
+
+/// El historial de ingresos y salidas de las cuatro vías en un rango de
+/// fechas. Las fechas son días de Costa Rica; el día final se incluye
+/// completo. El rango lo valida el dominio.
+#[derive(Debug)]
+pub struct ListarHistorial<C, R> {
+    consultas: C,
+    reloj: R,
+}
+
+impl<C: Consultas, R: Reloj> ListarHistorial<C, R> {
+    pub const fn new(consultas: C, reloj: R) -> Self {
+        Self { consultas, reloj }
+    }
+
+    pub async fn ejecutar(
+        &self,
+        desde: Option<NaiveDate>,
+        hasta: Option<NaiveDate>,
+    ) -> Result<Historial, ErrorHistorial> {
+        let rango = RangoFechas::nuevo(desde, hasta).map_err(ErrorCaso::Negocio)?;
+        let desde_utc = rango.desde().map(|dia| self.reloj.inicio_del_dia(dia));
+        // El día final entra completo: el límite es el inicio del día siguiente.
+        let hasta_utc = rango
+            .hasta()
+            .and_then(|dia| dia.checked_add_days(Days::new(1)))
+            .map(|dia| self.reloj.inicio_del_dia(dia));
+        // Se pide uno de más para saber si el rango se pasó del tope.
+        let mut movimientos = self
+            .consultas
+            .historial_de_ingresos(desde_utc, hasta_utc, MAXIMO_MOVIMIENTOS + 1)
+            .await?;
+        let truncado = movimientos.len() > MAXIMO_MOVIMIENTOS;
+        movimientos.truncate(MAXIMO_MOVIMIENTOS);
+        Ok(Historial {
+            rango,
+            movimientos,
+            truncado,
+        })
+    }
+}
+
+/// Un acceso rápido de fecha y el rango que da hoy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AtajoConRango {
+    pub atajo: Atajo,
+    pub rango: RangoFechas,
+}
+
+/// Los accesos rápidos de fecha (hoy, esta semana…) con el rango que cada uno
+/// da según la fecha de hoy en Costa Rica.
+#[derive(Debug)]
+pub struct AtajosDeFecha<R> {
+    reloj: R,
+}
+
+impl<R: Reloj> AtajosDeFecha<R> {
+    pub const fn new(reloj: R) -> Self {
+        Self { reloj }
+    }
+
+    pub fn ejecutar(&self) -> Vec<AtajoConRango> {
+        let hoy = self.reloj.hoy();
+        Atajo::TODOS
+            .into_iter()
+            .map(|atajo| AtajoConRango {
+                atajo,
+                rango: atajo.rango(hoy),
+            })
+            .collect()
+    }
+}
+
+/// Todos los contratistas con el nombre de su empresa y su estado de acceso
+/// de hoy, para la grilla.
+#[derive(Debug)]
+pub struct ListarContratistas<C, R> {
+    consultas: C,
+    reloj: R,
+}
+
+impl<C: Consultas, R: Reloj> ListarContratistas<C, R> {
+    pub const fn new(consultas: C, reloj: R) -> Self {
+        Self { consultas, reloj }
+    }
+
+    pub async fn ejecutar(&self) -> Result<Vec<ContratistaEnLista>, ErrorConsulta> {
+        let hoy = self.reloj.hoy();
+        let filas = self.consultas.listar_contratistas().await?;
+        Ok(filas
+            .into_iter()
+            .map(|fila| ContratistaEnLista {
+                acceso: verificar_acceso(&fila.contratista, hoy),
+                fila,
+            })
+            .collect())
     }
 }
 

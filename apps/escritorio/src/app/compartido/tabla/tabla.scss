@@ -1,0 +1,134 @@
+// La tabla ocupa todo el alto y el ancho que le deja su pantalla. El aspecto de
+// la grilla es el de serie de AG Grid; aquí sólo vive la fila de herramientas.
+:host {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.tabla {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+}
+
+// Una sola fila: a la izquierda lo propio de la pantalla y el buscador; a la
+// derecha el conteo y las herramientas de la grilla.
+.herramientas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.grupo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.buscador {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  width: 18rem;
+  max-width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+  background: var(--mat-sys-surface-container-low);
+
+  &:focus-within {
+    border-color: var(--mat-sys-primary);
+    outline: 1px solid var(--mat-sys-primary);
+  }
+
+  mat-icon {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--mat-sys-on-surface);
+    font: var(--mat-sys-body-medium);
+  }
+}
+
+.conteo {
+  margin: 0 4px;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+  white-space: nowrap;
+}
+
+// Botones de ícono pegados en una sola pieza.
+.segmentado {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+
+  button {
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    width: 36px;
+    height: 34px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--mat-sys-on-surface);
+    cursor: pointer;
+
+    & + button {
+      border-left: 1px solid var(--mat-sys-outline-variant);
+    }
+
+    &:hover {
+      background: var(--mat-sys-surface-container-high);
+    }
+
+    &[aria-pressed='true'] {
+      background: var(--mat-sys-secondary-container);
+      color: var(--mat-sys-on-secondary-container);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--mat-sys-primary);
+      outline-offset: -2px;
+    }
+
+    mat-icon {
+      width: 20px;
+      height: 20px;
+      font-size: 20px;
+    }
+  }
+}
+
+.rejilla {
+  flex: 1;
+  min-height: 0;
+
+  ag-grid-angular {
+    display: block;
+    height: 100%;
+  }
+}
