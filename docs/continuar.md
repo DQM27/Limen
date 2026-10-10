@@ -48,9 +48,9 @@ en GitHub (exigir PR y el resultado `CI verde`).
    el plugin de diálogo de Tauri).
 2. **Formulario de "Nuevo contratista"** (diálogo de Material, con el error del núcleo
    junto a cada campo por su `codigo`) y el botón en la fila de herramientas de la grilla.
-3. **CI para Node y Tauri**: un trabajo en Windows (instalar, lint, pruebas, build de
-   Angular, clippy del cascarón) y excluir `limen-escritorio` de los trabajos de Linux, que
-   no tienen las bibliotecas de Tauri. Activar CodeQL cuando haya JavaScript que analizar.
+3. ✅ **CI para Node y Tauri**: el trabajo `escritorio` (Windows) instala, revisa el
+   formato, prueba y compila Angular, y pasa clippy al cascarón; los demás trabajos
+   excluyen `limen-escritorio`. Falta activar CodeQL para el JavaScript.
 4. Otras pantallas de la barra lateral (Dentro, Proveedores, Correo, Personal KOF,
    Gafetes), el inicio de sesión real (bloque L) y la nube, en ese orden.
 
@@ -63,6 +63,10 @@ en GitHub (exigir PR y el resultado `CI verde`).
   `cargo clippy --all-targets --all -- -D warnings`, `cargo test --all`; y en
   `apps/escritorio`: `npx prettier --check "src/**/*.{ts,html,scss}"`, `npx ng test
   --no-watch` y `npm run build`.
+- Las pruebas de Angular corren aisladas (`"isolate": true` en `angular.json`): cada
+  archivo simula `@tauri-apps/api/core` a su manera, y sin aislamiento los simulacros de
+  un archivo pisaban los de otro (fallaban juntos y pasaban solos).
+- Angular 22 pide Node 22.22.3 o más nuevo (la CI usa Node 24).
 - La app en desarrollo: `npx tauri dev` dentro de `apps/escritorio`. Los paquetes npm de
   Tauri deben coincidir en versión menor con el crate de Rust (hoy 2.11).
 - Cerrar la app antes de importar datos: la base queda tomada mientras esté abierta.
