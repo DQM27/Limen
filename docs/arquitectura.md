@@ -380,11 +380,13 @@ las escrituras anotadas antes**. Los casos de uso leen primero y escriben al fin
 | Pruebas | Embebido en memoria (`kv-mem`): base nueva por prueba, en milisegundos |
 | Nube | SurrealDB Cloud (sección 10) |
 
-**Sólo motores escritos en Rust:** `kv-surrealkv` y `kv-mem`. **RocksDB (`kv-rocksdb`)
-está prohibido**: compila C++, alarga muchísimo la compilación y complica la compilación
-cruzada para Android. El crate `surrealdb` se declara con `default-features = false` y
-activando a mano sólo las features necesarias, para que ninguna dependencia traiga
-RocksDB por accidente.
+**Motores:** `kv-surrealkv` y `kv-mem`, escritos en Rust. **RocksDB (`kv-rocksdb`) no se
+usa por pesado**: alarga muchísimo la compilación y complica la compilación cruzada para
+Android, y SurrealKV cubre lo que necesitamos con mucho menos. Compilar C++ o C no está
+prohibido (el núcleo de SurrealDB ya trae C, abajo); se elige lo más liviano cuando
+alcanza. El crate `surrealdb` se declara con `default-features = false` y activando a
+mano sólo las features necesarias, para que ninguna dependencia traiga RocksDB por
+accidente.
 
 El núcleo de SurrealDB trae internamente tres librerías en C (`aws-lc-sys` para validar
 JWT, `lz4-sys` para compresión y `ring`). No dependen de nuestras features y no se pueden
@@ -395,9 +397,25 @@ necesita `cmake`: hay que tenerlo en cuenta al compilar para Android.
 clon de `AlmacenSurreal`; al soltar el último, el motor lo libera en segundo plano (el SDK
 no ofrece un cierre que se pueda esperar).
 
-SurrealDB embebido **no cifra la base en disco** como lo hacía SQLite3MC en Lattis. Se
-compensa con el cifrado del sistema operativo (BitLocker, cifrado de Android) y cifrando
-en el adaptador los campos sensibles si hace falta.
+**Cifrado en reposo (decidido: se espera a SurrealKV).** Hoy SurrealDB embebido no cifra
+la base en disco como lo hacía SQLite3MC en Lattis. SurrealKV ya tiene el cifrado en su
+rama principal (TDE: AES-256-GCM o XChaCha20-Poly1305, con rotación de clave sin parar,
+incorporado el 25 de septiembre de 2026), pero ninguna versión publicada lo trae (la
+última es la 0.21.4) y el adaptador de SurrealDB (`surrealdb-kvs-surrealkv`) todavía no
+tiene dónde recibir la clave. Cuando salgan las dos cosas se activa al abrir la base.
+
+La clave se maneja como en Lattis (`clave_cifrado.rs`): 32 bytes aleatorios, nunca
+derivados de datos de la máquina; en Windows protegida con DPAPI para el usuario de
+Windows (`db_key.dat` en `%APPDATA%`, aparte de la base en `%LOCALAPPDATA%`, para que
+una falla del disco no se lleve las dos); en Android, con el Keystore. Copiar la base y
+la clave juntas a otra máquina o a otro usuario no sirve de nada. Llamar a DPAPI exige
+código `unsafe`, que el proyecto prohíbe: cómo resolverlo (un crate mínimo con la
+excepción, o una librería que ya lo envuelva) se decide al implementarlo.
+
+Se descartaron: BitLocker solo (con Windows encendido no protege el archivo), RocksDB
+(su cifrado trae un cifrador de demostración y SurrealDB no lo conecta), volver a
+SQLite3MC (se pierde el ecosistema de SurrealDB) y cifrar campo por campo (rompe el
+buscador y deja ver la estructura).
 
 ### 8.3 Cómo se escriben las consultas (sin ORM)
 

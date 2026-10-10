@@ -35,9 +35,9 @@ tauri = { version = "2", features = [] }
 tauri-build = { version = "2", features = [] }
 tauri-plugin-log = "2"
 tokio = { version = "1", default-features = false, features = ["macros", "rt"] }
-# Sólo motores escritos en Rust: `kv-mem` (pruebas) y `kv-surrealkv` (equipos).
-# RocksDB (`kv-rocksdb`) está prohibido: compila C++ y alarga muchísimo la
-# compilación. `default-features = false` evita que entren TLS y el cliente
+# Motores: `kv-mem` (pruebas) y `kv-surrealkv` (equipos), escritos en Rust.
+# RocksDB (`kv-rocksdb`) no se usa por pesado: alarga muchísimo la compilación
+# (sobre todo para Android); SurrealKV alcanza. `default-features = false` evita que entren TLS y el cliente
 # WebSocket mientras no se usen.
 surrealdb = { version = "3.3", default-features = false, features = ["kv-mem", "kv-surrealkv"] }
 
