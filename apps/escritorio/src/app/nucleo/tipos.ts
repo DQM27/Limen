@@ -31,3 +31,31 @@ export interface FilaContratista {
   requiere_gafete: boolean;
   acceso: Acceso;
 }
+
+/** Una empresa de contratistas. */
+export interface Empresa {
+  id: string;
+  nombre: string;
+}
+
+/**
+ * El formulario de un contratista, tal cual lo escribe el operador: el
+ * núcleo normaliza y valida (cédula, nombre, PRAIND). Las claves son las que
+ * trae `ErrorApp.campo` cuando un dato no pasa.
+ */
+export interface ContratistaEntrada {
+  cedula: string;
+  nombre: string;
+  empresa_id: string;
+  tipo_ingreso: TipoIngreso;
+  /** `AAAA-MM-DD`. */
+  fecha_vencimiento_praind: string;
+  tiene_acceso: boolean;
+}
+
+/** Un campo que cambió al editar, con el antes y el después (regla B11). */
+export interface Cambio {
+  campo: string;
+  antes: string;
+  despues: string;
+}

@@ -25,13 +25,14 @@ use limen_dominio::presencia::Via;
 use limen_dominio::prestamo_kof::PrestamoKofId;
 
 pub use dto::{
-    AccesoDto, ContratistaDto, ContratistaEntrada, EmpresaDto, EntradaContratistaEntrada,
-    EntradaRegistradaDto, FilaContratistaDto, PersonaAdentroDto,
+    AccesoDto, CambioDto, ContratistaDto, ContratistaEntrada, EmpresaDto,
+    EntradaContratistaEntrada, EntradaRegistradaDto, FilaContratistaDto, PersonaAdentroDto,
+    campo_contratista,
 };
 pub use error::{ErrorEntrada, ErrorJson, TipoErrorJson};
 pub use operador::{ErrorOperador, NOMBRE_PROVISIONAL, Operador, OperadorDelEquipo};
 
-use dto::{leer_uuid, leer_via};
+use dto::{error_de_contratista, error_de_empresa, leer_uuid, leer_via};
 
 /// Los comandos de la interfaz, sobre una aplicación ya armada.
 ///
@@ -155,11 +156,18 @@ where
         sesion: &Sesion,
         nombre: &str,
     ) -> Result<String, ErrorJson> {
-        let id = self.app.empresas.registrar.ejecutar(sesion, nombre).await?;
+        let id = self
+            .app
+            .empresas
+            .registrar
+            .ejecutar(sesion, nombre)
+            .await
+            .map_err(error_de_empresa)?;
         Ok(id.uuid().to_string())
     }
 
-    /// Registra un contratista y devuelve su identificador.
+    /// Registra un contratista y devuelve su identificador. Un error de una
+    /// regla trae el campo del formulario al que pertenece.
     pub async fn registrar_contratista(
         &self,
         sesion: &Sesion,
@@ -171,8 +179,30 @@ where
             .contratistas
             .registrar
             .ejecutar(sesion, &comando)
-            .await?;
+            .await
+            .map_err(error_de_contratista)?;
         Ok(id.uuid().to_string())
+    }
+
+    /// Edita un contratista con el formulario completo y devuelve lo que
+    /// cambió: vacío si nada cambió (y entonces no se escribe nada). Los
+    /// errores traen su campo, como al registrar.
+    pub async fn editar_contratista(
+        &self,
+        sesion: &Sesion,
+        id: &str,
+        entrada: &ContratistaEntrada,
+    ) -> Result<Vec<CambioDto>, ErrorJson> {
+        let id = ContratistaId::desde_uuid(leer_uuid(id)?);
+        let comando = entrada.a_comando()?;
+        let cambios = self
+            .app
+            .contratistas
+            .editar
+            .ejecutar(sesion, id, &comando)
+            .await
+            .map_err(error_de_contratista)?;
+        Ok(cambios.iter().map(CambioDto::from).collect())
     }
 
     /// Registra la entrada de un contratista.

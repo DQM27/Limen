@@ -17,6 +17,7 @@ mod tests {
     use limen_dominio::tipo_ingreso::TipoIngreso;
     use limen_escritorio_comandos::{
         Comandos, ContratistaEntrada, EntradaContratistaEntrada, ErrorJson, TipoErrorJson,
+        campo_contratista,
     };
     use limen_infra_memoria::{AlmacenMemoria, IdsSecuenciales, RelojFijo};
     use serde_json::json;
@@ -586,7 +587,7 @@ mod tests {
     }
 
     #[test]
-    fn el_error_viaja_con_tres_campos_y_nada_mas() {
+    fn el_error_viaja_con_cuatro_campos_y_nada_mas() {
         let error: ErrorJson = ErrorCaso::<ErrorContratista>::NoEncontrado.into();
         assert_eq!(
             serde_json::to_value(&error).unwrap(),
@@ -594,7 +595,177 @@ mod tests {
                 "tipo": "negocio",
                 "codigo": "no_encontrado",
                 "mensaje": "El registro no existe",
+                "campo": null,
             })
         );
+    }
+
+    // --- Formulario de contratista ---
+
+    /// El código y el campo de un error.
+    fn codigo_y_campo(error: &ErrorJson) -> (&'static str, Option<&'static str>) {
+        (error.codigo, error.campo)
+    }
+
+    #[test]
+    fn los_campos_de_los_errores_son_las_claves_del_formulario() {
+        // Si una constante dejara de coincidir con una clave del JSON de
+        // entrada, este formulario no se podría leer.
+        let formulario: ContratistaEntrada = serde_json::from_value(json!({
+            campo_contratista::CEDULA: "111111111",
+            campo_contratista::NOMBRE: "ANA",
+            campo_contratista::EMPRESA: Uuid::from_u128(1).to_string(),
+            campo_contratista::TIPO_INGRESO: "PRAIND",
+            campo_contratista::FECHA_VENCIMIENTO_PRAIND: "2099-01-01",
+            "tiene_acceso": true,
+        }))
+        .unwrap();
+        assert_eq!(formulario.cedula, "111111111");
+    }
+
+    #[tokio::test]
+    async fn cada_regla_del_contratista_llega_con_su_campo() {
+        let (comandos, _) = con_contratista().await;
+        let empresa = comandos
+            .buscar_empresas("acme", 1)
+            .await
+            .unwrap()
+            .remove(0)
+            .id;
+        let con = |cambio: fn(&mut ContratistaEntrada)| {
+            let mut formulario = formulario(&empresa);
+            formulario.cedula = "4-4444-4444".into();
+            cambio(&mut formulario);
+            formulario
+        };
+        let casos = [
+            (
+                con(|f| f.cedula = "1-1111-1111".into()),
+                "cedula_repetida",
+                "cedula",
+            ),
+            (con(|f| f.cedula = "12".into()), "cedula_invalida", "cedula"),
+            (con(|f| f.cedula = String::new()), "cedula_vacia", "cedula"),
+            (
+                con(|f| f.nombre = "ana 2".into()),
+                "nombre_invalido",
+                "nombre",
+            ),
+            (con(|f| f.nombre = " ".into()), "nombre_vacio", "nombre"),
+            (
+                con(|f| f.empresa_id = Uuid::from_u128(777).to_string()),
+                "empresa_no_existe",
+                "empresa_id",
+            ),
+            (
+                con(|f| f.fecha_vencimiento_praind = "2020-01-01".into()),
+                "praind_vencido",
+                "fecha_vencimiento_praind",
+            ),
+            // Lo ilegible también dice de qué campo es.
+            (
+                con(|f| f.empresa_id = "basura".into()),
+                "id_invalido",
+                "empresa_id",
+            ),
+            (
+                con(|f| f.tipo_ingreso = "SWAT".into()),
+                "tipo_ingreso_invalido",
+                "tipo_ingreso",
+            ),
+            (
+                con(|f| f.fecha_vencimiento_praind = "09/10/2026".into()),
+                "fecha_invalida",
+                "fecha_vencimiento_praind",
+            ),
+        ];
+        for (formulario, codigo, campo) in casos {
+            let error = error_de(comandos.registrar_contratista(&sesion(), &formulario).await);
+            assert_eq!(
+                codigo_y_campo(&error),
+                (codigo, Some(campo)),
+                "{formulario:?}"
+            );
+            assert_eq!(error.tipo, TipoErrorJson::Negocio, "{error:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn la_empresa_repetida_llega_en_el_campo_nombre() {
+        let (comandos, _) = con_contratista().await;
+        let error = error_de(comandos.registrar_empresa(&sesion(), "ACME S.A.").await);
+        assert_eq!(
+            codigo_y_campo(&error),
+            ("empresa_nombre_repetido", Some("nombre"))
+        );
+    }
+
+    #[tokio::test]
+    async fn editar_devuelve_lo_que_cambio_y_nada_si_no_cambio_nada() {
+        let (comandos, contratista) = con_contratista().await;
+        let empresa = comandos
+            .buscar_empresas("acme", 1)
+            .await
+            .unwrap()
+            .remove(0)
+            .id;
+
+        let mismo = comandos
+            .editar_contratista(&sesion(), &contratista, &formulario(&empresa))
+            .await
+            .unwrap();
+        assert_eq!(mismo, Vec::new(), "el mismo formulario no cambia nada");
+
+        let mut otro = formulario(&empresa);
+        otro.nombre = "josé peña solís".into();
+        let cambios = comandos
+            .editar_contratista(&sesion(), &contratista, &otro)
+            .await
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(&cambios).unwrap(),
+            json!([{ "campo": "nombre", "antes": "JOSE PEÑA", "despues": "JOSE PEÑA SOLIS" }]),
+            "trae cada cambio con el antes y el después que decidió el dominio"
+        );
+        let buscado = comandos.buscar_contratistas("solis", 1).await.unwrap();
+        assert_eq!(buscado.len(), 1, "quedó guardado");
+    }
+
+    #[tokio::test]
+    async fn editar_valida_igual_que_registrar() {
+        let (comandos, contratista) = con_contratista().await;
+        let empresa = comandos
+            .buscar_empresas("acme", 1)
+            .await
+            .unwrap()
+            .remove(0)
+            .id;
+        let mut otro = formulario(&empresa);
+        otro.cedula = "4-4444-4444".into();
+        comandos
+            .registrar_contratista(&sesion(), &otro)
+            .await
+            .unwrap();
+
+        // Quitarle la cédula a otro contratista.
+        let repetida = error_de(
+            comandos
+                .editar_contratista(&sesion(), &contratista, &otro)
+                .await,
+        );
+        assert_eq!(
+            codigo_y_campo(&repetida),
+            ("cedula_repetida", Some("cedula"))
+        );
+
+        let inexistente = error_de(
+            comandos
+                .editar_contratista(&sesion(), &Uuid::from_u128(5).to_string(), &otro)
+                .await,
+        );
+        assert_eq!(codigo_y_campo(&inexistente), ("no_encontrado", None));
+
+        let ilegible = error_de(comandos.editar_contratista(&sesion(), "x", &otro).await);
+        assert_eq!(codigo_y_campo(&ilegible), ("id_invalido", None));
     }
 }

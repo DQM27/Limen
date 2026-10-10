@@ -30,6 +30,11 @@ pub struct ErrorJson {
     pub codigo: &'static str,
     /// Mensaje para mostrar tal cual al operador.
     pub mensaje: String,
+    /// El campo del formulario que causó el error (la clave del JSON de
+    /// entrada, por ejemplo `cedula`), para mostrarlo junto a él. `None`
+    /// cuando el error no es de un campo (un fallo técnico, un registro que
+    /// no existe).
+    pub campo: Option<&'static str>,
 }
 
 impl ErrorJson {
@@ -40,7 +45,15 @@ impl ErrorJson {
             tipo: TipoErrorJson::Negocio,
             codigo: "sin_operador",
             mensaje: "Falta identificar al operador de este equipo".to_owned(),
+            campo: None,
         }
+    }
+
+    /// El mismo error, atribuido a un campo del formulario.
+    #[must_use]
+    pub const fn en_campo(mut self, campo: Option<&'static str>) -> Self {
+        self.campo = campo;
+        self
     }
 }
 
@@ -80,6 +93,7 @@ impl From<ErrorEntrada> for ErrorJson {
             tipo: TipoErrorJson::Negocio,
             codigo: error.codigo(),
             mensaje: error.to_string(),
+            campo: None,
         }
     }
 }
@@ -97,6 +111,7 @@ impl<N: ErrorDeNegocio> From<ErrorCaso<N>> for ErrorJson {
             },
             codigo: interfaz.codigo,
             mensaje: interfaz.mensaje,
+            campo: None,
         }
     }
 }

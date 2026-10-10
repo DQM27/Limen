@@ -9,6 +9,12 @@ export interface ErrorApp {
   tipo: 'negocio' | 'tecnico';
   codigo: string;
   mensaje: string;
+  /**
+   * El campo del formulario que causó el error (la clave del JSON de
+   * entrada, por ejemplo `cedula`), para mostrarlo junto a él. `null` si el
+   * error no es de un campo. Lo decide el núcleo, no la interfaz.
+   */
+  campo?: string | null;
 }
 
 export function esErrorApp(valor: unknown): valor is ErrorApp {

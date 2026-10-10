@@ -16,7 +16,7 @@
 )]
 
 use limen_escritorio_comandos::{
-    ContratistaDto, ContratistaEntrada, EmpresaDto, EntradaContratistaEntrada,
+    CambioDto, ContratistaDto, ContratistaEntrada, EmpresaDto, EntradaContratistaEntrada,
     EntradaRegistradaDto, ErrorJson, FilaContratistaDto, Operador, PersonaAdentroDto,
 };
 use tauri::State;
@@ -110,6 +110,19 @@ pub async fn registrar_contratista(
     estado
         .comandos()
         .registrar_contratista(&sesion, &contratista)
+        .await
+}
+
+#[tauri::command]
+pub async fn editar_contratista(
+    estado: State<'_, Estado>,
+    id: String,
+    contratista: ContratistaEntrada,
+) -> Resultado<Vec<CambioDto>> {
+    let sesion = estado.operador().sesion()?;
+    estado
+        .comandos()
+        .editar_contratista(&sesion, &id, &contratista)
         .await
 }
 

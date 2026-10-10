@@ -46,8 +46,15 @@ en GitHub (exigir PR y el resultado `CI verde`).
    rápidos que da el núcleo y fechas Desde/Hasta; el modelo es el de Lattis) y las
    exportaciones: CSV, Excel y PDF (necesitan un comando de Rust que guarde el archivo y
    el plugin de diálogo de Tauri).
-2. **Formulario de "Nuevo contratista"** (diálogo de Material, con el error del núcleo
-   junto a cada campo por su `codigo`) y el botón en la fila de herramientas de la grilla.
+2. **Formulario de "Nuevo contratista"** (diálogo de Material) y el botón en la fila de
+   herramientas de la grilla. **El núcleo ya está listo**; falta sólo la pantalla:
+   - `nucleo/comandos.ts`: `registrarContratista`, `editarContratista` (devuelve los
+     `Cambio` o `[]` si nada cambió), `buscarEmpresas` y `registrarEmpresa`; tipos
+     `ContratistaEntrada`, `Empresa` y `Cambio` en `tipos.ts`.
+   - Cada error trae `campo` (`cedula`, `nombre`, `empresa_id`, `tipo_ingreso`,
+     `fecha_vencimiento_praind`, o `nombre` en la empresa): el mensaje va junto a ese
+     campo, sin que la interfaz traduzca códigos. `campo: null` → mensaje general.
+   - Para editar, la fila de la grilla ya trae todo para precargar el formulario.
 3. ✅ **CI para Node y Tauri**: el trabajo `escritorio` (Windows) instala, revisa el
    formato, prueba y compila Angular, y pasa clippy al cascarón; los demás trabajos
    excluyen `limen-escritorio`. Falta activar CodeQL para el JavaScript.
