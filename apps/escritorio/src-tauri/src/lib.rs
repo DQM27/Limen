@@ -9,21 +9,32 @@ mod comandos;
 mod estado;
 
 use limen_composicion::{AplicacionLimen, Config};
+use limen_infra_plataforma::{RelojConfiable, SERVIDORES_NTP, leer_desfase};
 use tauri::Manager;
 
 use estado::Estado;
 
 /// Carpeta de la base dentro de los datos de la app.
 const CARPETA_BASE: &str = "base";
+/// El último desfase medido del reloj del equipo, para la próxima apertura.
+const ARCHIVO_DESFASE_RELOJ: &str = "reloj-desfase.txt";
 /// Abre la base. Si falla no hay app que mostrar: el error sube a `setup`,
 /// que detiene el arranque con el motivo escrito. La app arranca sin
 /// sesión: la interfaz pide entrar (o crear el primer usuario).
 fn preparar_estado(app: &tauri::App) -> Result<Estado, Box<dyn std::error::Error>> {
     let datos = app.path().app_data_dir()?;
     std::fs::create_dir_all(&datos)?;
-    let aplicacion = tauri::async_runtime::block_on(AplicacionLimen::abrir(&Config {
-        ruta_base: datos.join(CARPETA_BASE),
-    }))?;
+    // La hora se corrige contra NTP en segundo plano: hasta la primera
+    // medición, la hora sale sin comprobar (y queda marcada, regla E5).
+    let ruta_desfase = datos.join(ARCHIVO_DESFASE_RELOJ);
+    let reloj = RelojConfiable::new(leer_desfase(&ruta_desfase));
+    reloj.sincronizar_en_segundo_plano(&SERVIDORES_NTP, ruta_desfase);
+    let aplicacion = tauri::async_runtime::block_on(AplicacionLimen::abrir(
+        &Config {
+            ruta_base: datos.join(CARPETA_BASE),
+        },
+        &reloj,
+    ))?;
     Ok(Estado::new(aplicacion))
 }
 

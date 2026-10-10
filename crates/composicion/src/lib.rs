@@ -7,7 +7,7 @@
 //! 130 métodos y un candado global.
 //!
 //! [`Aplicacion`] es genérica: con [`AplicacionLimen`] queda armada con los
-//! adaptadores reales (`SurrealDB`, la hora de Costa Rica, UUID v7 y
+//! adaptadores reales (`SurrealDB`, el reloj confiable, UUID v7 y
 //! Argon2id), y las pruebas la arman con los dobles en memoria y un reloj
 //! fijo.
 //!
@@ -45,7 +45,7 @@ use limen_aplicacion::casos_de_uso::usuarios::{
 use limen_aplicacion::puertos::{
     Consultas, Contrasenas, ErrorPersistencia, FabricaUnidadDeTrabajo, GeneradorIds, Reloj,
 };
-use limen_infra_plataforma::{ContrasenasArgon2, IdsV7, RelojCostaRica};
+use limen_infra_plataforma::{ContrasenasArgon2, IdsV7, RelojConfiable};
 use limen_infra_surreal::AlmacenSurreal;
 
 /// Con qué se abre la aplicación.
@@ -265,13 +265,15 @@ where
 }
 
 /// La aplicación con los adaptadores reales.
-pub type AplicacionLimen = Aplicacion<AlmacenSurreal, RelojCostaRica, IdsV7, ContrasenasArgon2>;
+pub type AplicacionLimen = Aplicacion<AlmacenSurreal, RelojConfiable, IdsV7, ContrasenasArgon2>;
 
 impl AplicacionLimen {
-    /// Abre (o crea) la base de este equipo y arma la aplicación.
-    pub async fn abrir(config: &Config) -> Result<Self, ErrorArranque> {
+    /// Abre (o crea) la base de este equipo y arma la aplicación. El reloj
+    /// lo crea quien arranca la app, que también lo sincroniza (ver
+    /// [`RelojConfiable::sincronizar_en_segundo_plano`]).
+    pub async fn abrir(config: &Config, reloj: &RelojConfiable) -> Result<Self, ErrorArranque> {
         let almacen = AlmacenSurreal::en_disco(&config.ruta_base).await?;
         let contrasenas = ContrasenasArgon2::new().map_err(ErrorArranque::Contrasenas)?;
-        Ok(Self::nueva(&almacen, &RelojCostaRica, &IdsV7, &contrasenas))
+        Ok(Self::nueva(&almacen, reloj, &IdsV7, &contrasenas))
     }
 }

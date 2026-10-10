@@ -245,7 +245,7 @@ arquitectura en hexagonal.
 | `FabricaUnidadDeTrabajo` / `UnidadDeTrabajo` | Transacción y acceso a los repositorios (sección 7) |
 | `RepositorioContratistas`, `RepositorioEmpresas`, … | Leer y anotar escrituras de un agregado |
 | `Consultas*` | Lecturas para pantallas (listas, búsquedas, historial) |
-| `Reloj` | Fecha de hoy en Costa Rica e instante UTC |
+| `Reloj` | Fecha de hoy en Costa Rica, instante UTC y la lectura con su margen de error para sellar movimientos (E5). En producción, `RelojConfiable`: hora NTP anclada al reloj monotónico |
 | `GeneradorIds` | UUID v7 para entidades nuevas |
 | `CanalNube` | Enviar hechos y recibir los de otros equipos |
 | `Firmante` | Firmar con la clave privada del equipo |

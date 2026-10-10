@@ -24,6 +24,13 @@ falta el detalle, [`arquitectura.md`](arquitectura.md), [`reglas.md`](reglas.md)
   contraseña, Argon2id (`infra-plataforma`), bloqueo tras 5 fallos, primer usuario del
   equipo y contraseña temporal. El operador provisional (`operador.json`) ya no existe:
   **la app arranca sin sesión** y ningún comando hace nada hasta entrar.
+- **Reloj confiable** (regla E5 nueva): la hora sale de NTP (`time.windows.com`, luego
+  `pool.ntp.org`) anclada al reloj monotónico del proceso; se vuelve a medir cada hora en
+  segundo plano y el último desfase se guarda en `reloj-desfase.txt` (carpeta de datos de
+  la app). El reloj ya no bloquea: un movimiento con hora dudosa se registra y su hecho
+  queda marcado (`hora_confiable = false`, con la `hora_equipo` cruda). **Pendiente de
+  probar en la PC**: que la red de la planta deje salir NTP (UDP 123); si no, todo queda
+  "sin comprobar" hasta que exista la nube, que dará la hora.
 - **Importador de Lattis** (`herramientas/importador-lattis`): carga un volcado SQL en la
   base de Limen. Los datos reales viven en `datos-privados/` (ignorada por git) y **nunca
   se suben**: el repositorio es público.

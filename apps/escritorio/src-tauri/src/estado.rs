@@ -2,11 +2,11 @@
 
 use limen_composicion::AplicacionLimen;
 use limen_escritorio_comandos::Comandos;
-use limen_infra_plataforma::{ContrasenasArgon2, IdsV7, RelojCostaRica};
+use limen_infra_plataforma::{ContrasenasArgon2, IdsV7, RelojConfiable};
 use limen_infra_surreal::AlmacenSurreal;
 
 /// Los comandos con los adaptadores reales.
-pub type ComandosLimen = Comandos<AlmacenSurreal, RelojCostaRica, IdsV7, ContrasenasArgon2>;
+pub type ComandosLimen = Comandos<AlmacenSurreal, RelojConfiable, IdsV7, ContrasenasArgon2>;
 
 /// Estado administrado por Tauri, sin candado global: la concurrencia de la
 /// base la maneja su adaptador, y la sesión del equipo vive en los comandos.
