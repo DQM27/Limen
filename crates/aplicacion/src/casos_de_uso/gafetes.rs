@@ -2,7 +2,7 @@
 
 use limen_dominio::auditoria::CambioCampo;
 use limen_dominio::gafete::{
-    Deudor, ErrorGafete, Gafete, NumeroGafete, Resolucion, SituacionGafete, TipoGafete,
+    ErrorGafete, Gafete, NumeroGafete, Portador, Resolucion, SituacionGafete, TipoGafete,
 };
 
 use crate::errores::ErrorCaso;
@@ -92,7 +92,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarGafetes<F, R
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CambioGafete {
     /// F4, F5.
-    MarcarPerdido(Deudor),
+    MarcarPerdido(Portador),
     /// F3.
     Resolver(Resolucion),
     /// F4, F6.
@@ -131,7 +131,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> CambiarGafete<F, R, G
             .await?
             .ok_or(ErrorCaso::NoEncontrado)?;
         let cambios = match cambio {
-            CambioGafete::MarcarPerdido(deudor) => gafete.marcar_perdido(deudor),
+            CambioGafete::MarcarPerdido(portador) => gafete.marcar_perdido(portador),
             CambioGafete::Resolver(resolucion) => gafete.resolver(resolucion),
             CambioGafete::DarDeBaja => {
                 let en_uso = uow.gafetes().prestado(tipo, numero).await?;

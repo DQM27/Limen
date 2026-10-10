@@ -16,8 +16,10 @@
 )]
 
 use limen_escritorio_comandos::{
-    CambioDto, ContratistaDto, ContratistaEntrada, EmpresaDto, EntradaContratistaEntrada,
-    EntradaRegistradaDto, ErrorJson, FilaContratistaDto, Operador, PersonaAdentroDto,
+    CambioDto, CambioGafeteEntrada, ContratistaDto, ContratistaEntrada, EmpresaDto,
+    EmpresaProveedoraDto, EntradaContratistaEntrada, EntradaCorreoEntrada, EntradaProveedorEntrada,
+    EntradaRegistradaDto, ErrorJson, FilaContratistaDto, GafeteDto, Operador, PersonaAdentroDto,
+    PersonalKofDto,
 };
 use tauri::State;
 
@@ -135,5 +137,166 @@ pub async fn registrar_entrada_contratista(
     estado
         .comandos()
         .registrar_entrada_contratista(&sesion, &entrada)
+        .await
+}
+
+// --- Empresas, proveedores, correo, personal KOF y gafetes ---
+
+#[tauri::command]
+pub async fn renombrar_empresa(
+    estado: State<'_, Estado>,
+    id: String,
+    nombre: String,
+) -> Resultado<Vec<CambioDto>> {
+    let sesion = estado.operador().sesion()?;
+    estado
+        .comandos()
+        .renombrar_empresa(&sesion, &id, &nombre)
+        .await
+}
+
+#[tauri::command]
+pub async fn buscar_empresas_proveedoras(
+    estado: State<'_, Estado>,
+    texto: String,
+    limite: usize,
+) -> Resultado<Vec<EmpresaProveedoraDto>> {
+    estado.operador().sesion()?;
+    estado
+        .comandos()
+        .buscar_empresas_proveedoras(&texto, limite)
+        .await
+}
+
+#[tauri::command]
+pub async fn registrar_empresa_proveedora(
+    estado: State<'_, Estado>,
+    nombre: String,
+) -> Resultado<String> {
+    let sesion = estado.operador().sesion()?;
+    estado
+        .comandos()
+        .registrar_empresa_proveedora(&sesion, &nombre)
+        .await
+}
+
+#[tauri::command]
+pub async fn renombrar_empresa_proveedora(
+    estado: State<'_, Estado>,
+    id: String,
+    nombre: String,
+) -> Resultado<Vec<CambioDto>> {
+    let sesion = estado.operador().sesion()?;
+    estado
+        .comandos()
+        .renombrar_empresa_proveedora(&sesion, &id, &nombre)
+        .await
+}
+
+#[tauri::command]
+pub async fn registrar_entrada_proveedor(
+    estado: State<'_, Estado>,
+    entrada: EntradaProveedorEntrada,
+) -> Resultado<String> {
+    let sesion = estado.operador().sesion()?;
+    estado
+        .comandos()
+        .registrar_entrada_proveedor(&sesion, &entrada)
+        .await
+}
+
+#[tauri::command]
+pub async fn registrar_entrada_correo(
+    estado: State<'_, Estado>,
+    entrada: EntradaCorreoEntrada,
+) -> Resultado<String> {
+    let sesion = estado.operador().sesion()?;
+    estado
+        .comandos()
+        .registrar_entrada_correo(&sesion, &entrada)
+        .await
+}
+
+#[tauri::command]
+pub async fn buscar_personal_kof(
+    estado: State<'_, Estado>,
+    texto: String,
+    limite: usize,
+) -> Resultado<Vec<PersonalKofDto>> {
+    estado.operador().sesion()?;
+    estado.comandos().buscar_personal_kof(&texto, limite).await
+}
+
+#[tauri::command]
+pub async fn registrar_personal_kof(
+    estado: State<'_, Estado>,
+    codigo_empleado: String,
+    nombre: String,
+) -> Resultado<String> {
+    let sesion = estado.operador().sesion()?;
+    estado
+        .comandos()
+        .registrar_personal_kof(&sesion, &codigo_empleado, &nombre)
+        .await
+}
+
+#[tauri::command]
+pub async fn editar_personal_kof(
+    estado: State<'_, Estado>,
+    id: String,
+    nombre: String,
+    activo: bool,
+) -> Resultado<Vec<CambioDto>> {
+    let sesion = estado.operador().sesion()?;
+    estado
+        .comandos()
+        .editar_personal_kof(&sesion, &id, &nombre, activo)
+        .await
+}
+
+#[tauri::command]
+pub async fn entregar_gafete_kof(
+    estado: State<'_, Estado>,
+    personal_id: String,
+    gafete: u32,
+) -> Resultado<String> {
+    let sesion = estado.operador().sesion()?;
+    estado
+        .comandos()
+        .entregar_gafete_kof(&sesion, &personal_id, gafete)
+        .await
+}
+
+#[tauri::command]
+pub async fn listar_gafetes(estado: State<'_, Estado>, tipo: String) -> Resultado<Vec<GafeteDto>> {
+    estado.operador().sesion()?;
+    estado.comandos().listar_gafetes(&tipo).await
+}
+
+#[tauri::command]
+pub async fn registrar_gafetes(
+    estado: State<'_, Estado>,
+    tipo: String,
+    desde: u32,
+    hasta: u32,
+) -> Resultado<usize> {
+    let sesion = estado.operador().sesion()?;
+    estado
+        .comandos()
+        .registrar_gafetes(&sesion, &tipo, desde, hasta)
+        .await
+}
+
+#[tauri::command]
+pub async fn cambiar_gafete(
+    estado: State<'_, Estado>,
+    tipo: String,
+    numero: u32,
+    cambio: CambioGafeteEntrada,
+) -> Resultado<Vec<CambioDto>> {
+    let sesion = estado.operador().sesion()?;
+    estado
+        .comandos()
+        .cambiar_gafete(&sesion, &tipo, numero, &cambio)
         .await
 }

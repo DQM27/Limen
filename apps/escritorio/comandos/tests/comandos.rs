@@ -16,8 +16,7 @@ mod tests {
     use limen_dominio::medio::TipoMedio;
     use limen_dominio::tipo_ingreso::TipoIngreso;
     use limen_escritorio_comandos::{
-        Comandos, ContratistaEntrada, EntradaContratistaEntrada, ErrorJson, TipoErrorJson,
-        campo_contratista,
+        Comandos, ContratistaEntrada, EntradaContratistaEntrada, ErrorJson, TipoErrorJson, campos,
     };
     use limen_infra_memoria::{AlmacenMemoria, IdsSecuenciales, RelojFijo};
     use serde_json::json;
@@ -612,11 +611,11 @@ mod tests {
         // Si una constante dejara de coincidir con una clave del JSON de
         // entrada, este formulario no se podría leer.
         let formulario: ContratistaEntrada = serde_json::from_value(json!({
-            campo_contratista::CEDULA: "111111111",
-            campo_contratista::NOMBRE: "ANA",
-            campo_contratista::EMPRESA: Uuid::from_u128(1).to_string(),
-            campo_contratista::TIPO_INGRESO: "PRAIND",
-            campo_contratista::FECHA_VENCIMIENTO_PRAIND: "2099-01-01",
+            campos::CEDULA: "111111111",
+            campos::NOMBRE: "ANA",
+            campos::EMPRESA: Uuid::from_u128(1).to_string(),
+            campos::TIPO_INGRESO: "PRAIND",
+            campos::FECHA_VENCIMIENTO_PRAIND: "2099-01-01",
             "tiene_acceso": true,
         }))
         .unwrap();
