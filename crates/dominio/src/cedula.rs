@@ -47,7 +47,7 @@ impl Cedula {
     ///    pierden ese cero: es la misma cédula de 9 dígitos.
     ///
     /// Rechaza sólo lo vacío, lo que trae otros símbolos y lo que pasa de
-    /// [`LARGO_MAXIMO`]. Qué documentos acepta cada tipo de persona lo
+    /// 20 caracteres. Qué documentos acepta cada tipo de persona lo
     /// decide su propia regla (ver [`Cedula::es_nacional_o_de_extranjero`]).
     pub fn normalizar(texto: &str) -> Result<Self, CedulaInvalida> {
         let limpia: String = texto

@@ -1,0 +1,19 @@
+# Avisos de seguridad que `cargo audit` deja pasar, cada uno con su motivo.
+# Todo lo demás —incluida cualquier dependencia nueva— hace fallar la CI.
+#
+# Los tres vienen de `surrealdb-core` y no se pueden arreglar desde Limen.
+# Se revisan cada vez que se sube la versión de SurrealDB: si ya no
+# aparecen, se borran de aquí.
+
+[advisories]
+ignore = [
+    # `rsa` (ataque Marvin, sin versión corregida). Lo trae `jsonwebtoken`,
+    # que SurrealDB usa para validar JWT de sus usuarios. Limen usa el motor
+    # embebido sin autenticación de SurrealDB (arquitectura.md, sección 8).
+    "RUSTSEC-2023-0071",
+    # `quick-xml` 0.39 (tiempo cuadrático y memoria sin límite al leer XML).
+    # Lo trae `object_store`, que sólo se usa con almacenamiento en la nube;
+    # Limen usa `kv-mem` y `kv-surrealkv`, y nunca lee XML de fuera.
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
+]
