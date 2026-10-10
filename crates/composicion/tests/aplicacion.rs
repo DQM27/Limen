@@ -23,8 +23,9 @@ mod tests {
     use limen_dominio::nombre::NombrePersona;
     use limen_dominio::personal_kof::PersonalKofId;
     use limen_dominio::tipo_ingreso::TipoIngreso;
-    use limen_infra_memoria::{AlmacenMemoria, IdsSecuenciales, RelojFijo};
-    use limen_infra_plataforma::{IdsV7, RelojCostaRica};
+    use limen_dominio::usuario::ErrorInicioSesion;
+    use limen_infra_memoria::{AlmacenMemoria, ContrasenasFalsas, IdsSecuenciales, RelojFijo};
+    use limen_infra_plataforma::{ContrasenasArgon2, IdsV7, RelojCostaRica};
     use limen_infra_surreal::AlmacenSurreal;
     use uuid::Uuid;
 
@@ -39,7 +40,8 @@ mod tests {
     #[test]
     fn la_aplicacion_se_puede_compartir_entre_hilos() {
         es_send_y_sync::<AplicacionLimen>();
-        es_send_y_sync::<Aplicacion<AlmacenMemoria, RelojFijo, IdsSecuenciales>>();
+        es_send_y_sync::<Aplicacion<AlmacenMemoria, RelojFijo, IdsSecuenciales, ContrasenasFalsas>>(
+        );
     }
 
     /// Lo que se crea al preparar el día y se necesita después.
@@ -51,11 +53,12 @@ mod tests {
 
     /// Catálogos: empresas, gafetes, un contratista y una persona del KOF; y
     /// comprueba que el buscador los encuentra.
-    async fn preparar_el_dia<F, R, G>(app: &Aplicacion<F, R, G>) -> Dia
+    async fn preparar_el_dia<F, R, G, C>(app: &Aplicacion<F, R, G, C>) -> Dia
     where
         F: FabricaUnidadDeTrabajo + Consultas + Clone,
         R: Reloj + Clone,
         G: GeneradorIds + Clone,
+        C: Sync,
     {
         let sesion = sesion();
         let acme = app
@@ -141,11 +144,12 @@ mod tests {
     }
 
     /// Entran por las tres vías y se le presta un provisional al KOF.
-    async fn entran_todos<F, R, G>(app: &Aplicacion<F, R, G>, dia: &Dia)
+    async fn entran_todos<F, R, G, C>(app: &Aplicacion<F, R, G, C>, dia: &Dia)
     where
         F: FabricaUnidadDeTrabajo + Consultas + Clone,
         R: Reloj + Clone,
         G: GeneradorIds + Clone,
+        C: Sync,
     {
         let sesion = sesion();
         let entrada = app
@@ -244,11 +248,12 @@ mod tests {
     }
 
     /// Las consultas de apoyo ven lo que pasó durante el día.
-    async fn consultas_de_apoyo<F, R, G>(app: &Aplicacion<F, R, G>, dia: &Dia)
+    async fn consultas_de_apoyo<F, R, G, C>(app: &Aplicacion<F, R, G, C>, dia: &Dia)
     where
         F: FabricaUnidadDeTrabajo + Consultas + Clone,
         R: Reloj + Clone,
         G: GeneradorIds + Clone,
+        C: Sync,
     {
         let historial = app
             .historial
@@ -288,11 +293,12 @@ mod tests {
     }
 
     /// Salen, cada uno por su gafete.
-    async fn salen_todos<F, R, G>(app: &Aplicacion<F, R, G>)
+    async fn salen_todos<F, R, G, C>(app: &Aplicacion<F, R, G, C>)
     where
         F: FabricaUnidadDeTrabajo + Consultas + Clone,
         R: Reloj + Clone,
         G: GeneradorIds + Clone,
+        C: Sync,
     {
         let sesion = sesion();
         app.ingresos.salida.por_gafete(&sesion, 3).await.unwrap();
@@ -314,11 +320,12 @@ mod tests {
     }
 
     /// Un día completo en la portería, con cada vía de ingreso.
-    async fn un_dia_en_la_porteria<F, R, G>(app: &Aplicacion<F, R, G>)
+    async fn un_dia_en_la_porteria<F, R, G, C>(app: &Aplicacion<F, R, G, C>)
     where
         F: FabricaUnidadDeTrabajo + Consultas + Clone,
         R: Reloj + Clone,
         G: GeneradorIds + Clone,
+        C: Sync,
     {
         let dia = preparar_el_dia(app).await;
         entran_todos(app, &dia).await;
@@ -329,8 +336,51 @@ mod tests {
     #[tokio::test]
     async fn un_dia_completo_con_los_adaptadores_reales() {
         let almacen = AlmacenSurreal::en_memoria().await.unwrap();
-        let app = AplicacionLimen::nueva(&almacen, &RelojCostaRica, &IdsV7);
+        let app = AplicacionLimen::nueva(
+            &almacen,
+            &RelojCostaRica,
+            &IdsV7,
+            &ContrasenasArgon2::new().unwrap(),
+        );
         un_dia_en_la_porteria(&app).await;
+    }
+
+    #[tokio::test]
+    async fn el_primer_usuario_entra_con_argon2_y_surreal() {
+        let almacen = AlmacenSurreal::en_memoria().await.unwrap();
+        let app = AplicacionLimen::nueva(
+            &almacen,
+            &RelojCostaRica,
+            &IdsV7,
+            &ContrasenasArgon2::new().unwrap(),
+        );
+        let usuarios = &app.usuarios;
+        assert!(
+            !usuarios.hay_usuarios.ejecutar().await.unwrap(),
+            "base recién creada"
+        );
+        let creado = usuarios
+            .crear_primero
+            .ejecutar("1-1111-1111", "ana mora", "portería segura")
+            .await
+            .unwrap();
+        let iniciada = usuarios
+            .iniciar_sesion
+            .ejecutar("111111111", "portería segura")
+            .await
+            .unwrap();
+        assert_eq!(iniciada, creado, "entra el mismo usuario");
+        assert_eq!(
+            usuarios
+                .iniciar_sesion
+                .ejecutar("111111111", "otra cosa")
+                .await
+                .unwrap_err()
+                .para_interfaz()
+                .codigo,
+            ErrorInicioSesion::CredencialesInvalidas.codigo(),
+            "la contraseña equivocada no entra"
+        );
     }
 
     #[tokio::test]
@@ -340,7 +390,7 @@ mod tests {
             "2026-10-09T14:00:00Z".parse().unwrap(),
             NaiveDate::from_ymd_opt(2026, 10, 9).unwrap(),
         );
-        let app = Aplicacion::nueva(&almacen, &reloj, &almacen.ids());
+        let app = Aplicacion::nueva(&almacen, &reloj, &almacen.ids(), &ContrasenasFalsas);
         un_dia_en_la_porteria(&app).await;
     }
 
@@ -416,7 +466,7 @@ mod tests {
         let almacen = AlmacenMemoria::new();
         let hoy = NaiveDate::from_ymd_opt(2026, 10, 9).unwrap();
         let reloj = RelojFijo::new("2026-10-09T14:00:00Z".parse().unwrap(), hoy);
-        let app = Aplicacion::nueva(&almacen, &reloj, &almacen.ids());
+        let app = Aplicacion::nueva(&almacen, &reloj, &almacen.ids(), &ContrasenasFalsas);
         let sesion = sesion();
         let acme = app
             .empresas

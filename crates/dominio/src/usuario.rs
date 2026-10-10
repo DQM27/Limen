@@ -341,6 +341,9 @@ pub enum ErrorInicioSesion {
     Bloqueado { minutos: i64 },
     #[error("Este usuario está desactivado")]
     Desactivado,
+    /// La contraseña la puso otra persona: hasta cambiarla no se opera.
+    #[error("Cambie su contraseña temporal antes de seguir")]
+    ContrasenaTemporal,
 }
 
 impl ErrorInicioSesion {
@@ -349,6 +352,7 @@ impl ErrorInicioSesion {
             Self::CredencialesInvalidas => "credenciales_invalidas",
             Self::Bloqueado { .. } => "inicio_bloqueado",
             Self::Desactivado => "usuario_desactivado",
+            Self::ContrasenaTemporal => "contrasena_temporal",
         }
     }
 
@@ -401,6 +405,16 @@ pub fn sumar_fallo(previos: Option<IntentosFallidos>, ahora: DateTime<Utc>) -> I
     IntentosFallidos {
         cantidad,
         ultimo: ahora,
+    }
+}
+
+/// Si quien tiene la sesión puede operar: con una contraseña temporal (la
+/// eligió otra persona) sólo puede cambiarla o cerrar la sesión.
+pub const fn puede_operar(debe_cambiar_contrasena: bool) -> Result<(), ErrorInicioSesion> {
+    if debe_cambiar_contrasena {
+        Err(ErrorInicioSesion::ContrasenaTemporal)
+    } else {
+        Ok(())
     }
 }
 
@@ -620,6 +634,16 @@ mod tests {
         assert!(ErrorInicioSesion::CredencialesInvalidas.suma_intento());
         assert!(!ErrorInicioSesion::Desactivado.suma_intento());
         assert!(!ErrorInicioSesion::Bloqueado { minutos: 1 }.suma_intento());
+        assert!(!ErrorInicioSesion::ContrasenaTemporal.suma_intento());
+    }
+
+    #[test]
+    fn con_contrasena_temporal_no_se_opera() {
+        assert_eq!(puede_operar(false), Ok(()));
+        assert_eq!(
+            puede_operar(true),
+            Err(ErrorInicioSesion::ContrasenaTemporal)
+        );
     }
 
     #[test]

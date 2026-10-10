@@ -11,11 +11,14 @@
 pub mod campos;
 mod dto;
 mod error;
-mod operador;
+mod sesion;
+mod usuarios;
 
 use std::fmt;
 
-use limen_aplicacion::puertos::{Consultas, FabricaUnidadDeTrabajo, GeneradorIds, Reloj};
+use limen_aplicacion::puertos::{
+    Consultas, Contrasenas, FabricaUnidadDeTrabajo, GeneradorIds, Reloj,
+};
 use limen_aplicacion::sesion::Sesion;
 use limen_composicion::Aplicacion;
 use limen_dominio::contratista::ContratistaId;
@@ -32,36 +35,50 @@ pub use dto::{
     AccesoDto, CambioDto, CambioGafeteEntrada, CandidatoIngresoDto, ContratistaDto,
     ContratistaEntrada, EmpresaDto, EmpresaProveedoraDto, EntradaContratistaEntrada,
     EntradaCorreoEntrada, EntradaProveedorEntrada, EntradaRegistradaDto, FilaContratistaDto,
-    GafeteDto, MotivoDto, PersonaAdentroDto, PersonalKofDto,
+    GafeteDto, MotivoDto, PersonaAdentroDto, PersonalKofDto, UsuarioDto, UsuarioEntrada,
 };
 pub use error::{ErrorEntrada, ErrorJson, TipoErrorJson};
-pub use operador::{ErrorOperador, NOMBRE_PROVISIONAL, Operador, OperadorDelEquipo};
+pub use sesion::{SesionDelEquipo, UsuarioActual};
 
 use campos::con_campo;
 use dto::{leer_tipo_gafete, leer_uuid, leer_via};
 
-/// Los comandos de la interfaz, sobre una aplicación ya armada.
+/// Los comandos de la interfaz, sobre una aplicación ya armada, y la
+/// sesión abierta en el equipo.
 ///
-/// Se comparte sin candado (por ejemplo dentro de un `Arc` en el estado de
-/// Tauri): cada caso de uso crea su propia Unit of Work en cada llamada.
-pub struct Comandos<F, R, G> {
-    app: Aplicacion<F, R, G>,
+/// Se comparte sin candado global (por ejemplo dentro de un `Arc` en el
+/// estado de Tauri): cada caso de uso crea su propia Unit of Work en cada
+/// llamada; sólo la sesión tiene su propio candado, cortito.
+pub struct Comandos<F, R, G, C> {
+    app: Aplicacion<F, R, G, C>,
+    sesion: SesionDelEquipo,
 }
 
-impl<F, R, G> fmt::Debug for Comandos<F, R, G> {
+impl<F, R, G, C> fmt::Debug for Comandos<F, R, G, C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Comandos").finish_non_exhaustive()
     }
 }
 
-impl<F, R, G> Comandos<F, R, G>
+impl<F, R, G, C> Comandos<F, R, G, C>
 where
     F: FabricaUnidadDeTrabajo + Consultas + Clone,
     R: Reloj + Clone,
     G: GeneradorIds + Clone,
+    C: Contrasenas + Clone,
 {
-    pub const fn new(app: Aplicacion<F, R, G>) -> Self {
-        Self { app }
+    /// Arranca sin sesión: hay que entrar (o crear el primer usuario).
+    pub fn new(app: Aplicacion<F, R, G, C>) -> Self {
+        Self {
+            app,
+            sesion: SesionDelEquipo::default(),
+        }
+    }
+
+    /// La sesión con la que se registra todo: sin ella (o con una
+    /// contraseña temporal sin cambiar) ningún comando hace nada.
+    pub fn sesion(&self) -> Result<Sesion, ErrorJson> {
+        self.sesion.sesion()
     }
 
     /// Quién está adentro ahora, por las cuatro vías juntas.

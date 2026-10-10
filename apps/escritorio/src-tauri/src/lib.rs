@@ -9,29 +9,22 @@ mod comandos;
 mod estado;
 
 use limen_composicion::{AplicacionLimen, Config};
-use limen_escritorio_comandos::OperadorDelEquipo;
-use limen_infra_plataforma::IdsV7;
 use tauri::Manager;
 
 use estado::Estado;
 
 /// Carpeta de la base dentro de los datos de la app.
 const CARPETA_BASE: &str = "base";
-/// Archivo del operador provisional (TEMPORAL, hasta el bloque L).
-const ARCHIVO_OPERADOR: &str = "operador.json";
-
-/// Abre la base y el operador guardado. Si algo falla no hay app que mostrar:
-/// el error sube a `setup`, que detiene el arranque con el motivo escrito.
+/// Abre la base. Si falla no hay app que mostrar: el error sube a `setup`,
+/// que detiene el arranque con el motivo escrito. La app arranca sin
+/// sesión: la interfaz pide entrar (o crear el primer usuario).
 fn preparar_estado(app: &tauri::App) -> Result<Estado, Box<dyn std::error::Error>> {
     let datos = app.path().app_data_dir()?;
     std::fs::create_dir_all(&datos)?;
-    let operador = OperadorDelEquipo::abrir(datos.join(ARCHIVO_OPERADOR))?;
-    // TEMPORAL: sin inicio de sesión, el primer arranque crea el operador.
-    operador.asegurar_provisional(&IdsV7)?;
     let aplicacion = tauri::async_runtime::block_on(AplicacionLimen::abrir(&Config {
         ruta_base: datos.join(CARPETA_BASE),
     }))?;
-    Ok(Estado::new(aplicacion, operador))
+    Ok(Estado::new(aplicacion))
 }
 
 /// Arranca la aplicación y no vuelve hasta que se cierra la ventana.
@@ -57,7 +50,16 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            comandos::operador_actual,
+            comandos::hay_usuarios,
+            comandos::crear_primer_usuario,
+            comandos::iniciar_sesion,
+            comandos::cerrar_sesion,
+            comandos::usuario_actual,
+            comandos::cambiar_contrasena,
+            comandos::listar_usuarios,
+            comandos::registrar_usuario,
+            comandos::editar_usuario,
+            comandos::restablecer_contrasena,
             comandos::dentro,
             comandos::listar_contratistas,
             comandos::buscar_contratistas,

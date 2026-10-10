@@ -108,11 +108,14 @@ reconstruir cómo estaba el contratista el día que entró.
 
 | Código | Regla | Estado |
 |---|---|---|
-| L1 | Un solo rol: Operador. Sin roles especiales. | ⏳ |
-| L2 | Los usuarios se crean en el panel y se desactivan, no se borran. | ⏳ |
-| L3 | Contraseña de mínimo 8 caracteres. | ⏳ |
+| L1 | Un solo rol: Operador. Sin roles especiales. Cada hecho y cada cambio queda a nombre del usuario que tenía la sesión. | ✅ |
+| L2 | Los usuarios se desactivan, no se borran, y nadie se desactiva a sí mismo (el equipo nunca se queda sin quién entre). La cédula es su identidad para entrar: nacional o de extranjero (A1 y A3), única y no se edita. TEMPORAL: mientras no exista el panel de la nube, cualquier usuario con sesión los registra y edita en el equipo. | ✅ |
+| L3 | Contraseña de 8 a 128 caracteres que no puede ser la propia cédula. Se guarda sólo su hash Argon2id (sal aleatoria, formato PHC); nunca va a la auditoría ni a la interfaz. | ✅ |
 | L4 | Login sin conexión con credencial guardada, por un máximo de 24 horas. | ⏳ |
 | L5 | Sesión única por equipo; cerrar la app cierra la sesión en la nube. | ⏳ |
+| L6 | Tras 5 intentos fallidos seguidos con la misma cédula, se bloquea su inicio de sesión por 5 minutos (aunque después escriba la contraseña correcta). Un fallo de hace más de 5 minutos ya no suma; entrar borra la cuenta. Las cédulas que no existen también se bloquean. | ✅ |
+| L7 | El inicio de sesión no revela qué cédulas existen: cédula desconocida o contraseña equivocada dan el mismo error y tardan lo mismo; "desactivado" sólo se le dice a quien escribió la contraseña correcta. | ✅ |
+| L8 | El primer usuario de un equipo recién instalado lo crea quien instala, sin sesión, y sólo mientras no haya ningún otro. Los demás los registra un usuario con sesión, con una contraseña temporal: hasta cambiarla, sólo se puede cambiarla o cerrar la sesión. | ✅ |
 
 ## M. Equipos
 

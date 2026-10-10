@@ -5,7 +5,7 @@ import { MatListModule } from '@angular/material/list';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { SECCIONES } from './navegacion';
-import { OperadorServicio } from './nucleo/operador';
+import { SesionServicio } from './nucleo/sesion';
 import { enTauri } from './nucleo/tauri';
 
 @Component({
@@ -25,14 +25,14 @@ import { enTauri } from './nucleo/tauri';
 })
 export class App {
   protected readonly secciones = SECCIONES;
-  protected readonly operador = inject(OperadorServicio).operador;
+  protected readonly operador = inject(SesionServicio).usuario;
   protected readonly enTauri = enTauri();
 
   /** La barra lateral completa (con texto) o reducida a íconos. */
   protected readonly expandida = signal(true);
 
   constructor() {
-    void inject(OperadorServicio).cargar();
+    void inject(SesionServicio).cargar();
   }
 
   protected alternar(): void {

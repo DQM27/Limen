@@ -610,7 +610,8 @@ Se avanza por capas, completando cada una para un módulo antes de pasar al sigu
    buscador y las consultas de lectura. Sigue una app mínima de escritorio para
    contratistas.
 6. Resto del dominio, en orden: ✅ ingreso y salida (E), ✅ gafetes (F), ✅ proveedores
-   (H), ✅ ingreso por correo (I), ✅ personal KOF (K), usuarios (L) y equipos (M).
+   (H), ✅ ingreso por correo (I), ✅ personal KOF (K), ✅ usuarios en el equipo (L; falta
+   lo de la nube: L4 y L5) y equipos (M).
    Lo que debe ser único entre equipos (una persona adentro, un gafete prestado, un
    número de gafete) usa una clave natural en la base (`presencia:⟨cédula⟩`,
    `prestamo_gafete:⟨TIPO-NÚMERO⟩`, `gafete:⟨TIPO-NÚMERO⟩`): si dos equipos lo

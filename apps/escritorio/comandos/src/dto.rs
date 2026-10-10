@@ -18,6 +18,7 @@ use limen_aplicacion::casos_de_uso::ingresos::{
     CandidatoIngreso, ComandoEntrada, EntradaContratista, GafeteElegido,
 };
 use limen_aplicacion::casos_de_uso::proveedores::ComandoEntradaProveedor;
+use limen_aplicacion::casos_de_uso::usuarios::FilaUsuario;
 use limen_aplicacion::puertos::{IngresoAbierto, PersonaAdentro, ResumenGafete};
 use limen_dominio::acceso::ResultadoAcceso;
 use limen_dominio::auditoria::CambioCampo;
@@ -598,4 +599,38 @@ impl From<&CandidatoIngreso> for CandidatoIngresoDto {
                 .collect(),
         }
     }
+}
+
+/// Un usuario en la lista de usuarios: nunca lleva la contraseña.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct UsuarioDto {
+    pub id: String,
+    pub cedula: String,
+    pub nombre: String,
+    /// Se desactiva, no se borra (L2).
+    pub activo: bool,
+    /// Tiene una contraseña temporal que todavía no cambió.
+    pub debe_cambiar_contrasena: bool,
+}
+
+impl From<&FilaUsuario> for UsuarioDto {
+    fn from(fila: &FilaUsuario) -> Self {
+        Self {
+            id: fila.id.uuid().to_string(),
+            cedula: fila.cedula.clone(),
+            nombre: fila.nombre.clone(),
+            activo: fila.activo,
+            debe_cambiar_contrasena: fila.debe_cambiar_contrasena,
+        }
+    }
+}
+
+/// El formulario de alta de un usuario. Para el primer usuario del equipo
+/// la contraseña es la suya; para los demás, una temporal que deberán
+/// cambiar al entrar.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct UsuarioEntrada {
+    pub cedula: String,
+    pub nombre: String,
+    pub contrasena: String,
 }

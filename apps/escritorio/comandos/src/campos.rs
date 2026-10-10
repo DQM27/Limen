@@ -18,6 +18,7 @@ use limen_dominio::ingreso_proveedor::ErrorIngresoProveedor;
 use limen_dominio::medio::ErrorMedio;
 use limen_dominio::personal_kof::ErrorPersonalKof;
 use limen_dominio::prestamo_kof::ErrorPrestamoKof;
+use limen_dominio::usuario::ErrorUsuario;
 use limen_dominio::visitante::ErrorVisitante;
 
 use crate::error::ErrorJson;
@@ -37,6 +38,9 @@ pub const HASTA: &str = "hasta";
 pub const PORTADOR: &str = "portador";
 pub const PERSONA: &str = "personal_id";
 pub const CONTRATISTA: &str = "contratista_id";
+pub const CONTRASENA: &str = "contrasena";
+pub const CONTRASENA_ACTUAL: &str = "contrasena_actual";
+pub const ACTIVO: &str = "activo";
 
 /// El campo del formulario al que pertenece un error de negocio.
 pub trait CampoDelError {
@@ -80,6 +84,21 @@ impl CampoDelError for ErrorPersonalKof {
             Self::CodigoVacio | Self::CodigoInvalido | Self::CodigoRepetido => CODIGO_EMPLEADO,
             Self::NombreVacio | Self::NombreInvalido => NOMBRE,
         })
+    }
+}
+
+impl CampoDelError for ErrorUsuario {
+    fn campo(&self) -> Option<&'static str> {
+        match self {
+            Self::CedulaVacia | Self::CedulaInvalida | Self::CedulaRepetida => Some(CEDULA),
+            Self::NombreVacio | Self::NombreInvalido => Some(NOMBRE),
+            Self::ContrasenaCorta | Self::ContrasenaLarga | Self::ContrasenaIgualALaCedula => {
+                Some(CONTRASENA)
+            }
+            Self::ContrasenaActualIncorrecta => Some(CONTRASENA_ACTUAL),
+            Self::NoSeDesactivaASiMismo => Some(ACTIVO),
+            Self::YaHayUsuarios => None,
+        }
     }
 }
 

@@ -45,13 +45,15 @@ cargo test
 El **núcleo** (todo lo que funciona dentro de un equipo, sin pantalla ni nube) está
 completo y probado: dominio, aplicación, `infra-memoria`, `infra-surreal`, `infra-plataforma`
 y `composicion`. Cubre contratistas, empresas, gafetes, ingresos y salidas (contratista,
-proveedor y correo), personal KOF con su gafete provisional, el buscador y las consultas
-de lectura. El detalle está en [`docs/reglas.md`](docs/reglas.md) y en la hoja de ruta de
+proveedor y correo), personal KOF con su gafete provisional, el buscador, las consultas
+de lectura y los usuarios con su inicio de sesión (bloque L: cédula y contraseña,
+Argon2id, bloqueo tras 5 fallos; la app arranca sin sesión). El detalle está en [`docs/reglas.md`](docs/reglas.md) y en la hoja de ruta de
 `docs/arquitectura.md` (sección 13).
 
 Lo que sigue, en este orden: **(1)** app de escritorio con Tauri (`apps/escritorio`),
 empezando por contratistas: buscar, registrar, entrar y salir; **(2)** el resto de las
-pantallas; **(3)** usuarios y sesión (bloque L) y equipos (bloque M); **(4)** la nube
+pantallas, empezando por el inicio de sesión (el núcleo ya está); **(3)** equipos
+(bloque M); **(4)** la nube
 (`infra-nube`: SurrealDB Cloud gratis en `aws-use1` para empezar, sincronización, Worker de
 Cloudflare); **(5)** móvil. El almacén clave-valor (configuración del equipo) se define
 cuando la pantalla diga qué necesita.

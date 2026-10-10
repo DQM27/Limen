@@ -19,7 +19,7 @@ use limen_escritorio_comandos::{
     CambioDto, CambioGafeteEntrada, CandidatoIngresoDto, ContratistaDto, ContratistaEntrada,
     EmpresaDto, EmpresaProveedoraDto, EntradaContratistaEntrada, EntradaCorreoEntrada,
     EntradaProveedorEntrada, EntradaRegistradaDto, ErrorJson, FilaContratistaDto, GafeteDto,
-    Operador, PersonaAdentroDto, PersonalKofDto,
+    PersonaAdentroDto, PersonalKofDto, UsuarioActual, UsuarioDto, UsuarioEntrada,
 };
 use tauri::State;
 
@@ -27,25 +27,111 @@ use crate::estado::Estado;
 
 type Resultado<T> = Result<T, ErrorJson>;
 
-// --- Operador provisional (TEMPORAL, hasta el bloque L) ---
+// --- Sesión (bloque L) ---
 
-/// El operador de este equipo (el arranque lo crea si no existía).
+/// Si el equipo ya tiene usuarios; sin ninguno, la interfaz ofrece crear
+/// el primero. No pide sesión.
 #[tauri::command]
-pub fn operador_actual(estado: State<'_, Estado>) -> Option<Operador> {
-    estado.operador().actual()
+pub async fn hay_usuarios(estado: State<'_, Estado>) -> Resultado<bool> {
+    estado.comandos().hay_usuarios().await
+}
+
+#[tauri::command]
+pub async fn crear_primer_usuario(
+    estado: State<'_, Estado>,
+    usuario: UsuarioEntrada,
+) -> Resultado<UsuarioActual> {
+    estado.comandos().crear_primer_usuario(&usuario).await
+}
+
+#[tauri::command]
+pub async fn iniciar_sesion(
+    estado: State<'_, Estado>,
+    cedula: String,
+    contrasena: String,
+) -> Resultado<UsuarioActual> {
+    estado.comandos().iniciar_sesion(&cedula, &contrasena).await
+}
+
+#[tauri::command]
+pub fn cerrar_sesion(estado: State<'_, Estado>) {
+    estado.comandos().cerrar_sesion();
+}
+
+/// Quién tiene la sesión en este equipo, si alguien.
+#[tauri::command]
+pub fn usuario_actual(estado: State<'_, Estado>) -> Option<UsuarioActual> {
+    estado.comandos().usuario_actual()
+}
+
+/// Cambia la contraseña propia; es lo único permitido con una temporal.
+#[tauri::command]
+pub async fn cambiar_contrasena(
+    estado: State<'_, Estado>,
+    contrasena_actual: String,
+    contrasena: String,
+) -> Resultado<()> {
+    estado
+        .comandos()
+        .cambiar_contrasena(&contrasena_actual, &contrasena)
+        .await
+}
+
+// --- Usuarios (TEMPORAL: se administran en el equipo hasta el panel de la nube) ---
+
+#[tauri::command]
+pub async fn listar_usuarios(estado: State<'_, Estado>) -> Resultado<Vec<UsuarioDto>> {
+    estado.comandos().sesion()?;
+    estado.comandos().listar_usuarios().await
+}
+
+#[tauri::command]
+pub async fn registrar_usuario(
+    estado: State<'_, Estado>,
+    usuario: UsuarioEntrada,
+) -> Resultado<String> {
+    let sesion = estado.comandos().sesion()?;
+    estado.comandos().registrar_usuario(&sesion, &usuario).await
+}
+
+#[tauri::command]
+pub async fn editar_usuario(
+    estado: State<'_, Estado>,
+    id: String,
+    nombre: String,
+    activo: bool,
+) -> Resultado<Vec<CambioDto>> {
+    let sesion = estado.comandos().sesion()?;
+    estado
+        .comandos()
+        .editar_usuario(&sesion, &id, &nombre, activo)
+        .await
+}
+
+#[tauri::command]
+pub async fn restablecer_contrasena(
+    estado: State<'_, Estado>,
+    id: String,
+    contrasena: String,
+) -> Resultado<()> {
+    let sesion = estado.comandos().sesion()?;
+    estado
+        .comandos()
+        .restablecer_contrasena(&sesion, &id, &contrasena)
+        .await
 }
 
 // --- Lecturas ---
 
 #[tauri::command]
 pub async fn dentro(estado: State<'_, Estado>) -> Resultado<Vec<PersonaAdentroDto>> {
-    estado.operador().sesion()?;
+    estado.comandos().sesion()?;
     estado.comandos().dentro().await
 }
 
 #[tauri::command]
 pub async fn listar_contratistas(estado: State<'_, Estado>) -> Resultado<Vec<FilaContratistaDto>> {
-    estado.operador().sesion()?;
+    estado.comandos().sesion()?;
     estado.comandos().listar_contratistas().await
 }
 
@@ -55,7 +141,7 @@ pub async fn buscar_contratistas(
     texto: String,
     limite: usize,
 ) -> Resultado<Vec<ContratistaDto>> {
-    estado.operador().sesion()?;
+    estado.comandos().sesion()?;
     estado.comandos().buscar_contratistas(&texto, limite).await
 }
 
@@ -65,7 +151,7 @@ pub async fn buscar_empresas(
     texto: String,
     limite: usize,
 ) -> Resultado<Vec<EmpresaDto>> {
-    estado.operador().sesion()?;
+    estado.comandos().sesion()?;
     estado.comandos().buscar_empresas(&texto, limite).await
 }
 
@@ -77,7 +163,7 @@ pub async fn registrar_salida(
     via: String,
     ingreso_id: String,
 ) -> Resultado<()> {
-    let sesion = estado.operador().sesion()?;
+    let sesion = estado.comandos().sesion()?;
     estado
         .comandos()
         .registrar_salida(&sesion, &via, &ingreso_id)
@@ -90,7 +176,7 @@ pub async fn registrar_salida_por_gafete(
     via: String,
     numero: u32,
 ) -> Resultado<()> {
-    let sesion = estado.operador().sesion()?;
+    let sesion = estado.comandos().sesion()?;
     estado
         .comandos()
         .registrar_salida_por_gafete(&sesion, &via, numero)
@@ -99,7 +185,7 @@ pub async fn registrar_salida_por_gafete(
 
 #[tauri::command]
 pub async fn registrar_empresa(estado: State<'_, Estado>, nombre: String) -> Resultado<String> {
-    let sesion = estado.operador().sesion()?;
+    let sesion = estado.comandos().sesion()?;
     estado.comandos().registrar_empresa(&sesion, &nombre).await
 }
 
@@ -108,7 +194,7 @@ pub async fn registrar_contratista(
     estado: State<'_, Estado>,
     contratista: ContratistaEntrada,
 ) -> Resultado<String> {
-    let sesion = estado.operador().sesion()?;
+    let sesion = estado.comandos().sesion()?;
     estado
         .comandos()
         .registrar_contratista(&sesion, &contratista)
@@ -121,7 +207,7 @@ pub async fn editar_contratista(
     id: String,
     contratista: ContratistaEntrada,
 ) -> Resultado<Vec<CambioDto>> {
-    let sesion = estado.operador().sesion()?;
+    let sesion = estado.comandos().sesion()?;
     estado
         .comandos()
         .editar_contratista(&sesion, &id, &contratista)
@@ -133,7 +219,7 @@ pub async fn registrar_entrada_contratista(
     estado: State<'_, Estado>,
     entrada: EntradaContratistaEntrada,
 ) -> Resultado<EntradaRegistradaDto> {
-    let sesion = estado.operador().sesion()?;
+    let sesion = estado.comandos().sesion()?;
     estado
         .comandos()
         .registrar_entrada_contratista(&sesion, &entrada)
@@ -148,7 +234,7 @@ pub async fn renombrar_empresa(
     id: String,
     nombre: String,
 ) -> Resultado<Vec<CambioDto>> {
-    let sesion = estado.operador().sesion()?;
+    let sesion = estado.comandos().sesion()?;
     estado
         .comandos()
         .renombrar_empresa(&sesion, &id, &nombre)
@@ -161,7 +247,7 @@ pub async fn buscar_empresas_proveedoras(
     texto: String,
     limite: usize,
 ) -> Resultado<Vec<EmpresaProveedoraDto>> {
-    estado.operador().sesion()?;
+    estado.comandos().sesion()?;
     estado
         .comandos()
         .buscar_empresas_proveedoras(&texto, limite)
@@ -173,7 +259,7 @@ pub async fn registrar_empresa_proveedora(
     estado: State<'_, Estado>,
     nombre: String,
 ) -> Resultado<String> {
-    let sesion = estado.operador().sesion()?;
+    let sesion = estado.comandos().sesion()?;
     estado
         .comandos()
         .registrar_empresa_proveedora(&sesion, &nombre)
@@ -186,7 +272,7 @@ pub async fn renombrar_empresa_proveedora(
     id: String,
     nombre: String,
 ) -> Resultado<Vec<CambioDto>> {
-    let sesion = estado.operador().sesion()?;
+    let sesion = estado.comandos().sesion()?;
     estado
         .comandos()
         .renombrar_empresa_proveedora(&sesion, &id, &nombre)
@@ -198,7 +284,7 @@ pub async fn registrar_entrada_proveedor(
     estado: State<'_, Estado>,
     entrada: EntradaProveedorEntrada,
 ) -> Resultado<String> {
-    let sesion = estado.operador().sesion()?;
+    let sesion = estado.comandos().sesion()?;
     estado
         .comandos()
         .registrar_entrada_proveedor(&sesion, &entrada)
@@ -210,7 +296,7 @@ pub async fn registrar_entrada_correo(
     estado: State<'_, Estado>,
     entrada: EntradaCorreoEntrada,
 ) -> Resultado<String> {
-    let sesion = estado.operador().sesion()?;
+    let sesion = estado.comandos().sesion()?;
     estado
         .comandos()
         .registrar_entrada_correo(&sesion, &entrada)
@@ -223,7 +309,7 @@ pub async fn buscar_personal_kof(
     texto: String,
     limite: usize,
 ) -> Resultado<Vec<PersonalKofDto>> {
-    estado.operador().sesion()?;
+    estado.comandos().sesion()?;
     estado.comandos().buscar_personal_kof(&texto, limite).await
 }
 
@@ -233,7 +319,7 @@ pub async fn registrar_personal_kof(
     codigo_empleado: String,
     nombre: String,
 ) -> Resultado<String> {
-    let sesion = estado.operador().sesion()?;
+    let sesion = estado.comandos().sesion()?;
     estado
         .comandos()
         .registrar_personal_kof(&sesion, &codigo_empleado, &nombre)
@@ -247,7 +333,7 @@ pub async fn editar_personal_kof(
     nombre: String,
     activo: bool,
 ) -> Resultado<Vec<CambioDto>> {
-    let sesion = estado.operador().sesion()?;
+    let sesion = estado.comandos().sesion()?;
     estado
         .comandos()
         .editar_personal_kof(&sesion, &id, &nombre, activo)
@@ -260,7 +346,7 @@ pub async fn entregar_gafete_kof(
     personal_id: String,
     gafete: u32,
 ) -> Resultado<String> {
-    let sesion = estado.operador().sesion()?;
+    let sesion = estado.comandos().sesion()?;
     estado
         .comandos()
         .entregar_gafete_kof(&sesion, &personal_id, gafete)
@@ -269,7 +355,7 @@ pub async fn entregar_gafete_kof(
 
 #[tauri::command]
 pub async fn listar_gafetes(estado: State<'_, Estado>, tipo: String) -> Resultado<Vec<GafeteDto>> {
-    estado.operador().sesion()?;
+    estado.comandos().sesion()?;
     estado.comandos().listar_gafetes(&tipo).await
 }
 
@@ -280,7 +366,7 @@ pub async fn registrar_gafetes(
     desde: u32,
     hasta: u32,
 ) -> Resultado<usize> {
-    let sesion = estado.operador().sesion()?;
+    let sesion = estado.comandos().sesion()?;
     estado
         .comandos()
         .registrar_gafetes(&sesion, &tipo, desde, hasta)
@@ -294,7 +380,7 @@ pub async fn cambiar_gafete(
     numero: u32,
     cambio: CambioGafeteEntrada,
 ) -> Resultado<Vec<CambioDto>> {
-    let sesion = estado.operador().sesion()?;
+    let sesion = estado.comandos().sesion()?;
     estado
         .comandos()
         .cambiar_gafete(&sesion, &tipo, numero, &cambio)
@@ -309,7 +395,7 @@ pub async fn buscar_para_ingreso(
     texto: String,
     limite: usize,
 ) -> Resultado<Vec<CandidatoIngresoDto>> {
-    estado.operador().sesion()?;
+    estado.comandos().sesion()?;
     estado.comandos().buscar_para_ingreso(&texto, limite).await
 }
 
@@ -318,6 +404,6 @@ pub async fn preparar_ingreso(
     estado: State<'_, Estado>,
     contratista_id: String,
 ) -> Resultado<CandidatoIngresoDto> {
-    estado.operador().sesion()?;
+    estado.comandos().sesion()?;
     estado.comandos().preparar_ingreso(&contratista_id).await
 }

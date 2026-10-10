@@ -46,14 +46,14 @@ describe('pantalla de contratistas', () => {
   it('si el núcleo falla, muestra su mensaje tal cual', async () => {
     vi.mocked(invoke).mockRejectedValue({
       tipo: 'negocio',
-      codigo: 'sin_operador',
-      mensaje: 'Falta identificar al operador de este equipo',
+      codigo: 'sin_sesion',
+      mensaje: 'Inicie sesión para continuar',
     });
 
     const { raiz } = await crear();
 
     expect(raiz.querySelector('[role="alert"]')?.textContent).toContain(
-      'Falta identificar al operador de este equipo',
+      'Inicie sesión para continuar',
     );
   });
 

@@ -38,13 +38,13 @@ pub struct ErrorJson {
 }
 
 impl ErrorJson {
-    /// Ningún operador ha iniciado sesión en este equipo: nada se registra
-    /// sin saber quién lo hace (regla E6).
-    pub fn sin_operador() -> Self {
+    /// Nadie ha iniciado sesión en este equipo: nada se registra sin saber
+    /// quién lo hace (regla E6).
+    pub fn sin_sesion() -> Self {
         Self {
             tipo: TipoErrorJson::Negocio,
-            codigo: "sin_operador",
-            mensaje: "Falta identificar al operador de este equipo".to_owned(),
+            codigo: "sin_sesion",
+            mensaje: "Inicie sesión para continuar".to_owned(),
             campo: None,
         }
     }
