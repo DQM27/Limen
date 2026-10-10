@@ -16,10 +16,11 @@
 )]
 
 use limen_escritorio_comandos::{
-    CambioDto, CambioGafeteEntrada, CandidatoIngresoDto, ContratistaDto, ContratistaEntrada,
-    EmpresaDto, EmpresaProveedoraDto, EntradaContratistaEntrada, EntradaCorreoEntrada,
-    EntradaProveedorEntrada, EntradaRegistradaDto, ErrorJson, FilaContratistaDto, GafeteDto,
-    PersonaAdentroDto, PersonalKofDto, UsuarioActual, UsuarioDto, UsuarioEntrada,
+    AtajoFechaDto, CambioDto, CambioGafeteEntrada, CandidatoIngresoDto, ContratistaDto,
+    ContratistaEntrada, EmpresaDto, EmpresaProveedoraDto, EntradaContratistaEntrada,
+    EntradaCorreoEntrada, EntradaProveedorEntrada, EntradaRegistradaDto, ErrorJson,
+    FilaContratistaDto, GafeteDto, HistorialDto, PersonaAdentroDto, PersonalKofDto, UsuarioActual,
+    UsuarioDto, UsuarioEntrada,
 };
 use tauri::State;
 
@@ -127,6 +128,28 @@ pub async fn restablecer_contrasena(
 pub async fn dentro(estado: State<'_, Estado>) -> Resultado<Vec<PersonaAdentroDto>> {
     estado.comandos().sesion()?;
     estado.comandos().dentro().await
+}
+
+/// Los ingresos y salidas entre `desde` y `hasta` (`AAAA-MM-DD`, vacíos =
+/// sin límite).
+#[tauri::command]
+pub async fn listar_historial(
+    estado: State<'_, Estado>,
+    desde: Option<String>,
+    hasta: Option<String>,
+) -> Resultado<HistorialDto> {
+    estado.comandos().sesion()?;
+    estado
+        .comandos()
+        .listar_historial(desde.as_deref(), hasta.as_deref())
+        .await
+}
+
+/// Los accesos rápidos de fecha del historial.
+#[tauri::command]
+pub fn atajos_de_fecha(estado: State<'_, Estado>) -> Resultado<Vec<AtajoFechaDto>> {
+    estado.comandos().sesion()?;
+    Ok(estado.comandos().atajos_de_fecha())
 }
 
 #[tauri::command]

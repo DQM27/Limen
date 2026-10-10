@@ -37,11 +37,12 @@ pub use dto::{
     EntradaCorreoEntrada, EntradaProveedorEntrada, EntradaRegistradaDto, FilaContratistaDto,
     GafeteDto, MotivoDto, PersonaAdentroDto, PersonalKofDto, UsuarioDto, UsuarioEntrada,
 };
+pub use dto::{AtajoFechaDto, HistorialDto, MovimientoDto};
 pub use error::{ErrorEntrada, ErrorJson, TipoErrorJson};
 pub use sesion::{SesionDelEquipo, UsuarioActual};
 
 use campos::con_campo;
-use dto::{leer_tipo_gafete, leer_uuid, leer_via};
+use dto::{leer_fecha_opcional, leer_tipo_gafete, leer_uuid, leer_via};
 
 /// Los comandos de la interfaz, sobre una aplicación ya armada, y la
 /// sesión abierta en el equipo.
@@ -85,6 +86,36 @@ where
     pub async fn dentro(&self) -> Result<Vec<PersonaAdentroDto>, ErrorJson> {
         let adentro = self.app.quienes_estan_adentro.ejecutar().await?;
         Ok(adentro.iter().map(PersonaAdentroDto::from).collect())
+    }
+
+    /// Los ingresos y salidas de las cuatro vías entre `desde` y `hasta`
+    /// (días `AAAA-MM-DD` de Costa Rica, ambos incluidos; vacío o `None` =
+    /// sin límite), del más reciente al más antiguo.
+    pub async fn listar_historial(
+        &self,
+        desde: Option<&str>,
+        hasta: Option<&str>,
+    ) -> Result<HistorialDto, ErrorJson> {
+        let desde = leer_fecha_opcional(desde, campos::DESDE)?;
+        let hasta = leer_fecha_opcional(hasta, campos::HASTA)?;
+        let historial = self
+            .app
+            .historial_de_ingresos
+            .ejecutar(desde, hasta)
+            .await
+            .map_err(con_campo)?;
+        Ok(HistorialDto::from(&historial))
+    }
+
+    /// Los accesos rápidos de fecha del historial, con el rango de cada uno
+    /// según el día de hoy.
+    pub fn atajos_de_fecha(&self) -> Vec<AtajoFechaDto> {
+        self.app
+            .atajos_de_fecha
+            .ejecutar()
+            .iter()
+            .map(AtajoFechaDto::from)
+            .collect()
     }
 
     /// Registra la salida de quien está adentro, desde la lista "dentro".

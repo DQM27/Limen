@@ -34,6 +34,8 @@ import {
   registrarUsuario,
   restablecerContrasena,
   usuarioActual,
+  atajosDeFecha,
+  listarHistorial,
 } from './comandos';
 import type { ContratistaEntrada } from './tipos';
 
@@ -238,5 +240,13 @@ describe('comandos del núcleo', () => {
       await llamar();
       expect(invoke).toHaveBeenCalledWith(comando, argumentos);
     }
+  });
+
+  it('los comandos del historial llevan su nombre y sus parámetros exactos', async () => {
+    await listarHistorial('2026-10-01', null);
+    expect(invoke).toHaveBeenCalledWith('listar_historial', { desde: '2026-10-01', hasta: null });
+    vi.mocked(invoke).mockClear();
+    await atajosDeFecha();
+    expect(invoke).toHaveBeenCalledWith('atajos_de_fecha', undefined);
   });
 });

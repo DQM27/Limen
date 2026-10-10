@@ -73,6 +73,8 @@ pub fn run() {
             comandos::restablecer_contrasena,
             comandos::dentro,
             comandos::listar_contratistas,
+            comandos::listar_historial,
+            comandos::atajos_de_fecha,
             comandos::buscar_contratistas,
             comandos::buscar_empresas,
             comandos::registrar_salida,

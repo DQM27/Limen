@@ -19,8 +19,9 @@ use std::fmt;
 use std::path::PathBuf;
 
 use limen_aplicacion::casos_de_uso::consultas::{
-    BuscarContratistas, BuscarEmpresas, BuscarEmpresasProveedoras, BuscarPersonalKof,
-    HistorialDeCambios, ListarContratistas, ListarGafetes, PraindPorVencer, QuienesEstanAdentro,
+    AtajosDeFecha, BuscarContratistas, BuscarEmpresas, BuscarEmpresasProveedoras,
+    BuscarPersonalKof, HistorialDeCambios, ListarContratistas, ListarGafetes, ListarHistorial,
+    PraindPorVencer, QuienesEstanAdentro,
 };
 use limen_aplicacion::casos_de_uso::contratistas::{
     ConsultarContratista, EditarContratista, RegistrarContratista,
@@ -185,6 +186,10 @@ pub struct Aplicacion<F, R, G, C = ContrasenasArgon2> {
     pub quienes_estan_adentro: QuienesEstanAdentro<F>,
     /// Qué cambió en un registro, quién y cuándo.
     pub historial: HistorialDeCambios<F>,
+    /// Los ingresos y salidas de las cuatro vías en un rango de fechas.
+    pub historial_de_ingresos: ListarHistorial<F, R>,
+    /// Los accesos rápidos de fecha (hoy, esta semana…) del historial.
+    pub atajos_de_fecha: AtajosDeFecha<R>,
 }
 
 impl<F, R, G, C> fmt::Debug for Aplicacion<F, R, G, C> {
@@ -260,6 +265,8 @@ where
             },
             quienes_estan_adentro: QuienesEstanAdentro::new(a()),
             historial: HistorialDeCambios::new(a()),
+            historial_de_ingresos: ListarHistorial::new(a(), r()),
+            atajos_de_fecha: AtajosDeFecha::new(r()),
         }
     }
 }

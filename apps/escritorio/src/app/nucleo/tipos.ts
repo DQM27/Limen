@@ -214,3 +214,49 @@ export interface UsuarioEntrada {
   nombre: string;
   contrasena: string;
 }
+
+// --- Historial de ingresos ---
+
+/** Una fila del historial: una entrada, con su salida si ya salió. */
+export interface Movimiento {
+  via: Via;
+  ingreso_id: string;
+  /** La cédula o, para el personal KOF, el código de empleado. */
+  identidad: string;
+  nombre: string;
+  procedencia: string;
+  medio: 'A_PIE' | 'VEHICULO' | null;
+  placa: string | null;
+  gafete: number | null;
+  /** Entró sin gafete: se muestra «S/G». */
+  sin_gafete: boolean;
+  /** RFC 3339, UTC. */
+  entrada: string;
+  /** `null` mientras siga adentro. */
+  salida: string | null;
+}
+
+/** El historial de un rango de fechas. */
+export interface Historial {
+  /** `AAAA-MM-DD`; `null` = sin límite. */
+  desde: string | null;
+  hasta: string | null;
+  /** Del más reciente al más antiguo. */
+  movimientos: Movimiento[];
+  /** Había más de `maximo` movimientos: sólo vienen los más recientes. */
+  truncado: boolean;
+  maximo: number;
+}
+
+/** Un acceso rápido de fecha (hoy, esta semana…) con su rango de hoy. */
+export interface AtajoFecha {
+  codigo: string;
+  /** Para el menú. */
+  etiqueta: string;
+  /** Para el botón. */
+  corta: string;
+  desde: string | null;
+  hasta: string | null;
+  /** El que abre el historial. */
+  por_omision: boolean;
+}
