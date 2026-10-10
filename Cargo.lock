@@ -3185,9 +3185,12 @@ dependencies = [
 name = "limen-infra-plataforma"
 version = "0.1.0"
 dependencies = [
+ "argon2",
  "chrono",
  "chrono-tz",
  "limen-aplicacion",
+ "limen-dominio",
+ "password-hash",
  "uuid",
 ]
 

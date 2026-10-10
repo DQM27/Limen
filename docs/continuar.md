@@ -15,30 +15,41 @@ falta el detalle, [`arquitectura.md`](arquitectura.md), [`reglas.md`](reglas.md)
   `DEFINE EVENT`). Es la base de la sincronización.
 - **App de escritorio** (Tauri 2 + Angular 22 + Angular Material + AG Grid Community):
   - `apps/escritorio/comandos`: la lógica de los comandos (JSON, un solo error para la
-    interfaz, operador provisional). Se prueba con la base en memoria.
+    interfaz, la sesión del equipo). Se prueba con la base en memoria.
   - `apps/escritorio/src-tauri`: cascarón de Tauri, sin lógica ni pruebas propias (un
     ejecutable de pruebas que enlaza Tauri no arranca en Windows).
   - Frontend: barra lateral, `compartido/tabla` (la grilla base de toda la app, con el
     diseño unificado) y la pantalla de Contratistas.
+- **Usuarios e inicio de sesión** (bloque L, reglas L1–L3 y L6–L8): cédula y
+  contraseña, Argon2id (`infra-plataforma`), bloqueo tras 5 fallos, primer usuario del
+  equipo y contraseña temporal. El operador provisional (`operador.json`) ya no existe:
+  **la app arranca sin sesión** y ningún comando hace nada hasta entrar.
 - **Importador de Lattis** (`herramientas/importador-lattis`): carga un volcado SQL en la
   base de Limen. Los datos reales viven en `datos-privados/` (ignorada por git) y **nunca
   se suben**: el repositorio es público.
 
 ## Ramas y PR (nada va a `main` sin PR y CI en verde)
 
-Las ramas están apiladas, en este orden: `fix/pruebas-en-windows` (PR #1) →
-`ci/endurecer` (PR #2) → `feat/app-escritorio` → `feat/contratistas-grilla` →
-`feat/hechos` (la de trabajo actual: hechos inmutables). `feat/importador-lattis` sale
-de `feat/app-escritorio`.
-
-**Ojo:** el PR #1 ya está en `main`, pero el #2 se fusionó en `fix/pruebas-en-windows`
-*después* de que esa rama entrara a `main`, así que el endurecimiento de la CI **no llegó
-a `main`**: hay que abrir un PR nuevo de `ci/endurecer` contra `main` (el dueño hace el
-merge). Después se rebasa el resto sobre `main` y se abren sus PR. Falta proteger `main`
-en GitHub (exigir PR y el resultado `CI verde`).
+Todo lo anterior ya está en `main` (PR #3 a #8). La rama de trabajo actual es
+`feat/usuarios` (bloque L). `feat/importador-lattis` quedó atrás: necesita traer `main`
+y generar los hechos de los ingresos importados antes de su PR.
 
 ## Lo que sigue
 
+0. **La pantalla de inicio de sesión va primero**: sin ella la app no puede operar.
+   Todo está listo en `nucleo/sesion.ts` (`SesionServicio`: `usuario`, `cargar`,
+   `iniciar`, `crearPrimerUsuario`, `cambiarContrasena`, `cerrar`) y en
+   `nucleo/comandos.ts` (`hayUsuarios` y la administración de usuarios). Flujo:
+   - al abrir, `hayUsuarios()`: sin usuarios, el alta del primero (cédula, nombre y
+     contraseña); con usuarios, cédula y contraseña;
+   - si `usuario().debe_cambiar_contrasena`, sólo el cambio de contraseña (el núcleo
+     rechaza todo lo demás con `contrasena_temporal`);
+   - los errores de entrada no traen campo (`credenciales_invalidas`,
+     `inicio_bloqueado`, `usuario_desactivado`): mensaje general, tal cual;
+   - cualquier comando puede responder `sin_sesion`: volver a la pantalla de entrada.
+   - Pantalla de Usuarios (listar, registrar con contraseña temporal, editar nombre y
+     activo, restablecer contraseña); los errores traen `campo` (`cedula`, `nombre`,
+     `contrasena`, `contrasena_actual`, `activo`).
 1. **Historial, segunda mitad.** Conectar `ListarHistorial` y `AtajosDeFecha` en
    `composicion`, en `apps/escritorio/comandos` (DTO + comandos `listar_historial` y
    `atajos_de_fecha`) y en `src-tauri`. Luego la pantalla en Angular sobre la grilla base,
@@ -72,7 +83,7 @@ en GitHub (exigir PR y el resultado `CI verde`).
    formato, prueba y compila Angular, y pasa clippy al cascarón; los demás trabajos
    excluyen `limen-escritorio`. Falta activar CodeQL para el JavaScript.
 4. Otras pantallas de la barra lateral (Dentro, Proveedores, Correo, Personal KOF,
-   Gafetes), el inicio de sesión real (bloque L) y la nube, en ese orden.
+   Gafetes), los equipos (bloque M) y la nube (con L4 y L5), en ese orden.
 
 ## Cómo trabajar en esta máquina
 

@@ -13,7 +13,9 @@ async function crear(dentroDeLaApp: boolean) {
   vi.mocked(isTauri).mockReturnValue(dentroDeLaApp);
   vi.mocked(invoke).mockImplementation((comando: string) =>
     Promise.resolve(
-      comando === 'operador_actual' ? { id: 'abc', nombre: 'Operador provisional' } : [],
+      comando === 'usuario_actual'
+        ? { id: 'abc', cedula: '111111111', nombre: 'ANA MORA', debe_cambiar_contrasena: false }
+        : [],
     ),
   );
   TestBed.configureTestingModule({ imports: [App], providers: [provideRouter(routes)] });
@@ -70,7 +72,7 @@ describe('carcasa de la app', () => {
   it('muestra al operador de este equipo al pie', async () => {
     const { raiz } = await crear(true);
 
-    expect(raiz.querySelector('.barra-pie')?.textContent).toContain('Operador provisional');
+    expect(raiz.querySelector('.barra-pie')?.textContent).toContain('ANA MORA');
   });
 
   it('fuera de la app avisa que es modo navegador', async () => {

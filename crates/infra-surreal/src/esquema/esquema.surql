@@ -141,11 +141,28 @@ DEFINE FIELD OVERWRITE desde ON personal_kof_con_prestamo TYPE datetime;
 DEFINE TABLE OVERWRITE reloj SCHEMAFULL;
 DEFINE FIELD OVERWRITE en ON reloj TYPE datetime;
 
+-- Usuarios (bloque L). La contraseña nunca se guarda: sólo su hash
+-- Argon2id en formato PHC (lleva la sal y los parámetros).
+DEFINE TABLE OVERWRITE usuario SCHEMAFULL;
+DEFINE FIELD OVERWRITE cedula ON usuario TYPE string ASSERT string::len($value) > 0;
+DEFINE FIELD OVERWRITE nombre ON usuario TYPE string ASSERT string::len($value) > 0;
+DEFINE FIELD OVERWRITE activo ON usuario TYPE bool;
+DEFINE FIELD OVERWRITE contrasena ON usuario TYPE string ASSERT string::len($value) > 0;
+DEFINE FIELD OVERWRITE debe_cambiar_contrasena ON usuario TYPE bool;
+DEFINE INDEX OVERWRITE usuario_cedula_unica ON usuario FIELDS cedula UNIQUE;
+
+-- Intentos fallidos de inicio de sesión (regla L6). Clave:
+-- intento_inicio:⟨cédula⟩; se borra al entrar. Son del equipo: no se
+-- sincronizan.
+DEFINE TABLE OVERWRITE intento_inicio SCHEMAFULL;
+DEFINE FIELD OVERWRITE cantidad ON intento_inicio TYPE int;
+DEFINE FIELD OVERWRITE ultimo ON intento_inicio TYPE datetime;
+
 -- Auditoría (regla B11): sólo se agrega, nunca se edita ni se borra. El
 -- evento lo hace cumplir la base, también para la conexión embebida (que
 -- entra como root y no pasa por PERMISSIONS).
 DEFINE TABLE OVERWRITE auditoria SCHEMAFULL;
-DEFINE FIELD OVERWRITE entidad ON auditoria TYPE 'contratista' | 'empresa' | 'empresa_proveedora' | 'gafete' | 'personal_kof';
+DEFINE FIELD OVERWRITE entidad ON auditoria TYPE 'contratista' | 'empresa' | 'empresa_proveedora' | 'gafete' | 'personal_kof' | 'usuario';
 DEFINE FIELD OVERWRITE registro ON auditoria TYPE string;
 DEFINE FIELD OVERWRITE accion ON auditoria TYPE 'alta' | 'edicion';
 DEFINE FIELD OVERWRITE cambios ON auditoria TYPE array<object>;

@@ -11,11 +11,11 @@ mod tests {
         CambioGafeteEntrada, Comandos, ContratistaEntrada, EntradaCorreoEntrada,
         EntradaProveedorEntrada, ErrorJson, campos,
     };
-    use limen_infra_memoria::{AlmacenMemoria, IdsSecuenciales, RelojFijo};
+    use limen_infra_memoria::{AlmacenMemoria, ContrasenasFalsas, IdsSecuenciales, RelojFijo};
     use serde_json::json;
     use uuid::Uuid;
 
-    type Prueba = Comandos<AlmacenMemoria, RelojFijo, IdsSecuenciales>;
+    type Prueba = Comandos<AlmacenMemoria, RelojFijo, IdsSecuenciales, ContrasenasFalsas>;
 
     fn sesion() -> Sesion {
         Sesion::nueva(OperadorId::desde_uuid(Uuid::from_u128(900)))
@@ -28,7 +28,12 @@ mod tests {
             "2026-10-09T14:00:00Z".parse().unwrap(),
             NaiveDate::from_ymd_opt(2026, 10, 9).unwrap(),
         );
-        Comandos::new(Aplicacion::nueva(&almacen, &reloj, &almacen.ids()))
+        Comandos::new(Aplicacion::nueva(
+            &almacen,
+            &reloj,
+            &almacen.ids(),
+            &ContrasenasFalsas,
+        ))
     }
 
     fn error_de<T: std::fmt::Debug>(resultado: Result<T, ErrorJson>) -> ErrorJson {

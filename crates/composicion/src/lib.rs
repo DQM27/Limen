@@ -7,8 +7,9 @@
 //! 130 métodos y un candado global.
 //!
 //! [`Aplicacion`] es genérica: con [`AplicacionLimen`] queda armada con los
-//! adaptadores reales (`SurrealDB`, la hora de Costa Rica y UUID v7), y las
-//! pruebas la arman con los dobles en memoria y un reloj fijo.
+//! adaptadores reales (`SurrealDB`, la hora de Costa Rica, UUID v7 y
+//! Argon2id), y las pruebas la arman con los dobles en memoria y un reloj
+//! fijo.
 //!
 //! Se comparte entre pantallas y comandos sin candado (por ejemplo dentro de
 //! un `Arc`): cada caso de uso crea su propia Unit of Work en cada llamada y
@@ -37,10 +38,14 @@ use limen_aplicacion::casos_de_uso::proveedores::{
     RegistrarEmpresaProveedora, RegistrarEntradaProveedor, RegistrarSalidaProveedor,
     RenombrarEmpresaProveedora,
 };
-use limen_aplicacion::puertos::{
-    Consultas, ErrorPersistencia, FabricaUnidadDeTrabajo, GeneradorIds, Reloj,
+use limen_aplicacion::casos_de_uso::usuarios::{
+    CambiarContrasena, CrearPrimerUsuario, EditarUsuario, HayUsuarios, IniciarSesion,
+    ListarUsuarios, RegistrarUsuario, RestablecerContrasena,
 };
-use limen_infra_plataforma::{IdsV7, RelojCostaRica};
+use limen_aplicacion::puertos::{
+    Consultas, Contrasenas, ErrorPersistencia, FabricaUnidadDeTrabajo, GeneradorIds, Reloj,
+};
+use limen_infra_plataforma::{ContrasenasArgon2, IdsV7, RelojCostaRica};
 use limen_infra_surreal::AlmacenSurreal;
 
 /// Con qué se abre la aplicación.
@@ -52,8 +57,12 @@ pub struct Config {
 
 /// No se pudo arrancar la aplicación.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("No se pudo abrir la base de datos: {0}")]
-pub struct ErrorArranque(#[from] ErrorPersistencia);
+pub enum ErrorArranque {
+    #[error("No se pudo abrir la base de datos: {0}")]
+    Base(#[from] ErrorPersistencia),
+    #[error("No se pudo preparar el cifrado de contraseñas: {0}")]
+    Contrasenas(String),
+}
 
 macro_rules! grupo {
     ($(#[$meta:meta])* $nombre:ident { $($campo:ident : $tipo:ty),+ $(,)? }) => {
@@ -140,10 +149,30 @@ grupo! {
     }
 }
 
+/// Usuarios e inicio de sesión (bloque L). Es el único grupo que cifra
+/// contraseñas, por eso lleva además el cifrador `C`.
+pub struct Usuarios<F, R, G, C> {
+    pub hay_usuarios: HayUsuarios<F>,
+    pub crear_primero: CrearPrimerUsuario<F, R, G, C>,
+    pub iniciar_sesion: IniciarSesion<F, R, C>,
+    pub registrar: RegistrarUsuario<F, R, G, C>,
+    pub editar: EditarUsuario<F, R, G>,
+    pub cambiar_contrasena: CambiarContrasena<F, R, G, C>,
+    pub restablecer_contrasena: RestablecerContrasena<F, R, G, C>,
+    pub listar: ListarUsuarios<F>,
+}
+
+impl<F, R, G, C> fmt::Debug for Usuarios<F, R, G, C> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Usuarios").finish_non_exhaustive()
+    }
+}
+
 /// Todo lo que la aplicación sabe hacer, agrupado por módulo.
 ///
-/// `F` es la base de datos, `R` el reloj y `G` el generador de IDs.
-pub struct Aplicacion<F, R, G> {
+/// `F` es la base de datos, `R` el reloj, `G` el generador de IDs y `C` el
+/// cifrador de contraseñas (Argon2id si no se dice otro).
+pub struct Aplicacion<F, R, G, C = ContrasenasArgon2> {
     pub empresas: Empresas<F, R, G>,
     pub contratistas: Contratistas<F, R, G>,
     pub gafetes: Gafetes<F, R, G>,
@@ -151,29 +180,32 @@ pub struct Aplicacion<F, R, G> {
     pub proveedores: Proveedores<F, R, G>,
     pub correo: Correo<F, R, G>,
     pub kof: Kof<F, R, G>,
+    pub usuarios: Usuarios<F, R, G, C>,
     /// Quién está adentro ahora.
     pub quienes_estan_adentro: QuienesEstanAdentro<F>,
     /// Qué cambió en un registro, quién y cuándo.
     pub historial: HistorialDeCambios<F>,
 }
 
-impl<F, R, G> fmt::Debug for Aplicacion<F, R, G> {
+impl<F, R, G, C> fmt::Debug for Aplicacion<F, R, G, C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Aplicacion").finish_non_exhaustive()
     }
 }
 
-impl<F, R, G> Aplicacion<F, R, G>
+impl<F, R, G, C> Aplicacion<F, R, G, C>
 where
     F: FabricaUnidadDeTrabajo + Consultas + Clone,
     R: Reloj + Clone,
     G: GeneradorIds + Clone,
+    C: Contrasenas + Clone,
 {
     /// Conecta todos los casos de uso con las piezas dadas.
-    pub fn nueva(almacen: &F, reloj: &R, ids: &G) -> Self {
+    pub fn nueva(almacen: &F, reloj: &R, ids: &G, contrasenas: &C) -> Self {
         let a = || almacen.clone();
         let r = || reloj.clone();
         let i = || ids.clone();
+        let c = || contrasenas.clone();
         Self {
             empresas: Empresas {
                 registrar: RegistrarEmpresa::new(a(), r(), i()),
@@ -216,6 +248,16 @@ where
                 entregar_gafete: EntregarGafeteKof::new(a(), r(), i()),
                 devolver_gafete: DevolverGafeteKof::new(a(), r(), i()),
             },
+            usuarios: Usuarios {
+                hay_usuarios: HayUsuarios::new(a()),
+                crear_primero: CrearPrimerUsuario::new(a(), r(), i(), c()),
+                iniciar_sesion: IniciarSesion::new(a(), r(), c()),
+                registrar: RegistrarUsuario::new(a(), r(), i(), c()),
+                editar: EditarUsuario::new(a(), r(), i()),
+                cambiar_contrasena: CambiarContrasena::new(a(), r(), i(), c()),
+                restablecer_contrasena: RestablecerContrasena::new(a(), r(), i(), c()),
+                listar: ListarUsuarios::new(a()),
+            },
             quienes_estan_adentro: QuienesEstanAdentro::new(a()),
             historial: HistorialDeCambios::new(a()),
         }
@@ -223,12 +265,13 @@ where
 }
 
 /// La aplicación con los adaptadores reales.
-pub type AplicacionLimen = Aplicacion<AlmacenSurreal, RelojCostaRica, IdsV7>;
+pub type AplicacionLimen = Aplicacion<AlmacenSurreal, RelojCostaRica, IdsV7, ContrasenasArgon2>;
 
 impl AplicacionLimen {
     /// Abre (o crea) la base de este equipo y arma la aplicación.
     pub async fn abrir(config: &Config) -> Result<Self, ErrorArranque> {
         let almacen = AlmacenSurreal::en_disco(&config.ruta_base).await?;
-        Ok(Self::nueva(&almacen, &RelojCostaRica, &IdsV7))
+        let contrasenas = ContrasenasArgon2::new().map_err(ErrorArranque::Contrasenas)?;
+        Ok(Self::nueva(&almacen, &RelojCostaRica, &IdsV7, &contrasenas))
     }
 }

@@ -18,12 +18,12 @@ mod tests {
     use limen_escritorio_comandos::{
         Comandos, ContratistaEntrada, EntradaContratistaEntrada, ErrorJson, TipoErrorJson, campos,
     };
-    use limen_infra_memoria::{AlmacenMemoria, IdsSecuenciales, RelojFijo};
+    use limen_infra_memoria::{AlmacenMemoria, ContrasenasFalsas, IdsSecuenciales, RelojFijo};
     use serde_json::json;
     use uuid::Uuid;
 
-    type App = Aplicacion<AlmacenMemoria, RelojFijo, IdsSecuenciales>;
-    type Prueba = Comandos<AlmacenMemoria, RelojFijo, IdsSecuenciales>;
+    type App = Aplicacion<AlmacenMemoria, RelojFijo, IdsSecuenciales, ContrasenasFalsas>;
+    type Prueba = Comandos<AlmacenMemoria, RelojFijo, IdsSecuenciales, ContrasenasFalsas>;
 
     fn sesion() -> Sesion {
         Sesion::nueva(OperadorId::desde_uuid(Uuid::from_u128(900)))
@@ -37,7 +37,7 @@ mod tests {
             "2026-10-09T14:00:00Z".parse().unwrap(),
             NaiveDate::from_ymd_opt(2026, 10, 9).unwrap(),
         );
-        let app = Aplicacion::nueva(&almacen, &reloj, &almacen.ids());
+        let app = Aplicacion::nueva(&almacen, &reloj, &almacen.ids(), &ContrasenasFalsas);
         for tipo in [
             TipoGafete::Contratista,
             TipoGafete::Proveedor,
@@ -581,10 +581,10 @@ mod tests {
     }
 
     #[test]
-    fn sin_operador_es_un_error_de_negocio_con_codigo_propio() {
-        let error = ErrorJson::sin_operador();
+    fn sin_sesion_es_un_error_de_negocio_con_codigo_propio() {
+        let error = ErrorJson::sin_sesion();
         assert_eq!(error.tipo, TipoErrorJson::Negocio);
-        assert_eq!(error.codigo, "sin_operador");
+        assert_eq!(error.codigo, "sin_sesion");
         assert_ne!(error.mensaje, "", "trae un mensaje para mostrar");
     }
 

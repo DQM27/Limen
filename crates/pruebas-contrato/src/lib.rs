@@ -40,12 +40,14 @@ mod hechos;
 mod kof;
 mod movimientos;
 mod proveedores;
+mod usuarios;
 
 pub use consultas::*;
 pub use hechos::*;
 pub use kof::*;
 pub use movimientos::*;
 pub use proveedores::*;
+pub use usuarios::*;
 
 /// Genera un `#[tokio::test]` por cada prueba de la batería. `$fabrica` es
 /// una expresión (puede usar `.await`) que crea un almacén nuevo y vacío.
@@ -114,6 +116,11 @@ macro_rules! bateria_de_contrato {
             los_hechos_de_las_cuatro_vias_se_guardan_y_se_leen_tal_cual,
             un_hecho_sin_confirmar_no_queda,
             un_hecho_nunca_se_reemplaza_y_el_intento_no_aplica_nada,
+            // Usuarios e inicio de sesión (`usuarios`).
+            guarda_y_lee_un_usuario_tal_cual,
+            la_cedula_de_usuario_repetida_choca,
+            todos_los_usuarios_van_por_nombre,
+            los_intentos_fallidos_se_anotan_y_se_borran,
         );
     };
     (@pruebas $fabrica:expr; $($prueba:ident),+ $(,)?) => {

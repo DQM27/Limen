@@ -17,4 +17,5 @@ pub mod gafetes;
 pub mod ingresos;
 pub mod kof;
 pub mod proveedores;
+pub mod usuarios;
 mod veto;

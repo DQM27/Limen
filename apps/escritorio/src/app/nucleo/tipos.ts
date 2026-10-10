@@ -183,3 +183,34 @@ export interface PersonaAdentro {
   sin_gafete: boolean;
   desde: string;
 }
+
+// --- Usuarios e inicio de sesión (bloque L) ---
+
+/** Quién tiene la sesión en este equipo. */
+export interface UsuarioActual {
+  id: string;
+  cedula: string;
+  nombre: string;
+  /** Contraseña temporal: hay que cambiarla antes de hacer cualquier otra cosa. */
+  debe_cambiar_contrasena: boolean;
+}
+
+/** Un usuario en la lista de usuarios (nunca trae la contraseña). */
+export interface Usuario {
+  id: string;
+  cedula: string;
+  nombre: string;
+  /** Se desactiva, no se borra. */
+  activo: boolean;
+  debe_cambiar_contrasena: boolean;
+}
+
+/**
+ * El formulario de alta de un usuario. Para el primer usuario del equipo la
+ * contraseña es la suya; para los demás, una temporal.
+ */
+export interface UsuarioEntrada {
+  cedula: string;
+  nombre: string;
+  contrasena: string;
+}
