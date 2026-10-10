@@ -13,10 +13,12 @@ use chrono::{NaiveDate, SecondsFormat};
 use limen_aplicacion::casos_de_uso::consultas::ContratistaEnLista;
 use limen_aplicacion::casos_de_uso::contratistas::ComandoContratista;
 use limen_aplicacion::casos_de_uso::ingresos::{ComandoEntrada, EntradaContratista};
+use limen_aplicacion::errores::ErrorCaso;
 use limen_aplicacion::puertos::{IngresoAbierto, PersonaAdentro};
 use limen_dominio::acceso::ResultadoAcceso;
-use limen_dominio::contratista::Contratista;
-use limen_dominio::empresa::{Empresa, EmpresaId};
+use limen_dominio::auditoria::CambioCampo;
+use limen_dominio::contratista::{Contratista, ErrorContratista};
+use limen_dominio::empresa::{Empresa, EmpresaId, ErrorEmpresa};
 use limen_dominio::gafete::NumeroGafete;
 use limen_dominio::medio::{Medio, TipoMedio};
 use limen_dominio::presencia::Via;
@@ -24,7 +26,7 @@ use limen_dominio::tipo_ingreso::TipoIngreso;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::error::ErrorEntrada;
+use crate::error::{ErrorEntrada, ErrorJson};
 
 const A_PIE: &str = "A_PIE";
 const VEHICULO: &str = "VEHICULO";
@@ -225,21 +227,93 @@ pub struct ContratistaEntrada {
     pub tiene_acceso: bool,
 }
 
+/// Los campos del formulario de un contratista: las claves de
+/// [`ContratistaEntrada`], que es lo que trae [`ErrorJson::campo`].
+pub mod campo_contratista {
+    pub const CEDULA: &str = "cedula";
+    pub const NOMBRE: &str = "nombre";
+    pub const EMPRESA: &str = "empresa_id";
+    pub const TIPO_INGRESO: &str = "tipo_ingreso";
+    pub const FECHA_VENCIMIENTO_PRAIND: &str = "fecha_vencimiento_praind";
+}
+
 impl ContratistaEntrada {
-    pub fn a_comando(&self) -> Result<ComandoContratista, ErrorEntrada> {
+    /// Lee el formato de cada campo; si uno no se puede leer, el error dice
+    /// cuál es.
+    pub fn a_comando(&self) -> Result<ComandoContratista, ErrorJson> {
+        let en = |campo: &'static str| {
+            move |error: ErrorEntrada| ErrorJson::from(error).en_campo(Some(campo))
+        };
         Ok(ComandoContratista {
             cedula: self.cedula.clone(),
             nombre: self.nombre.clone(),
-            empresa: EmpresaId::desde_uuid(leer_uuid(&self.empresa_id)?),
+            empresa: EmpresaId::desde_uuid(
+                leer_uuid(&self.empresa_id).map_err(en(campo_contratista::EMPRESA))?,
+            ),
             tipo_ingreso: TipoIngreso::desde_codigo(&self.tipo_ingreso)
-                .map_err(|_| ErrorEntrada::TipoIngresoInvalido)?,
+                .map_err(|_| ErrorEntrada::TipoIngresoInvalido)
+                .map_err(en(campo_contratista::TIPO_INGRESO))?,
             fecha_vencimiento_praind: NaiveDate::parse_from_str(
                 self.fecha_vencimiento_praind.trim(),
                 "%Y-%m-%d",
             )
-            .map_err(|_| ErrorEntrada::FechaInvalida)?,
+            .map_err(|_| ErrorEntrada::FechaInvalida)
+            .map_err(en(campo_contratista::FECHA_VENCIMIENTO_PRAIND))?,
             tiene_acceso: self.tiene_acceso,
         })
+    }
+}
+
+/// El campo del formulario al que pertenece cada regla del contratista.
+/// Sin comodín: una regla nueva obliga a decidir su campo.
+pub const fn campo_de_error_contratista(error: ErrorContratista) -> &'static str {
+    match error {
+        ErrorContratista::CedulaVacia
+        | ErrorContratista::CedulaInvalida
+        | ErrorContratista::CedulaRepetida
+        | ErrorContratista::CedulaNoEditableAdentro => campo_contratista::CEDULA,
+        ErrorContratista::NombreVacio | ErrorContratista::NombreInvalido => {
+            campo_contratista::NOMBRE
+        }
+        ErrorContratista::EmpresaNoExiste => campo_contratista::EMPRESA,
+        ErrorContratista::PraindVencido => campo_contratista::FECHA_VENCIMIENTO_PRAIND,
+    }
+}
+
+/// El error de un caso de uso de contratistas, con su campo si es de una
+/// regla.
+pub fn error_de_contratista(error: ErrorCaso<ErrorContratista>) -> ErrorJson {
+    let campo = match &error {
+        ErrorCaso::Negocio(regla) => Some(campo_de_error_contratista(*regla)),
+        ErrorCaso::NoEncontrado | ErrorCaso::Tecnico(_) => None,
+    };
+    ErrorJson::from(error).en_campo(campo)
+}
+
+/// El formulario de una empresa sólo tiene el nombre: toda regla es suya.
+pub fn error_de_empresa(error: ErrorCaso<ErrorEmpresa>) -> ErrorJson {
+    let campo = match &error {
+        ErrorCaso::Negocio(_) => Some("nombre"),
+        ErrorCaso::NoEncontrado | ErrorCaso::Tecnico(_) => None,
+    };
+    ErrorJson::from(error).en_campo(campo)
+}
+
+/// Un campo que cambió al editar (lo decide el dominio, regla B11).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CambioDto {
+    pub campo: &'static str,
+    pub antes: String,
+    pub despues: String,
+}
+
+impl From<&CambioCampo> for CambioDto {
+    fn from(cambio: &CambioCampo) -> Self {
+        Self {
+            campo: cambio.campo,
+            antes: cambio.antes.clone(),
+            despues: cambio.despues.clone(),
+        }
     }
 }
 

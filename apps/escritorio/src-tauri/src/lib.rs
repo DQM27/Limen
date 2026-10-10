@@ -66,6 +66,7 @@ pub fn run() {
             comandos::registrar_salida_por_gafete,
             comandos::registrar_empresa,
             comandos::registrar_contratista,
+            comandos::editar_contratista,
             comandos::registrar_entrada_contratista,
         ])
         .run(tauri::generate_context!())

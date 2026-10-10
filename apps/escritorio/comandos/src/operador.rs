@@ -51,6 +51,7 @@ impl From<ErrorOperador> for ErrorJson {
                 tipo: TipoErrorJson::Negocio,
                 codigo: "nombre_vacio",
                 mensaje: error.to_string(),
+                campo: None,
             },
             ErrorOperador::Archivo(detalle) => {
                 ErrorCaso::<std::convert::Infallible>::Tecnico(detalle).into()
