@@ -5,7 +5,8 @@ use limen_dominio::contratista::ContratistaId;
 use limen_dominio::gafete::{ErrorPrestamoGafete, NumeroGafete, TipoGafete};
 use limen_dominio::hecho::{Hecho, HechoId};
 use limen_dominio::ingreso_contratista::{
-    DatosEntrada, ErrorIngreso, HechosEntrada, IngresoContratista, IngresoId, gafete_que_aplica,
+    DatosEntrada, ErrorIngreso, GafeteIndicado, HechosEntrada, IngresoContratista, IngresoId,
+    gafete_que_aplica,
 };
 use limen_dominio::medio::TipoMedio;
 use limen_dominio::movimiento::{ErrorSalida, Marca};
@@ -35,14 +36,23 @@ fn conflicto_de_entrada(restriccion: Restriccion) -> Option<ErrorIngreso> {
     }
 }
 
+/// Lo que el operador eligió sobre el gafete, tal cual llega.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GafeteElegido {
+    Numero(u32),
+    /// "Sin gafete" (S/G), marcado a propósito.
+    SinGafete,
+}
+
 /// Lo que llega del formulario de entrada.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ComandoEntrada {
     pub contratista: ContratistaId,
     pub medio: TipoMedio,
     pub placa: Option<String>,
-    /// Número del gafete; `None` = "sin gafete".
-    pub gafete: Option<u32>,
+    /// `None` = el operador no eligió nada: a quien le corresponde gafete
+    /// el dominio se lo exige (E3).
+    pub gafete: Option<GafeteElegido>,
 }
 
 /// La entrada registrada y el resultado del acceso (para avisar si el
@@ -81,13 +91,15 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarEntrada<F, R
             .await?
             .ok_or(ErrorCaso::NoEncontrado)?;
         // Un gafete 0 no existe en ningún catálogo.
-        let gafete = comando
-            .gafete
-            .map(NumeroGafete::nuevo)
-            .transpose()
-            .map_err(|_| {
-                ErrorCaso::Negocio(ErrorIngreso::Gafete(ErrorPrestamoGafete::NoRegistrado))
-            })?;
+        let gafete = match comando.gafete {
+            Some(GafeteElegido::Numero(numero)) => Some(GafeteIndicado::Numero(
+                NumeroGafete::nuevo(numero).map_err(|_| {
+                    ErrorCaso::Negocio(ErrorIngreso::Gafete(ErrorPrestamoGafete::NoRegistrado))
+                })?,
+            )),
+            Some(GafeteElegido::SinGafete) => Some(GafeteIndicado::SinGafete),
+            None => None,
+        };
 
         let situacion_gafete = match gafete_que_aplica(&contratista, gafete) {
             Some(numero) => {

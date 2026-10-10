@@ -7,7 +7,7 @@ mod tests {
     use limen_aplicacion::casos_de_uso::contratistas::{ComandoContratista, RegistrarContratista};
     use limen_aplicacion::casos_de_uso::gafetes::{CambiarGafete, CambioGafete, RegistrarGafetes};
     use limen_aplicacion::casos_de_uso::ingresos::{
-        ComandoEntrada, RegistrarEntrada, RegistrarSalida,
+        ComandoEntrada, GafeteElegido, RegistrarEntrada, RegistrarSalida,
     };
     use limen_aplicacion::errores::ErrorCaso;
     use limen_aplicacion::puertos::{
@@ -23,7 +23,7 @@ mod tests {
         TipoGafete,
     };
     use limen_dominio::hecho::Suceso;
-    use limen_dominio::ingreso_contratista::ErrorIngreso;
+    use limen_dominio::ingreso_contratista::{EntregaGafete, ErrorIngreso};
     use limen_dominio::medio::{ErrorMedio, TipoMedio};
     use limen_dominio::movimiento::ErrorSalida;
     use limen_dominio::presencia::{Via, YaEstaAdentro};
@@ -120,12 +120,14 @@ mod tests {
         con_contratista(almacen, cedula, TipoIngreso::Praind, "2027-01-01", true).await
     }
 
+    /// A pie, con ese gafete o, si no se indica número, "sin gafete" (S/G)
+    /// marcado a propósito.
     fn a_pie(contratista: ContratistaId, gafete: Option<u32>) -> ComandoEntrada {
         ComandoEntrada {
             contratista,
             medio: TipoMedio::APie,
             placa: None,
-            gafete,
+            gafete: Some(gafete.map_or(GafeteElegido::SinGafete, GafeteElegido::Numero)),
         }
     }
 
@@ -749,5 +751,31 @@ mod tests {
             2,
             "la salida rechazada no deja hecho"
         );
+    }
+
+    #[tokio::test]
+    async fn a_un_praind_hay_que_indicarle_gafete_o_sin_gafete() {
+        let almacen = preparado().await;
+        let id = praind(&almacen, "111111111").await;
+        let nada = ComandoEntrada {
+            gafete: None,
+            ..a_pie(id, None)
+        };
+        assert_eq!(
+            entrada(&almacen).ejecutar(&sesion(), &nada).await,
+            Err(ErrorCaso::Negocio(ErrorIngreso::GafeteRequerido)),
+        );
+        assert_eq!(almacen.ingresos().len(), 0, "no se registra nada");
+
+        let sin_gafete = entrada(&almacen)
+            .ejecutar(&sesion(), &a_pie(id, None))
+            .await
+            .unwrap();
+        assert_eq!(
+            almacen.ingresos()[0].entrega_gafete(),
+            EntregaGafete::SinGafete,
+            "S/G queda guardado"
+        );
+        assert_eq!(almacen.ingresos()[0].id(), sin_gafete.ingreso);
     }
 }

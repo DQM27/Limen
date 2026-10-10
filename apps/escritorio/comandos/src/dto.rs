@@ -14,7 +14,7 @@ use limen_aplicacion::casos_de_uso::consultas::ContratistaEnLista;
 use limen_aplicacion::casos_de_uso::contratistas::ComandoContratista;
 use limen_aplicacion::casos_de_uso::correo::ComandoEntradaCorreo;
 use limen_aplicacion::casos_de_uso::gafetes::CambioGafete;
-use limen_aplicacion::casos_de_uso::ingresos::{ComandoEntrada, EntradaContratista};
+use limen_aplicacion::casos_de_uso::ingresos::{ComandoEntrada, EntradaContratista, GafeteElegido};
 use limen_aplicacion::casos_de_uso::proveedores::ComandoEntradaProveedor;
 use limen_aplicacion::puertos::{IngresoAbierto, PersonaAdentro, ResumenGafete};
 use limen_dominio::acceso::ResultadoAcceso;
@@ -70,6 +70,9 @@ pub struct PersonaAdentroDto {
     pub medio: Option<&'static str>,
     pub placa: Option<String>,
     pub gafete: Option<u32>,
+    /// Entró sin gafete (S/G) aunque le correspondía uno: la pantalla
+    /// muestra "S/G".
+    pub sin_gafete: bool,
     /// Desde cuándo está adentro (RFC 3339, UTC).
     pub desde: String,
 }
@@ -96,6 +99,7 @@ impl From<&PersonaAdentro> for PersonaAdentroDto {
             medio,
             placa,
             gafete: persona.gafete.map(NumeroGafete::valor),
+            sin_gafete: persona.sin_gafete,
             desde: persona.desde.to_rfc3339_opts(SecondsFormat::Secs, true),
         }
     }
@@ -285,17 +289,34 @@ pub struct EntradaContratistaEntrada {
     /// `A_PIE` o `VEHICULO`.
     pub medio: String,
     pub placa: Option<String>,
-    /// Número del gafete; vacío = "sin gafete".
+    /// El número del gafete que se le presta…
     pub gafete: Option<u32>,
+    /// …o "Sin gafete" (S/G), marcado a propósito. A quien le corresponde
+    /// gafete (PRAIND) el núcleo le exige uno de los dos (E3); a quien no
+    /// (IN HOUSE) no le aplica ninguno.
+    #[serde(default)]
+    pub sin_gafete: bool,
 }
 
 impl EntradaContratistaEntrada {
-    pub fn a_comando(&self) -> Result<ComandoEntrada, ErrorEntrada> {
+    pub fn a_comando(&self) -> Result<ComandoEntrada, ErrorJson> {
+        let gafete = match (self.gafete, self.sin_gafete) {
+            (Some(numero), false) => Some(GafeteElegido::Numero(numero)),
+            (None, true) => Some(GafeteElegido::SinGafete),
+            (None, false) => None,
+            (Some(_), true) => {
+                return Err(
+                    ErrorJson::from(ErrorEntrada::GafeteYSinGafete).en_campo(Some(campos::GAFETE))
+                );
+            }
+        };
         Ok(ComandoEntrada {
-            contratista: ContratistaId::desde_uuid(leer_uuid(&self.contratista_id)?),
-            medio: leer_medio(&self.medio)?,
+            contratista: ContratistaId::desde_uuid(
+                leer_uuid(&self.contratista_id).map_err(en(campos::CONTRATISTA))?,
+            ),
+            medio: leer_medio(&self.medio).map_err(en(campos::MEDIO))?,
             placa: self.placa.clone(),
-            gafete: self.gafete,
+            gafete,
         })
     }
 }

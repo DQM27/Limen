@@ -121,6 +121,7 @@ impl CampoDelError for ErrorIngreso {
         match self {
             Self::Medio(error) => error.campo(),
             Self::Gafete(error) => error.campo(),
+            Self::GafeteRequerido => Some(GAFETE),
             Self::Reloj(_) | Self::YaEstaAdentro(_) | Self::AccesoDenegado(_) => None,
         }
     }

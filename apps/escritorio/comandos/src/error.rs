@@ -80,6 +80,8 @@ pub enum ErrorEntrada {
         "Indique un solo último portador del gafete: el contratista, la cédula de la persona o el personal KOF"
     )]
     PortadorInvalido,
+    #[error("Indique el número de gafete o «Sin gafete», no los dos")]
+    GafeteYSinGafete,
 }
 
 impl ErrorEntrada {
@@ -94,6 +96,7 @@ impl ErrorEntrada {
             Self::TipoGafeteInvalido => "tipo_gafete_invalido",
             Self::CambioGafeteInvalido => "cambio_gafete_invalido",
             Self::PortadorInvalido => "portador_invalido",
+            Self::GafeteYSinGafete => "gafete_y_sin_gafete",
         }
     }
 }

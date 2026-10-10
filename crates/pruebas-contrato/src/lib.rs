@@ -109,6 +109,7 @@ macro_rules! bateria_de_contrato {
             listar_contratistas_trae_la_empresa_y_ordena_por_nombre_y_cedula,
             historial_de_ingresos_junta_las_cuatro_vias_y_trae_cada_fila,
             historial_de_ingresos_filtra_por_rango_y_respeta_el_limite,
+            dentro_y_el_historial_distinguen_a_quien_entro_sin_gafete,
             // Hechos (`hechos`).
             los_hechos_de_las_cuatro_vias_se_guardan_y_se_leen_tal_cual,
             un_hecho_sin_confirmar_no_queda,

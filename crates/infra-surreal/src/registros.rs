@@ -13,7 +13,9 @@ use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
 use limen_dominio::gafete::{EstadoGafete, Gafete, NumeroGafete, Portador, TipoGafete};
 use limen_dominio::hecho::{Hecho, HechoId, Salida, Suceso};
-use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoGuardado, IngresoId};
+use limen_dominio::ingreso_contratista::{
+    EntregaGafete, IngresoContratista, IngresoGuardado, IngresoId,
+};
 use limen_dominio::ingreso_correo::{
     IngresoCorreo, IngresoCorreoGuardado, IngresoCorreoId, Motivo,
 };
@@ -364,6 +366,8 @@ pub struct IngresoDatos {
     pub cedula: String,
     pub placa: Option<String>,
     pub gafete: Option<i64>,
+    /// `PRESTADO`, `SIN_GAFETE` o `NO_APLICA`.
+    pub entrega_gafete: String,
     pub entrada_en: DateTime<Utc>,
     pub entrada_operador: Uuid,
     pub salida_en: Option<DateTime<Utc>>,
@@ -377,6 +381,9 @@ pub struct IngresoLeido {
     pub cedula: String,
     pub placa: Option<String>,
     pub gafete: Option<i64>,
+    /// Puede faltar en una base creada antes de que existiera: se deduce
+    /// del gafete (ver [`entrega_de`]).
+    pub entrega_gafete: Option<String>,
     pub entrada_en: DateTime<Utc>,
     pub entrada_operador: Uuid,
     pub salida_en: Option<DateTime<Utc>>,
@@ -394,6 +401,7 @@ impl From<&IngresoContratista> for IngresoDatos {
                 .placa()
                 .map(|placa| placa.as_str().to_owned()),
             gafete: ingreso.gafete().map(|numero| i64::from(numero.valor())),
+            entrega_gafete: ingreso.entrega_gafete().codigo().to_owned(),
             entrada_en: ingreso.entrada().en,
             entrada_operador: ingreso.entrada().operador.uuid(),
             salida_en: salida.map(|marca| marca.en),
@@ -415,13 +423,32 @@ impl TryFrom<IngresoLeido> for IngresoContratista {
             contratista: ContratistaId::desde_uuid(uuid_de(&leido.contratista, TABLA_CONTRATISTA)?),
             cedula: Cedula::normalizar(&leido.cedula).map_err(|e| corrupto(e.to_string()))?,
             medio,
-            gafete: leido.gafete.map(|n| numero_de(n, tabla)).transpose()?,
+            gafete: entrega_de(leido.entrega_gafete.as_deref(), leido.gafete, tabla)?,
             entrada: Marca {
                 en: leido.entrada_en,
                 operador: OperadorId::desde_uuid(leido.entrada_operador),
             },
             salida,
         }))
+    }
+}
+
+/// Qué pasó con el gafete de un ingreso guardado. Si falta el campo (base
+/// anterior), con número es prestado y sin él, no aplica.
+fn entrega_de(
+    codigo: Option<&str>,
+    gafete: Option<i64>,
+    tabla: &str,
+) -> Result<EntregaGafete, ErrorPersistencia> {
+    let numero = gafete.map(|n| numero_de(n, tabla)).transpose()?;
+    match (codigo, numero) {
+        (Some("PRESTADO") | None, Some(numero)) => Ok(EntregaGafete::Prestado(numero)),
+        (Some("SIN_GAFETE"), None) => Ok(EntregaGafete::SinGafete),
+        (Some("NO_APLICA") | None, None) => Ok(EntregaGafete::NoAplica),
+        (otro, _) => Err(dato_corrupto(
+            tabla,
+            format!("entrega de gafete incoherente: {otro:?} con {gafete:?}"),
+        )),
     }
 }
 
@@ -857,6 +884,7 @@ impl TryFrom<HechoLeido> for Hecho {
                     cedula: ingreso.cedula,
                     placa: ingreso.placa,
                     gafete: ingreso.gafete,
+                    entrega_gafete: Some(ingreso.entrega_gafete),
                     entrada_en: ingreso.entrada_en,
                     entrada_operador: ingreso.entrada_operador,
                     salida_en: ingreso.salida_en,
