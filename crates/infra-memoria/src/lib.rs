@@ -37,7 +37,7 @@ use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
 use limen_dominio::gafete::{Gafete, NumeroGafete, TipoGafete};
 use limen_dominio::hecho::{Hecho, HechoId};
-use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoId};
+use limen_dominio::ingreso_contratista::{EntregaGafete, IngresoContratista, IngresoId};
 use limen_dominio::ingreso_correo::{IngresoCorreo, IngresoCorreoId};
 use limen_dominio::ingreso_proveedor::{IngresoProveedor, IngresoProveedorId};
 use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
@@ -258,6 +258,7 @@ impl Consultas for AlmacenMemoria {
                         .unwrap_or_default(),
                     medio: Some(ingreso.medio().clone()),
                     gafete: ingreso.gafete(),
+                    sin_gafete: ingreso.entrega_gafete() == EntregaGafete::SinGafete,
                     desde: ingreso.entrada().en,
                 });
             }
@@ -273,6 +274,7 @@ impl Consultas for AlmacenMemoria {
                         .unwrap_or_default(),
                     medio: Some(ingreso.medio().clone()),
                     gafete: Some(ingreso.gafete()),
+                    sin_gafete: false,
                     desde: ingreso.entrada().en,
                 });
             }
@@ -284,6 +286,7 @@ impl Consultas for AlmacenMemoria {
                     procedencia: ingreso.motivo().to_string(),
                     medio: Some(ingreso.medio().clone()),
                     gafete: Some(ingreso.gafete()),
+                    sin_gafete: false,
                     desde: ingreso.entrada().en,
                 });
             }
@@ -295,6 +298,7 @@ impl Consultas for AlmacenMemoria {
                     procedencia: "Personal KOF".to_owned(),
                     medio: None,
                     gafete: Some(prestamo.gafete()),
+                    sin_gafete: false,
                     desde: prestamo.entrega().en,
                 });
             }
@@ -436,6 +440,7 @@ impl Consultas for AlmacenMemoria {
                         .unwrap_or_default(),
                     medio: Some(ingreso.medio().clone()),
                     gafete: ingreso.gafete(),
+                    sin_gafete: ingreso.entrega_gafete() == EntregaGafete::SinGafete,
                     entrada: ingreso.entrada().en,
                     salida: ingreso.salida().map(|marca| marca.en),
                 });
@@ -456,6 +461,7 @@ impl Consultas for AlmacenMemoria {
                         .unwrap_or_default(),
                     medio: Some(ingreso.medio().clone()),
                     gafete: Some(ingreso.gafete()),
+                    sin_gafete: false,
                     entrada: ingreso.entrada().en,
                     salida: ingreso.salida().map(|marca| marca.en),
                 });
@@ -472,6 +478,7 @@ impl Consultas for AlmacenMemoria {
                     procedencia: ingreso.motivo().to_string(),
                     medio: Some(ingreso.medio().clone()),
                     gafete: Some(ingreso.gafete()),
+                    sin_gafete: false,
                     entrada: ingreso.entrada().en,
                     salida: ingreso.salida().map(|marca| marca.en),
                 });
@@ -488,6 +495,7 @@ impl Consultas for AlmacenMemoria {
                     procedencia: "Personal KOF".to_owned(),
                     medio: None,
                     gafete: Some(prestamo.gafete()),
+                    sin_gafete: false,
                     entrada: prestamo.entrega().en,
                     salida: prestamo.devolucion().map(|marca| marca.en),
                 });

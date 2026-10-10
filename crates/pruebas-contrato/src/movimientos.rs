@@ -9,7 +9,9 @@ use limen_aplicacion::puertos::{
 };
 use limen_dominio::cedula::Cedula;
 use limen_dominio::gafete::{EstadoGafete, Gafete, NumeroGafete, Portador, TipoGafete};
-use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoGuardado, IngresoId};
+use limen_dominio::ingreso_contratista::{
+    EntregaGafete, IngresoContratista, IngresoGuardado, IngresoId,
+};
 use limen_dominio::medio::{Medio, Placa};
 use limen_dominio::movimiento::Marca;
 use limen_dominio::nombre::NombrePersona;
@@ -52,10 +54,24 @@ fn ingreso(n: u128, salida: Option<Marca>) -> IngresoContratista {
         contratista: id_contratista(1),
         cedula: cedula("111111111"),
         medio: Medio::Vehiculo(Placa::nueva("ABC-123").unwrap()),
-        gafete: Some(numero(7)),
+        gafete: EntregaGafete::Prestado(numero(7)),
         entrada: marca("2026-10-09T14:00:00Z"),
         salida,
     })
+}
+
+/// Un ingreso a pie, del día anterior y ya cerrado, al que no le aplica
+/// gafete.
+fn guardado_a_pie() -> IngresoGuardado {
+    IngresoGuardado {
+        id: IngresoId::desde_uuid(Uuid::from_u128(5002)),
+        contratista: id_contratista(1),
+        cedula: cedula("111111111"),
+        medio: Medio::APie,
+        gafete: EntregaGafete::NoAplica,
+        entrada: marca("2026-10-08T08:00:00Z"),
+        salida: Some(marca("2026-10-08T17:30:00Z")),
+    }
 }
 
 // --- Presencias ---
@@ -347,18 +363,16 @@ pub async fn un_gafete_no_se_presta_dos_veces_hasta_que_se_devuelve<F: FabricaUn
 pub async fn guarda_y_lee_un_ingreso_abierto_y_cerrado<F: FabricaUnidadDeTrabajo>(fabrica: F) {
     sembrar(&fabrica, &[contratista(1, "111111111", "ANA")]).await;
     let abierto = ingreso(1, None);
-    let a_pie = IngresoContratista::restaurar(IngresoGuardado {
-        id: IngresoId::desde_uuid(Uuid::from_u128(5002)),
-        contratista: id_contratista(1),
-        cedula: cedula("111111111"),
-        medio: Medio::APie,
-        gafete: None,
-        entrada: marca("2026-10-08T08:00:00Z"),
-        salida: Some(marca("2026-10-08T17:30:00Z")),
+    let a_pie = IngresoContratista::restaurar(guardado_a_pie());
+    let sin_gafete = IngresoContratista::restaurar(IngresoGuardado {
+        id: IngresoId::desde_uuid(Uuid::from_u128(5003)),
+        gafete: EntregaGafete::SinGafete,
+        ..guardado_a_pie()
     });
     let mut uow = fabrica.nueva();
     uow.ingresos().guardar(&abierto);
     uow.ingresos().guardar(&a_pie);
+    uow.ingresos().guardar(&sin_gafete);
     uow.confirmar().await.unwrap();
 
     let mut lectura = fabrica.nueva();
@@ -370,7 +384,12 @@ pub async fn guarda_y_lee_un_ingreso_abierto_y_cerrado<F: FabricaUnidadDeTrabajo
     assert_eq!(
         lectura.ingresos().obtener(a_pie.id()).await.unwrap(),
         Some(a_pie),
-        "a pie, sin gafete y con salida"
+        "a pie, sin gafete porque no aplica, y con salida"
+    );
+    assert_eq!(
+        lectura.ingresos().obtener(sin_gafete.id()).await.unwrap(),
+        Some(sin_gafete),
+        "sin gafete (S/G), decidido por el operador: no es lo mismo que no aplica"
     );
 
     // Guardar de nuevo con la salida cierra el mismo ingreso.

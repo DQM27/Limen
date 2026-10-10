@@ -124,3 +124,62 @@ export interface CambioGafete {
   portador_cedula: string | null;
   portador_personal_id: string | null;
 }
+
+export type Via = 'CONTRATISTA' | 'PROVEEDOR' | 'CORREO' | 'KOF';
+
+/** Un contratista en el buscador o en la ficha del ingreso: todo decidido. */
+export interface CandidatoIngreso {
+  id: string;
+  cedula: string;
+  nombre: string;
+  empresa_id: string;
+  empresa_nombre: string | null;
+  tipo_ingreso: TipoIngreso;
+  fecha_vencimiento_praind: string;
+  tiene_acceso: boolean;
+  /** PRAIND: hay que indicar un gafete o «Sin gafete». IN HOUSE: no aplica. */
+  requiere_gafete: boolean;
+  puede_entrar: boolean;
+  /** Si puede: permitido, o con aviso de PRAIND por vencer. */
+  acceso: Acceso | null;
+  /** Si no puede: el mismo motivo que daría registrar. */
+  motivo: { codigo: string; mensaje: string } | null;
+  /** Si ya está adentro: por qué vía, para ofrecer registrar su salida. */
+  adentro_por: Via | null;
+  /** Gafetes de contratista perdidos a su nombre: sólo informa. */
+  gafetes_perdidos: number[];
+}
+
+/** El formulario de entrada de un contratista. */
+export interface EntradaContratista {
+  contratista_id: string;
+  medio: Medio;
+  placa: string | null;
+  /** El número de gafete, o `null` con `sin_gafete` marcado (o si no aplica). */
+  gafete: number | null;
+  /** «Sin gafete» (S/G), marcado a propósito. */
+  sin_gafete: boolean;
+}
+
+/** La entrada registrada y el resultado del acceso (con su aviso, si hay). */
+export interface EntradaRegistrada {
+  ingreso_id: string;
+  acceso: Acceso;
+}
+
+/** Una persona que está adentro, por cualquiera de las cuatro vías. */
+export interface PersonaAdentro {
+  via: Via;
+  /** El ingreso abierto: con él se registra la salida. */
+  ingreso_id: string;
+  /** La cédula o, para el personal KOF, el código de empleado. */
+  identidad: string;
+  nombre: string;
+  procedencia: string;
+  medio: Medio | null;
+  placa: string | null;
+  gafete: number | null;
+  /** Entró sin gafete (S/G): se muestra «S/G». */
+  sin_gafete: boolean;
+  desde: string;
+}

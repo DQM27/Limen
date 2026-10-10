@@ -27,7 +27,9 @@ use limen_aplicacion::casos_de_uso::contratistas::{
 use limen_aplicacion::casos_de_uso::correo::{RegistrarEntradaCorreo, RegistrarSalidaCorreo};
 use limen_aplicacion::casos_de_uso::empresas::{RegistrarEmpresa, RenombrarEmpresa};
 use limen_aplicacion::casos_de_uso::gafetes::{CambiarGafete, RegistrarGafetes};
-use limen_aplicacion::casos_de_uso::ingresos::{RegistrarEntrada, RegistrarSalida};
+use limen_aplicacion::casos_de_uso::ingresos::{
+    PrepararIngreso, RegistrarEntrada, RegistrarSalida,
+};
 use limen_aplicacion::casos_de_uso::kof::{
     DevolverGafeteKof, EditarPersonalKof, EntregarGafeteKof, RegistrarPersonalKof,
 };
@@ -99,10 +101,12 @@ grupo! {
 }
 
 grupo! {
-    /// Ingreso y salida de contratistas.
+    /// Ingreso y salida de contratistas, y el buscador y la ficha antes de
+    /// registrar la entrada (`preparar`).
     Ingresos {
         entrada: RegistrarEntrada<F, R, G>,
         salida: RegistrarSalida<F, R, G>,
+        preparar: PrepararIngreso<F, R>,
     }
 }
 
@@ -192,6 +196,7 @@ where
             ingresos: Ingresos {
                 entrada: RegistrarEntrada::new(a(), r(), i()),
                 salida: RegistrarSalida::new(a(), r(), i()),
+                preparar: PrepararIngreso::new(a(), r()),
             },
             proveedores: Proveedores {
                 registrar_empresa: RegistrarEmpresaProveedora::new(a(), r(), i()),

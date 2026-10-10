@@ -69,11 +69,14 @@ struct FilaAdentro {
     procedencia: Option<String>,
     placa: Option<String>,
     gafete: Option<i64>,
+    /// Sólo lo trae la consulta de contratistas.
+    sin_gafete: Option<bool>,
     entrada_en: DateTime<Utc>,
 }
 
 const ADENTRO_CONTRATISTAS: &str = "SELECT id, cedula, contratista.nombre AS nombre, \
-    contratista.empresa.nombre AS procedencia, placa, gafete, entrada_en \
+    contratista.empresa.nombre AS procedencia, placa, gafete, \
+    entrega_gafete = 'SIN_GAFETE' AS sin_gafete, entrada_en \
     FROM ingreso_contratista WHERE salida_en = NONE";
 const ADENTRO_PROVEEDORES: &str = "SELECT id, cedula, nombre, empresa.nombre AS procedencia, \
     placa, gafete, entrada_en FROM ingreso_proveedor WHERE salida_en = NONE";
@@ -92,6 +95,8 @@ struct FilaMovimiento {
     procedencia: Option<String>,
     placa: Option<String>,
     gafete: Option<i64>,
+    /// Sólo lo trae la consulta de contratistas.
+    sin_gafete: Option<bool>,
     entrada_en: DateTime<Utc>,
     salida_en: Option<DateTime<Utc>>,
 }
@@ -99,7 +104,8 @@ struct FilaMovimiento {
 /// El rango se enlaza como parámetros (`$desde`, `$hasta`, `$limite`): nunca se
 /// concatena. La condición es `[desde, hasta)` sobre la entrada.
 const HISTORIAL_CONTRATISTAS: &str = "SELECT id, cedula, contratista.nombre AS nombre, \
-    contratista.empresa.nombre AS procedencia, placa, gafete, entrada_en, salida_en \
+    contratista.empresa.nombre AS procedencia, placa, gafete, \
+    entrega_gafete = 'SIN_GAFETE' AS sin_gafete, entrada_en, salida_en \
     FROM ingreso_contratista WHERE entrada_en >= $desde AND entrada_en < $hasta \
     ORDER BY entrada_en DESC LIMIT $limite";
 const HISTORIAL_PROVEEDORES: &str = "SELECT id, cedula, nombre, empresa.nombre AS procedencia, \
@@ -143,6 +149,7 @@ impl FilaMovimiento {
                 None
             },
             gafete: self.gafete.map(|n| numero_de(n, tabla)).transpose()?,
+            sin_gafete: self.sin_gafete.unwrap_or(false),
             entrada: self.entrada_en,
             salida: self.salida_en,
         }))
@@ -188,6 +195,7 @@ impl FilaAdentro {
                 None
             },
             gafete: self.gafete.map(|n| numero_de(n, tabla)).transpose()?,
+            sin_gafete: self.sin_gafete.unwrap_or(false),
             desde: self.entrada_en,
         }))
     }

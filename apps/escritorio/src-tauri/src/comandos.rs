@@ -16,10 +16,10 @@
 )]
 
 use limen_escritorio_comandos::{
-    CambioDto, CambioGafeteEntrada, ContratistaDto, ContratistaEntrada, EmpresaDto,
-    EmpresaProveedoraDto, EntradaContratistaEntrada, EntradaCorreoEntrada, EntradaProveedorEntrada,
-    EntradaRegistradaDto, ErrorJson, FilaContratistaDto, GafeteDto, Operador, PersonaAdentroDto,
-    PersonalKofDto,
+    CambioDto, CambioGafeteEntrada, CandidatoIngresoDto, ContratistaDto, ContratistaEntrada,
+    EmpresaDto, EmpresaProveedoraDto, EntradaContratistaEntrada, EntradaCorreoEntrada,
+    EntradaProveedorEntrada, EntradaRegistradaDto, ErrorJson, FilaContratistaDto, GafeteDto,
+    Operador, PersonaAdentroDto, PersonalKofDto,
 };
 use tauri::State;
 
@@ -299,4 +299,25 @@ pub async fn cambiar_gafete(
         .comandos()
         .cambiar_gafete(&sesion, &tipo, numero, &cambio)
         .await
+}
+
+// --- Preparar el ingreso de un contratista ---
+
+#[tauri::command]
+pub async fn buscar_para_ingreso(
+    estado: State<'_, Estado>,
+    texto: String,
+    limite: usize,
+) -> Resultado<Vec<CandidatoIngresoDto>> {
+    estado.operador().sesion()?;
+    estado.comandos().buscar_para_ingreso(&texto, limite).await
+}
+
+#[tauri::command]
+pub async fn preparar_ingreso(
+    estado: State<'_, Estado>,
+    contratista_id: String,
+) -> Resultado<CandidatoIngresoDto> {
+    estado.operador().sesion()?;
+    estado.comandos().preparar_ingreso(&contratista_id).await
 }

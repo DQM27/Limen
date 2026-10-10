@@ -7,12 +7,17 @@
 //! 3. la persona no está adentro por ninguna vía (E1, A7). Pesa más que el
 //!    acceso: si está adentro, lo que corresponde es registrar su salida;
 //! 4. el acceso: sin acceso o PRAIND vencido, no entra (D2, D4);
-//! 5. el gafete, si corresponde y se indicó uno: registrado, disponible y
-//!    libre (E3).
+//! 5. el gafete (E3): a quien le corresponde (PRAIND) el operador le indica
+//!    un número o marca "sin gafete" (S/G), a propósito y nunca por omisión;
+//!    con número, el gafete debe estar registrado, disponible y libre. A
+//!    quien no le corresponde (IN HOUSE) no aplica: se ignora lo indicado.
 //!
-//! El gafete es opcional aunque el tipo lo requiera: el operador puede
-//! registrar la entrada "sin gafete" y queda dicho quién lo hizo. A quien no
-//! le corresponde gafete (IN HOUSE) se le ignora el número indicado.
+//! El S/G no pide motivo: el hecho inmutable deja dicho qué operador lo
+//! registró. Tampoco se le asigna un gafete después: quien entra S/G
+//! normalmente sale y no regresa.
+//!
+//! Los pasos 3 y 4 son [`puede_entrar`]: la misma regla que muestra la ficha
+//! antes de registrar, para que nunca se contradigan.
 
 use std::fmt;
 
@@ -48,13 +53,50 @@ impl fmt::Display for IngresoId {
     }
 }
 
+/// Lo que el operador indicó sobre el gafete.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GafeteIndicado {
+    Numero(NumeroGafete),
+    /// "Sin gafete" (S/G), marcado a propósito.
+    SinGafete,
+}
+
+/// Qué pasó con el gafete en un ingreso: queda guardado y en el hecho.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EntregaGafete {
+    Prestado(NumeroGafete),
+    /// Le correspondía gafete y el operador registró la entrada sin él.
+    SinGafete,
+    /// No le corresponde gafete (IN HOUSE: su credencial ya es el gafete).
+    NoAplica,
+}
+
+impl EntregaGafete {
+    /// El número prestado, si se prestó uno.
+    pub const fn numero(self) -> Option<NumeroGafete> {
+        match self {
+            Self::Prestado(numero) => Some(numero),
+            Self::SinGafete | Self::NoAplica => None,
+        }
+    }
+
+    /// Código estable: `PRESTADO`, `SIN_GAFETE` o `NO_APLICA`.
+    pub const fn codigo(self) -> &'static str {
+        match self {
+            Self::Prestado(_) => "PRESTADO",
+            Self::SinGafete => "SIN_GAFETE",
+            Self::NoAplica => "NO_APLICA",
+        }
+    }
+}
+
 /// Lo que llega del formulario de entrada.
 #[derive(Debug, Clone, Copy)]
 pub struct DatosEntrada<'a> {
     pub medio: TipoMedio,
     pub placa: Option<&'a str>,
-    /// `None` = "sin gafete".
-    pub gafete: Option<NumeroGafete>,
+    /// `None` = el operador no indicó nada.
+    pub gafete: Option<GafeteIndicado>,
 }
 
 /// Lo que el caso de uso averiguó antes de pedir la decisión.
@@ -78,6 +120,8 @@ pub enum ErrorIngreso {
     YaEstaAdentro(YaEstaAdentro),
     #[error("{0}")]
     AccesoDenegado(MotivoDenegacion),
+    #[error("Indique el número de gafete o marque «Sin gafete»")]
+    GafeteRequerido,
     #[error("{0}")]
     Gafete(ErrorPrestamoGafete),
 }
@@ -89,18 +133,54 @@ impl ErrorIngreso {
             Self::Reloj(error) => error.codigo(),
             Self::YaEstaAdentro(error) => error.codigo(),
             Self::AccesoDenegado(motivo) => motivo.codigo(),
+            Self::GafeteRequerido => "gafete_requerido",
             Self::Gafete(error) => error.codigo(),
         }
     }
 }
 
-/// El gafete que de verdad se va a prestar: el indicado, sólo si al
-/// contratista le corresponde gafete (PRAIND sí, IN HOUSE no).
-pub fn gafete_que_aplica(
+/// Pasos 3 y 4: si la persona puede entrar hoy, sin mirar el formulario.
+/// "Ya está adentro" pesa más que el acceso (E1): lo que corresponde es
+/// registrar su salida. La ficha previa y el registro usan esta misma regla.
+pub fn puede_entrar(
     contratista: &Contratista,
-    indicado: Option<NumeroGafete>,
+    adentro_por: Option<Via>,
+    hoy: NaiveDate,
+) -> Result<ResultadoAcceso, ErrorIngreso> {
+    verificar_afuera(adentro_por).map_err(ErrorIngreso::YaEstaAdentro)?;
+    match verificar_acceso(contratista, hoy) {
+        ResultadoAcceso::Denegado(motivo) => Err(ErrorIngreso::AccesoDenegado(motivo)),
+        permitido => Ok(permitido),
+    }
+}
+
+/// Paso 5 (E3): qué se hace con el gafete. A quien le corresponde, el
+/// operador tiene que decidirlo: un número o "sin gafete", nunca nada.
+pub const fn entrega_de_gafete(
+    contratista: &Contratista,
+    indicado: Option<GafeteIndicado>,
+) -> Result<EntregaGafete, ErrorIngreso> {
+    if !contratista.requiere_gafete() {
+        return Ok(EntregaGafete::NoAplica);
+    }
+    match indicado {
+        Some(GafeteIndicado::Numero(numero)) => Ok(EntregaGafete::Prestado(numero)),
+        Some(GafeteIndicado::SinGafete) => Ok(EntregaGafete::SinGafete),
+        None => Err(ErrorIngreso::GafeteRequerido),
+    }
+}
+
+/// El gafete que habría que prestar: el número indicado, sólo si al
+/// contratista le corresponde gafete (PRAIND sí, IN HOUSE no). Es el que el
+/// caso de uso revisa antes de pedir la decisión.
+pub const fn gafete_que_aplica(
+    contratista: &Contratista,
+    indicado: Option<GafeteIndicado>,
 ) -> Option<NumeroGafete> {
-    indicado.filter(|_| contratista.requiere_gafete())
+    match entrega_de_gafete(contratista, indicado) {
+        Ok(entrega) => entrega.numero(),
+        Err(_) => None,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -109,7 +189,7 @@ pub struct IngresoContratista {
     contratista: ContratistaId,
     cedula: Cedula,
     medio: Medio,
-    gafete: Option<NumeroGafete>,
+    gafete: EntregaGafete,
     entrada: Marca,
     salida: Option<Marca>,
 }
@@ -129,7 +209,7 @@ pub struct IngresoGuardado {
     pub contratista: ContratistaId,
     pub cedula: Cedula,
     pub medio: Medio,
-    pub gafete: Option<NumeroGafete>,
+    pub gafete: EntregaGafete,
     pub entrada: Marca,
     pub salida: Option<Marca>,
 }
@@ -146,13 +226,9 @@ impl IngresoContratista {
         let medio =
             Medio::desde_formulario(datos.medio, datos.placa).map_err(ErrorIngreso::Medio)?;
         verificar_reloj(entrada.en, hechos.ultimo_movimiento).map_err(ErrorIngreso::Reloj)?;
-        verificar_afuera(hechos.adentro_por).map_err(ErrorIngreso::YaEstaAdentro)?;
-        let acceso = verificar_acceso(contratista, hoy);
-        if let ResultadoAcceso::Denegado(motivo) = acceso {
-            return Err(ErrorIngreso::AccesoDenegado(motivo));
-        }
-        let gafete = gafete_que_aplica(contratista, datos.gafete);
-        if gafete.is_some() {
+        let acceso = puede_entrar(contratista, hechos.adentro_por, hoy)?;
+        let gafete = entrega_de_gafete(contratista, datos.gafete)?;
+        if let EntregaGafete::Prestado(_) = gafete {
             verificar_prestamo(
                 hechos
                     .situacion_gafete
@@ -211,7 +287,13 @@ impl IngresoContratista {
         &self.medio
     }
 
+    /// El número prestado, si se prestó uno.
     pub const fn gafete(&self) -> Option<NumeroGafete> {
+        self.gafete.numero()
+    }
+
+    /// Qué pasó con el gafete: prestado, sin gafete o no aplica.
+    pub const fn entrega_gafete(&self) -> EntregaGafete {
         self.gafete
     }
 
@@ -287,7 +369,7 @@ mod tests {
         DatosEntrada {
             medio: TipoMedio::APie,
             placa: None,
-            gafete: Some(numero(n)),
+            gafete: Some(GafeteIndicado::Numero(numero(n))),
         }
     }
 
@@ -330,34 +412,115 @@ mod tests {
         let datos = DatosEntrada {
             medio: TipoMedio::Vehiculo,
             placa: Some("abc 123"),
-            gafete: None,
+            gafete: Some(GafeteIndicado::SinGafete),
         };
         let ingreso = entrar(&praind(), datos, hechos()).unwrap().ingreso;
         assert_eq!(ingreso.medio().placa().map(Placa::as_str), Some("ABC 123"));
     }
 
-    #[test]
-    fn sin_gafete_tambien_puede_entrar() {
-        let datos = DatosEntrada {
+    fn a_pie(gafete: Option<GafeteIndicado>) -> DatosEntrada<'static> {
+        DatosEntrada {
             medio: TipoMedio::APie,
             placa: None,
-            gafete: None,
-        };
+            gafete,
+        }
+    }
+
+    #[test]
+    fn sin_gafete_marcado_a_proposito_tambien_puede_entrar() {
         let sin_situacion = HechosEntrada {
             situacion_gafete: None,
             ..hechos()
         };
-        let ingreso = entrar(&praind(), datos, sin_situacion).unwrap().ingreso;
-        assert_eq!(ingreso.gafete(), None, "queda registrado sin gafete");
+        let ingreso = entrar(
+            &praind(),
+            a_pie(Some(GafeteIndicado::SinGafete)),
+            sin_situacion,
+        )
+        .unwrap()
+        .ingreso;
+        assert_eq!(ingreso.gafete(), None, "no se prestó ninguno");
+        assert_eq!(
+            ingreso.entrega_gafete(),
+            EntregaGafete::SinGafete,
+            "queda S/G"
+        );
     }
 
     #[test]
-    fn a_in_house_se_le_ignora_el_gafete() {
+    fn a_quien_le_corresponde_gafete_no_entra_sin_decidirlo() {
+        assert_eq!(
+            entrar(&praind(), a_pie(None), hechos()),
+            Err(ErrorIngreso::GafeteRequerido),
+            "ni número ni S/G: nunca queda S/G por olvido"
+        );
+    }
+
+    #[test]
+    fn a_in_house_no_le_aplica_el_gafete() {
         let in_house = contratista(TipoIngreso::InHouse, "2027-01-01", true);
-        let ingreso = entrar(&in_house, a_pie_con_gafete(25), hechos())
-            .unwrap()
-            .ingreso;
-        assert_eq!(ingreso.gafete(), None, "su credencial ya es el gafete");
+        for indicado in [
+            None,
+            Some(GafeteIndicado::SinGafete),
+            Some(GafeteIndicado::Numero(numero(25))),
+        ] {
+            let ingreso = entrar(&in_house, a_pie(indicado), hechos())
+                .unwrap()
+                .ingreso;
+            assert_eq!(
+                ingreso.entrega_gafete(),
+                EntregaGafete::NoAplica,
+                "{indicado:?}"
+            );
+            assert_eq!(ingreso.gafete(), None, "su credencial ya es el gafete");
+        }
+    }
+
+    #[test]
+    fn la_entrega_tiene_codigo_estable() {
+        assert_eq!(EntregaGafete::Prestado(numero(1)).codigo(), "PRESTADO");
+        assert_eq!(EntregaGafete::SinGafete.codigo(), "SIN_GAFETE");
+        assert_eq!(EntregaGafete::NoAplica.codigo(), "NO_APLICA");
+        assert_eq!(ErrorIngreso::GafeteRequerido.codigo(), "gafete_requerido");
+    }
+
+    #[test]
+    fn puede_entrar_es_la_misma_regla_que_el_registro() {
+        let sin_acceso = contratista(TipoIngreso::Praind, "2027-01-01", false);
+        let por_vencer = contratista(TipoIngreso::Praind, "2026-10-20", true);
+        let casos = [
+            (praind(), None, Ok(ResultadoAcceso::Permitido)),
+            (
+                por_vencer,
+                None,
+                Ok(ResultadoAcceso::PermitidoConAdvertencia {
+                    dias_para_vencer: 11,
+                }),
+            ),
+            (
+                sin_acceso.clone(),
+                None,
+                Err(ErrorIngreso::AccesoDenegado(MotivoDenegacion::SinAcceso)),
+            ),
+            (
+                sin_acceso,
+                Some(Via::Correo),
+                Err(ErrorIngreso::YaEstaAdentro(YaEstaAdentro(Via::Correo))),
+            ),
+        ];
+        for (contratista, adentro_por, esperado) in casos {
+            assert_eq!(puede_entrar(&contratista, adentro_por, hoy()), esperado);
+            let registro = entrar(
+                &contratista,
+                a_pie(Some(GafeteIndicado::SinGafete)),
+                HechosEntrada {
+                    adentro_por,
+                    ..hechos()
+                },
+            )
+            .map(|registrada| registrada.acceso);
+            assert_eq!(registro, esperado, "el registro decide lo mismo");
+        }
     }
 
     #[test]

@@ -7,7 +7,7 @@ mod tests {
     use limen_aplicacion::casos_de_uso::contratistas::{ComandoContratista, RegistrarContratista};
     use limen_aplicacion::casos_de_uso::gafetes::{CambiarGafete, CambioGafete, RegistrarGafetes};
     use limen_aplicacion::casos_de_uso::ingresos::{
-        ComandoEntrada, RegistrarEntrada, RegistrarSalida,
+        ComandoEntrada, GafeteElegido, PrepararIngreso, RegistrarEntrada, RegistrarSalida,
     };
     use limen_aplicacion::errores::ErrorCaso;
     use limen_aplicacion::puertos::{
@@ -23,7 +23,7 @@ mod tests {
         TipoGafete,
     };
     use limen_dominio::hecho::Suceso;
-    use limen_dominio::ingreso_contratista::ErrorIngreso;
+    use limen_dominio::ingreso_contratista::{EntregaGafete, ErrorIngreso};
     use limen_dominio::medio::{ErrorMedio, TipoMedio};
     use limen_dominio::movimiento::ErrorSalida;
     use limen_dominio::presencia::{Via, YaEstaAdentro};
@@ -120,12 +120,14 @@ mod tests {
         con_contratista(almacen, cedula, TipoIngreso::Praind, "2027-01-01", true).await
     }
 
+    /// A pie, con ese gafete o, si no se indica número, "sin gafete" (S/G)
+    /// marcado a propósito.
     fn a_pie(contratista: ContratistaId, gafete: Option<u32>) -> ComandoEntrada {
         ComandoEntrada {
             contratista,
             medio: TipoMedio::APie,
             placa: None,
-            gafete,
+            gafete: Some(gafete.map_or(GafeteElegido::SinGafete, GafeteElegido::Numero)),
         }
     }
 
@@ -748,6 +750,150 @@ mod tests {
             almacen.hechos().len(),
             2,
             "la salida rechazada no deja hecho"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_un_praind_hay_que_indicarle_gafete_o_sin_gafete() {
+        let almacen = preparado().await;
+        let id = praind(&almacen, "111111111").await;
+        let nada = ComandoEntrada {
+            gafete: None,
+            ..a_pie(id, None)
+        };
+        assert_eq!(
+            entrada(&almacen).ejecutar(&sesion(), &nada).await,
+            Err(ErrorCaso::Negocio(ErrorIngreso::GafeteRequerido)),
+        );
+        assert_eq!(almacen.ingresos().len(), 0, "no se registra nada");
+
+        let sin_gafete = entrada(&almacen)
+            .ejecutar(&sesion(), &a_pie(id, None))
+            .await
+            .unwrap();
+        assert_eq!(
+            almacen.ingresos()[0].entrega_gafete(),
+            EntregaGafete::SinGafete,
+            "S/G queda guardado"
+        );
+        assert_eq!(almacen.ingresos()[0].id(), sin_gafete.ingreso);
+    }
+
+    // --- Preparar el ingreso: buscador y ficha ---
+
+    fn preparar(almacen: &AlmacenMemoria) -> PrepararIngreso<AlmacenMemoria, RelojFijo> {
+        PrepararIngreso::new(almacen.clone(), reloj_a(ENTRADA))
+    }
+
+    async fn llamado(
+        almacen: &AlmacenMemoria,
+        cedula: &str,
+        nombre: &str,
+        tiene_acceso: bool,
+    ) -> ContratistaId {
+        let comando = ComandoContratista {
+            cedula: cedula.into(),
+            nombre: nombre.into(),
+            empresa: EmpresaId::desde_uuid(Uuid::from_u128(500)),
+            tipo_ingreso: TipoIngreso::Praind,
+            fecha_vencimiento_praind: "2027-01-01".parse().unwrap(),
+            tiene_acceso,
+        };
+        RegistrarContratista::new(almacen.clone(), reloj_a(ENTRADA), almacen.ids())
+            .ejecutar(&sesion(), &comando)
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn el_buscador_encuentra_por_cedula_o_por_nombre_con_la_decision_tomada() {
+        let almacen = preparado().await;
+        let ana = llamado(&almacen, "111111111", "ana solano", true).await;
+        llamado(&almacen, "222222222", "beto mora", true).await;
+
+        for texto in ["1111", "solano", "ANA", "sol ana"] {
+            let encontrados = preparar(&almacen).buscar(texto, 10).await.unwrap();
+            let ids: Vec<ContratistaId> = encontrados.iter().map(|c| c.contratista.id()).collect();
+            assert_eq!(ids, vec![ana], "buscar {texto:?}");
+        }
+        let candidato = preparar(&almacen).ficha(ana).await.unwrap();
+        assert_eq!(candidato.decision, Ok(ResultadoAcceso::Permitido));
+        assert_eq!(
+            candidato.empresa.map(|e| e.to_string()),
+            Some("ACME".to_owned())
+        );
+        assert_eq!(candidato.gafetes_perdidos, Vec::new());
+        assert!(
+            preparar(&almacen)
+                .buscar("  ", 10)
+                .await
+                .unwrap()
+                .is_empty(),
+            "un texto vacío no trae nada"
+        );
+    }
+
+    #[tokio::test]
+    async fn la_ficha_decide_lo_mismo_que_el_registro() {
+        let almacen = preparado().await;
+        let sin_acceso = llamado(&almacen, "111111111", "ana solano", false).await;
+        let adentro = llamado(&almacen, "222222222", "beto mora", true).await;
+        entrada(&almacen)
+            .ejecutar(&sesion(), &a_pie(adentro, None))
+            .await
+            .unwrap();
+
+        let casos = [
+            (
+                sin_acceso,
+                ErrorIngreso::AccesoDenegado(MotivoDenegacion::SinAcceso),
+            ),
+            (
+                adentro,
+                ErrorIngreso::YaEstaAdentro(YaEstaAdentro(Via::Contratista)),
+            ),
+        ];
+        for (id, motivo) in casos {
+            let ficha = preparar(&almacen).ficha(id).await.unwrap();
+            assert_eq!(ficha.decision, Err(motivo), "la ficha");
+            assert_eq!(
+                entrada(&almacen)
+                    .ejecutar(&sesion(), &a_pie(id, None))
+                    .await,
+                Err(ErrorCaso::Negocio(motivo)),
+                "el registro dice lo mismo"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn la_ficha_informa_los_gafetes_perdidos_a_su_nombre() {
+        let almacen = preparado().await;
+        let ana = llamado(&almacen, "111111111", "ana solano", true).await;
+        let beto = llamado(&almacen, "222222222", "beto mora", true).await;
+        for (numero, portador) in [(4, ana), (9, beto)] {
+            cambiar(&almacen)
+                .ejecutar(
+                    &sesion(),
+                    TipoGafete::Contratista,
+                    numero,
+                    CambioGafete::MarcarPerdido(Portador::Contratista(portador)),
+                )
+                .await
+                .unwrap();
+        }
+        let ficha = preparar(&almacen).ficha(ana).await.unwrap();
+        assert_eq!(ficha.gafetes_perdidos, vec![numero(4)], "sólo el suyo");
+        assert_eq!(
+            ficha.decision,
+            Ok(ResultadoAcceso::Permitido),
+            "no impide la entrada"
+        );
+        assert_eq!(
+            preparar(&almacen)
+                .ficha(ContratistaId::desde_uuid(Uuid::from_u128(77)))
+                .await,
+            Err(ErrorCaso::NoEncontrado)
         );
     }
 }

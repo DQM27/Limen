@@ -1,6 +1,12 @@
 import { invoke } from '@tauri-apps/api/core';
 import {
   buscarEmpresas,
+  buscarParaIngreso,
+  dentro,
+  prepararIngreso,
+  registrarEntradaContratista,
+  registrarSalida,
+  registrarSalidaPorGafete,
   buscarEmpresasProveedoras,
   buscarPersonalKof,
   cambiarGafete,
@@ -145,6 +151,38 @@ describe('comandos del núcleo', () => {
         () => cambiarGafete('VISITA', 1, perdido),
         'cambiar_gafete',
         { tipo: 'VISITA', numero: 1, cambio: perdido },
+      ],
+    ];
+    for (const [llamar, comando, argumentos] of casos) {
+      vi.mocked(invoke).mockClear();
+      await llamar();
+      expect(invoke).toHaveBeenCalledWith(comando, argumentos);
+    }
+  });
+
+  it('los comandos del ingreso y de las salidas llevan su nombre y sus parámetros exactos', async () => {
+    const entrada = {
+      contratista_id: 'c1',
+      medio: 'A_PIE' as const,
+      placa: null,
+      gafete: null,
+      sin_gafete: true,
+    };
+    const casos: [() => Promise<unknown>, string, Record<string, unknown> | undefined][] = [
+      [() => buscarParaIngreso('ana', 10), 'buscar_para_ingreso', { texto: 'ana', limite: 10 }],
+      // Tauri pasa los parámetros a camelCase: `contratista_id` es `contratistaId`.
+      [() => prepararIngreso('c1'), 'preparar_ingreso', { contratistaId: 'c1' }],
+      [() => registrarEntradaContratista(entrada), 'registrar_entrada_contratista', { entrada }],
+      [() => dentro(), 'dentro', undefined],
+      [
+        () => registrarSalida('CONTRATISTA', 'i1'),
+        'registrar_salida',
+        { via: 'CONTRATISTA', ingresoId: 'i1' },
+      ],
+      [
+        () => registrarSalidaPorGafete('PROVEEDOR', 4),
+        'registrar_salida_por_gafete',
+        { via: 'PROVEEDOR', numero: 4 },
       ],
     ];
     for (const [llamar, comando, argumentos] of casos) {

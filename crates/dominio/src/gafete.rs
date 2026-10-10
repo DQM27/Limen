@@ -309,6 +309,11 @@ impl Gafete {
         self.portador.as_ref()
     }
 
+    /// Si está perdido y su último portador es esa persona (F5).
+    pub fn perdido_por(&self, portador: &Portador) -> bool {
+        self.estado == EstadoGafete::Perdido && self.portador.as_ref() == Some(portador)
+    }
+
     pub fn cambios_de_alta(&self) -> Vec<CambioCampo> {
         cambios_de_alta(self.campos_auditables())
     }
@@ -580,5 +585,20 @@ mod tests {
             Err(ErrorGafete::CedulaDelPortadorInvalida)
         );
         assert_eq!(gafete.estado(), EstadoGafete::Disponible, "no cambia nada");
+    }
+
+    #[test]
+    fn perdido_por_su_ultimo_portador() {
+        let mut gafete = disponible();
+        assert!(
+            !gafete.perdido_por(&portador()),
+            "disponible: nadie lo perdió"
+        );
+        gafete.marcar_perdido(portador()).unwrap();
+        assert!(gafete.perdido_por(&portador()));
+        let otro = Portador::Contratista(ContratistaId::desde_uuid(Uuid::from_u128(8)));
+        assert!(!gafete.perdido_por(&otro), "otro contratista");
+        gafete.resolver(Resolucion::Pagado).unwrap();
+        assert!(!gafete.perdido_por(&portador()), "ya se resolvió");
     }
 }

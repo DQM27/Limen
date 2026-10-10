@@ -22,7 +22,9 @@ use limen_dominio::contratista::{Contratista, ContratistaGuardado};
 use limen_dominio::empresa::{Empresa, EmpresaId, NombreEmpresa};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
 use limen_dominio::gafete::{EstadoGafete, Gafete, NumeroGafete, Portador, TipoGafete};
-use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoGuardado, IngresoId};
+use limen_dominio::ingreso_contratista::{
+    EntregaGafete, IngresoContratista, IngresoGuardado, IngresoId,
+};
 use limen_dominio::ingreso_correo::{
     IngresoCorreo, IngresoCorreoGuardado, IngresoCorreoId, Motivo,
 };
@@ -77,7 +79,7 @@ async fn sembrar_las_cuatro_vias<F: FabricaUnidadDeTrabajo>(fabrica: &F) {
             contratista: id_contratista(1),
             cedula: cedula("111111111"),
             medio: Medio::Vehiculo(Placa::nueva("ABC-123").unwrap()),
-            gafete: Some(NumeroGafete::nuevo(7).unwrap()),
+            gafete: EntregaGafete::Prestado(NumeroGafete::nuevo(7).unwrap()),
             entrada: marca("2026-10-09T08:00:00Z"),
             salida: None,
         }));
@@ -220,7 +222,7 @@ pub async fn quienes_estan_adentro_ignora_a_quienes_ya_salieron<
             contratista: id_contratista(1),
             cedula: cedula("111111111"),
             medio: Medio::APie,
-            gafete: None,
+            gafete: EntregaGafete::SinGafete,
             entrada: marca("2026-10-09T08:00:00Z"),
             salida: Some(marca("2026-10-09T09:00:00Z")),
         }));
@@ -228,6 +230,68 @@ pub async fn quienes_estan_adentro_ignora_a_quienes_ya_salieron<
     assert!(
         fabrica.quienes_estan_adentro().await.unwrap().is_empty(),
         "ya salió"
+    );
+}
+
+/// Quien entró sin gafete (S/G) se ve así en "dentro" y en el historial;
+/// quien no lo necesita (IN HOUSE) o lo llevó, no.
+pub async fn dentro_y_el_historial_distinguen_a_quien_entro_sin_gafete<
+    F: FabricaUnidadDeTrabajo + Consultas,
+>(
+    fabrica: F,
+) {
+    sembrar(
+        &fabrica,
+        &[
+            contratista(1, "111111111", "ANA"),
+            contratista(2, "222222222", "BETO"),
+            contratista(3, "333333333", "CARLA"),
+        ],
+    )
+    .await;
+    let entregas = [
+        (1, EntregaGafete::SinGafete),
+        (2, EntregaGafete::NoAplica),
+        (3, EntregaGafete::Prestado(NumeroGafete::nuevo(7).unwrap())),
+    ];
+    let mut uow = fabrica.nueva();
+    for (n, entrega) in entregas {
+        uow.ingresos()
+            .guardar(&IngresoContratista::restaurar(IngresoGuardado {
+                id: IngresoId::desde_uuid(Uuid::from_u128(5000 + n)),
+                contratista: id_contratista(n),
+                cedula: cedula(&format!("{n}{n}{n}{n}{n}{n}{n}{n}{n}")),
+                medio: Medio::APie,
+                gafete: entrega,
+                entrada: marca(&format!("2026-10-09T0{n}:00:00Z")),
+                salida: None,
+            }));
+    }
+    uow.confirmar().await.unwrap();
+
+    let sin_gafete_dentro: Vec<(String, bool)> = fabrica
+        .quienes_estan_adentro()
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|persona| (persona.identidad.to_string(), persona.sin_gafete))
+        .collect();
+    let sin_gafete_historial: Vec<(String, bool)> = fabrica
+        .historial_de_ingresos(None, None, 10)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|movimiento| (movimiento.identidad.to_string(), movimiento.sin_gafete))
+        .collect();
+    let esperado = vec![
+        ("333333333".to_owned(), false),
+        ("222222222".to_owned(), false),
+        ("111111111".to_owned(), true),
+    ];
+    assert_eq!(sin_gafete_dentro, esperado, "dentro: sólo ANA entró S/G");
+    assert_eq!(
+        sin_gafete_historial, esperado,
+        "historial: sólo ANA entró S/G"
     );
 }
 
@@ -244,7 +308,7 @@ async fn sembrar_historial<F: FabricaUnidadDeTrabajo>(fabrica: &F) {
             contratista: id_contratista(1),
             cedula: cedula("111111111"),
             medio: Medio::APie,
-            gafete: None,
+            gafete: EntregaGafete::NoAplica,
             entrada: marca("2026-10-08T14:00:00Z"),
             salida: Some(marca("2026-10-08T15:00:00Z")),
         }));

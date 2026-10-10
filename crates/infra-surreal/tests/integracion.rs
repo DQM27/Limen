@@ -13,7 +13,7 @@ mod tests {
     use limen_aplicacion::casos_de_uso::empresas::RegistrarEmpresa;
     use limen_aplicacion::casos_de_uso::gafetes::{CambiarGafete, CambioGafete, RegistrarGafetes};
     use limen_aplicacion::casos_de_uso::ingresos::{
-        ComandoEntrada, RegistrarEntrada, RegistrarSalida,
+        ComandoEntrada, GafeteElegido, RegistrarEntrada, RegistrarSalida,
     };
     use limen_aplicacion::errores::ErrorCaso;
     use limen_aplicacion::puertos::RegistroAuditado;
@@ -172,7 +172,7 @@ mod tests {
             contratista,
             medio: TipoMedio::Vehiculo,
             placa: Some("abc-123".into()),
-            gafete: Some(7),
+            gafete: Some(GafeteElegido::Numero(7)),
         }
     }
 

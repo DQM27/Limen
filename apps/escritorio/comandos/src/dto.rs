@@ -14,7 +14,9 @@ use limen_aplicacion::casos_de_uso::consultas::ContratistaEnLista;
 use limen_aplicacion::casos_de_uso::contratistas::ComandoContratista;
 use limen_aplicacion::casos_de_uso::correo::ComandoEntradaCorreo;
 use limen_aplicacion::casos_de_uso::gafetes::CambioGafete;
-use limen_aplicacion::casos_de_uso::ingresos::{ComandoEntrada, EntradaContratista};
+use limen_aplicacion::casos_de_uso::ingresos::{
+    CandidatoIngreso, ComandoEntrada, EntradaContratista, GafeteElegido,
+};
 use limen_aplicacion::casos_de_uso::proveedores::ComandoEntradaProveedor;
 use limen_aplicacion::puertos::{IngresoAbierto, PersonaAdentro, ResumenGafete};
 use limen_dominio::acceso::ResultadoAcceso;
@@ -24,9 +26,10 @@ use limen_dominio::contratista::{Contratista, ContratistaId};
 use limen_dominio::empresa::{Empresa, EmpresaId};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
 use limen_dominio::gafete::{NumeroGafete, Portador, Resolucion, TipoGafete};
+use limen_dominio::ingreso_contratista::ErrorIngreso;
 use limen_dominio::medio::{Medio, TipoMedio};
 use limen_dominio::personal_kof::{PersonalKof, PersonalKofId};
-use limen_dominio::presencia::Via;
+use limen_dominio::presencia::{Via, YaEstaAdentro};
 use limen_dominio::tipo_ingreso::TipoIngreso;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -70,6 +73,9 @@ pub struct PersonaAdentroDto {
     pub medio: Option<&'static str>,
     pub placa: Option<String>,
     pub gafete: Option<u32>,
+    /// Entró sin gafete (S/G) aunque le correspondía uno: la pantalla
+    /// muestra "S/G".
+    pub sin_gafete: bool,
     /// Desde cuándo está adentro (RFC 3339, UTC).
     pub desde: String,
 }
@@ -96,6 +102,7 @@ impl From<&PersonaAdentro> for PersonaAdentroDto {
             medio,
             placa,
             gafete: persona.gafete.map(NumeroGafete::valor),
+            sin_gafete: persona.sin_gafete,
             desde: persona.desde.to_rfc3339_opts(SecondsFormat::Secs, true),
         }
     }
@@ -285,17 +292,34 @@ pub struct EntradaContratistaEntrada {
     /// `A_PIE` o `VEHICULO`.
     pub medio: String,
     pub placa: Option<String>,
-    /// Número del gafete; vacío = "sin gafete".
+    /// El número del gafete que se le presta…
     pub gafete: Option<u32>,
+    /// …o "Sin gafete" (S/G), marcado a propósito. A quien le corresponde
+    /// gafete (PRAIND) el núcleo le exige uno de los dos (E3); a quien no
+    /// (IN HOUSE) no le aplica ninguno.
+    #[serde(default)]
+    pub sin_gafete: bool,
 }
 
 impl EntradaContratistaEntrada {
-    pub fn a_comando(&self) -> Result<ComandoEntrada, ErrorEntrada> {
+    pub fn a_comando(&self) -> Result<ComandoEntrada, ErrorJson> {
+        let gafete = match (self.gafete, self.sin_gafete) {
+            (Some(numero), false) => Some(GafeteElegido::Numero(numero)),
+            (None, true) => Some(GafeteElegido::SinGafete),
+            (None, false) => None,
+            (Some(_), true) => {
+                return Err(
+                    ErrorJson::from(ErrorEntrada::GafeteYSinGafete).en_campo(Some(campos::GAFETE))
+                );
+            }
+        };
         Ok(ComandoEntrada {
-            contratista: ContratistaId::desde_uuid(leer_uuid(&self.contratista_id)?),
-            medio: leer_medio(&self.medio)?,
+            contratista: ContratistaId::desde_uuid(
+                leer_uuid(&self.contratista_id).map_err(en(campos::CONTRATISTA))?,
+            ),
+            medio: leer_medio(&self.medio).map_err(en(campos::MEDIO))?,
             placa: self.placa.clone(),
-            gafete: self.gafete,
+            gafete,
         })
     }
 }
@@ -512,6 +536,66 @@ impl CambioGafeteEntrada {
                 Ok(Portador::PersonalKof(PersonalKofId::desde_uuid(uuid(id)?)))
             }
             _ => Err(invalido()),
+        }
+    }
+}
+
+// --- Preparar el ingreso de un contratista ---
+
+/// Por qué no puede entrar: el mismo error que daría registrar la entrada.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MotivoDto {
+    pub codigo: &'static str,
+    pub mensaje: String,
+}
+
+/// Un contratista en el buscador o en la ficha del ingreso, con todo
+/// decidido por el núcleo: la pantalla sólo lo muestra.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CandidatoIngresoDto {
+    #[serde(flatten)]
+    pub contratista: ContratistaDto,
+    pub empresa_nombre: Option<String>,
+    pub puede_entrar: bool,
+    /// Si puede: permitido, o con aviso de PRAIND por vencer.
+    pub acceso: Option<AccesoDto>,
+    /// Si no puede: el motivo, el mismo que daría registrar.
+    pub motivo: Option<MotivoDto>,
+    /// Si ya está adentro: por qué vía (`CONTRATISTA`, `PROVEEDOR`,
+    /// `CORREO` o `KOF`), para ofrecer registrar su salida.
+    pub adentro_por: Option<&'static str>,
+    /// Gafetes de contratista perdidos a su nombre: sólo informa.
+    pub gafetes_perdidos: Vec<u32>,
+}
+
+impl From<&CandidatoIngreso> for CandidatoIngresoDto {
+    fn from(candidato: &CandidatoIngreso) -> Self {
+        let (acceso, motivo, adentro_por) = match candidato.decision {
+            Ok(acceso) => (Some(AccesoDto::from(acceso)), None, None),
+            Err(error) => {
+                let adentro_por = match error {
+                    ErrorIngreso::YaEstaAdentro(YaEstaAdentro(via)) => Some(via.codigo()),
+                    _ => None,
+                };
+                let motivo = MotivoDto {
+                    codigo: error.codigo(),
+                    mensaje: error.to_string(),
+                };
+                (None, Some(motivo), adentro_por)
+            }
+        };
+        Self {
+            contratista: ContratistaDto::from(&candidato.contratista),
+            empresa_nombre: candidato.empresa.as_ref().map(ToString::to_string),
+            puede_entrar: candidato.decision.is_ok(),
+            acceso,
+            motivo,
+            adentro_por,
+            gafetes_perdidos: candidato
+                .gafetes_perdidos
+                .iter()
+                .map(|numero| numero.valor())
+                .collect(),
         }
     }
 }

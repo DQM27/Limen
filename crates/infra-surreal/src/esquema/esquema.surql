@@ -63,6 +63,9 @@ DEFINE FIELD OVERWRITE contratista ON ingreso_contratista TYPE record<contratist
 DEFINE FIELD OVERWRITE cedula ON ingreso_contratista TYPE string;
 DEFINE FIELD OVERWRITE placa ON ingreso_contratista TYPE option<string>;
 DEFINE FIELD OVERWRITE gafete ON ingreso_contratista TYPE option<int>;
+-- Qué pasó con el gafete (E3): prestado (con su número), sin gafete (S/G,
+-- decidido por el operador) o no aplica (IN HOUSE).
+DEFINE FIELD OVERWRITE entrega_gafete ON ingreso_contratista TYPE option<'PRESTADO' | 'SIN_GAFETE' | 'NO_APLICA'>;
 DEFINE FIELD OVERWRITE entrada_en ON ingreso_contratista TYPE datetime;
 DEFINE FIELD OVERWRITE entrada_operador ON ingreso_contratista TYPE uuid;
 DEFINE FIELD OVERWRITE salida_en ON ingreso_contratista TYPE option<datetime>;

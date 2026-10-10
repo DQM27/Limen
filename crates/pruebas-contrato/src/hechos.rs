@@ -9,7 +9,9 @@ use limen_dominio::cedula::Cedula;
 use limen_dominio::empresa_proveedora::EmpresaProveedoraId;
 use limen_dominio::gafete::NumeroGafete;
 use limen_dominio::hecho::{Hecho, HechoId};
-use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoGuardado, IngresoId};
+use limen_dominio::ingreso_contratista::{
+    EntregaGafete, IngresoContratista, IngresoGuardado, IngresoId,
+};
 use limen_dominio::ingreso_correo::{
     IngresoCorreo, IngresoCorreoGuardado, IngresoCorreoId, Motivo,
 };
@@ -59,7 +61,7 @@ fn ingreso_contratista(salida: Option<Marca>) -> IngresoContratista {
         contratista: id_contratista(1),
         cedula: cedula("111111111"),
         medio: Medio::Vehiculo(Placa::nueva("ABC-123").unwrap()),
-        gafete: Some(NumeroGafete::nuevo(7).unwrap()),
+        gafete: EntregaGafete::Prestado(NumeroGafete::nuevo(7).unwrap()),
         entrada: marca(ENTRADA, 1),
         salida,
     })

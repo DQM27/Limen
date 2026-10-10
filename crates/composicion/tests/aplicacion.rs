@@ -6,7 +6,7 @@ mod tests {
     use chrono::NaiveDate;
     use limen_aplicacion::casos_de_uso::contratistas::ComandoContratista;
     use limen_aplicacion::casos_de_uso::correo::ComandoEntradaCorreo;
-    use limen_aplicacion::casos_de_uso::ingresos::ComandoEntrada;
+    use limen_aplicacion::casos_de_uso::ingresos::{ComandoEntrada, GafeteElegido};
     use limen_aplicacion::casos_de_uso::proveedores::ComandoEntradaProveedor;
     use limen_aplicacion::puertos::{
         AccionAuditada, Consultas, FabricaUnidadDeTrabajo, GeneradorIds, IngresoAbierto,
@@ -157,7 +157,7 @@ mod tests {
                     contratista: dia.contratista,
                     medio: TipoMedio::APie,
                     placa: None,
-                    gafete: Some(3),
+                    gafete: Some(GafeteElegido::Numero(3)),
                 },
             )
             .await

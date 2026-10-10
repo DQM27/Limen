@@ -185,7 +185,7 @@ mod tests {
     use super::*;
     use crate::cedula::Cedula;
     use crate::contratista::ContratistaId;
-    use crate::ingreso_contratista::{IngresoGuardado, IngresoId};
+    use crate::ingreso_contratista::{EntregaGafete, IngresoGuardado, IngresoId};
     use crate::medio::Medio;
     use crate::operador::OperadorId;
 
@@ -202,7 +202,7 @@ mod tests {
             contratista: ContratistaId::desde_uuid(Uuid::from_u128(8)),
             cedula: Cedula::normalizar("112345678").unwrap(),
             medio: Medio::APie,
-            gafete: None,
+            gafete: EntregaGafete::NoAplica,
             entrada: marca("2026-10-09T08:00:00Z", 1),
             salida,
         })

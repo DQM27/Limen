@@ -65,6 +65,9 @@ pub struct PersonaAdentro {
     /// Cómo llegó; el personal KOF no lo registra.
     pub medio: Option<Medio>,
     pub gafete: Option<NumeroGafete>,
+    /// Entró sin gafete (S/G) aunque le correspondía uno: lo decidió el
+    /// operador (E3). Sólo pasa con contratistas.
+    pub sin_gafete: bool,
     pub desde: DateTime<Utc>,
 }
 
@@ -101,6 +104,9 @@ pub struct MovimientoHistorial {
     /// Cómo llegó; el personal KOF no lo registra.
     pub medio: Option<Medio>,
     pub gafete: Option<NumeroGafete>,
+    /// Entró sin gafete (S/G) aunque le correspondía uno: lo decidió el
+    /// operador (E3). Sólo pasa con contratistas.
+    pub sin_gafete: bool,
     pub entrada: DateTime<Utc>,
     /// `None` mientras la persona siga adentro.
     pub salida: Option<DateTime<Utc>>,

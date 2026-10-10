@@ -60,7 +60,7 @@ reconstruir cómo estaba el contratista el día que entró.
 |---|---|---|
 | E1 | No puede tener dos ingresos abiertos. "Ya está adentro" pesa más que el acceso denegado: lo que corresponde es registrar la salida. (Entre equipos y sitios: fase de nube.) | ✅ |
 | E2 | En vehículo la placa es obligatoria (mayúsculas; letras, números, espacios y guiones; hasta 20); a pie lo escrito se descarta. | ✅ |
-| E3 | Si lleva gafete, debe existir en el catálogo, estar disponible y no estar prestado. El gafete es opcional ("sin gafete") aunque el tipo lo requiera; a IN HOUSE se le ignora el número. | ✅ |
+| E3 | A quien le corresponde gafete (PRAIND) el operador le indica **un número o «Sin gafete» (S/G)**, a propósito: sin ninguno de los dos no entra (`gafete_requerido`), así nunca queda S/G por olvido. Con número, el gafete debe existir en el catálogo, estar disponible y no estar prestado. El S/G no pide motivo (el hecho dice qué operador lo registró) y no se le asigna gafete después (quien entra S/G normalmente sale y no regresa). A IN HOUSE no le aplica: se ignora lo indicado. El ingreso guarda qué pasó: prestado, S/G o no aplica. | ✅ |
 | E4 | La salida no puede ser anterior a la entrada, y un ingreso no se cierra dos veces. | ✅ |
 | E5 | Si el reloj del equipo retrocedió respecto al último movimiento, no se registran movimientos. | ✅ |
 | E6 | El movimiento lo registra una sesión válida y activa. | ⏳ |
