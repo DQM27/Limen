@@ -18,12 +18,12 @@ mod tests {
     use limen_escritorio_comandos::{
         Comandos, ContratistaEntrada, EntradaContratistaEntrada, ErrorJson, TipoErrorJson, campos,
     };
-    use limen_infra_memoria::{AlmacenMemoria, ContrasenasFalsas, IdsSecuenciales, RelojFijo};
+    use limen_infra_memoria::{AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo};
     use serde_json::json;
     use uuid::Uuid;
 
-    type App = Aplicacion<AlmacenMemoria, RelojFijo, IdsSecuenciales, ContrasenasFalsas>;
-    type Prueba = Comandos<AlmacenMemoria, RelojFijo, IdsSecuenciales, ContrasenasFalsas>;
+    type App = Aplicacion<AlmacenMemoria, RelojFijo, IdsSecuenciales, ClavesFalsas>;
+    type Prueba = Comandos<AlmacenMemoria, RelojFijo, IdsSecuenciales, ClavesFalsas>;
 
     fn sesion() -> Sesion {
         Sesion::nueva(OperadorId::desde_uuid(Uuid::from_u128(900)))
@@ -37,7 +37,7 @@ mod tests {
             "2026-10-09T14:00:00Z".parse().unwrap(),
             NaiveDate::from_ymd_opt(2026, 10, 9).unwrap(),
         );
-        let app = Aplicacion::nueva(&almacen, &reloj, &almacen.ids(), &ContrasenasFalsas);
+        let app = Aplicacion::nueva(&almacen, &reloj, &almacen.ids(), &ClavesFalsas);
         for tipo in [
             TipoGafete::Contratista,
             TipoGafete::Proveedor,
@@ -146,7 +146,11 @@ mod tests {
                 "placa": "ABC-123",
                 "gafete": 3,
                 "sin_gafete": false,
-                "desde": "2026-10-09T14:00:00Z",
+                "entrada": "2026-10-09T14:00:00Z",
+                "entrada_por": {
+                    "id": "00000000-0000-0000-0000-000000000384",
+                    "nombre": null,
+                },
             }]),
             "la fila de la lista dentro"
         );

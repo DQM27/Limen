@@ -24,7 +24,7 @@ import {
   registrarPersonalKof,
   renombrarEmpresa,
   renombrarEmpresaProveedora,
-  cambiarContrasena,
+  cambiarClave,
   cerrarSesion,
   crearPrimerUsuario,
   editarUsuario,
@@ -32,7 +32,7 @@ import {
   iniciarSesion,
   listarUsuarios,
   registrarUsuario,
-  restablecerContrasena,
+  restablecerClave,
   usuarioActual,
   atajosDeFecha,
   listarHistorial,
@@ -205,22 +205,22 @@ describe('comandos del núcleo', () => {
   });
 
   it('los comandos de sesión y de usuarios llevan su nombre y sus parámetros exactos', async () => {
-    const usuario = { cedula: '1-1111-1111', nombre: 'ana mora', contrasena: 'portería segura' };
+    const usuario = { cedula: '1-1111-1111', nombre: 'ana mora', clave: 'portería segura' };
     const casos: [() => Promise<unknown>, string, Record<string, unknown> | undefined][] = [
       [() => hayUsuarios(), 'hay_usuarios', undefined],
       [() => crearPrimerUsuario(usuario), 'crear_primer_usuario', { usuario }],
       [
         () => iniciarSesion('111111111', 'portería segura'),
         'iniciar_sesion',
-        { cedula: '111111111', contrasena: 'portería segura' },
+        { cedula: '111111111', clave: 'portería segura' },
       ],
       [() => cerrarSesion(), 'cerrar_sesion', undefined],
       [() => usuarioActual(), 'usuario_actual', undefined],
-      // `contrasena_actual` en Rust es `contrasenaActual` del lado de JavaScript.
+      // `clave_actual` en Rust es `claveActual` del lado de JavaScript.
       [
-        () => cambiarContrasena('temporal 123', 'la mía'),
-        'cambiar_contrasena',
-        { contrasenaActual: 'temporal 123', contrasena: 'la mía' },
+        () => cambiarClave('temporal 123', 'la mía'),
+        'cambiar_clave',
+        { claveActual: 'temporal 123', clave: 'la mía' },
       ],
       [() => listarUsuarios(), 'listar_usuarios', undefined],
       [() => registrarUsuario(usuario), 'registrar_usuario', { usuario }],
@@ -230,9 +230,9 @@ describe('comandos del núcleo', () => {
         { id: 'u1', nombre: 'ana mora', activo: false },
       ],
       [
-        () => restablecerContrasena('u1', 'nueva temporal'),
-        'restablecer_contrasena',
-        { id: 'u1', contrasena: 'nueva temporal' },
+        () => restablecerClave('u1', 'nueva temporal'),
+        'restablecer_clave',
+        { id: 'u1', clave: 'nueva temporal' },
       ],
     ];
     for (const [llamar, comando, argumentos] of casos) {

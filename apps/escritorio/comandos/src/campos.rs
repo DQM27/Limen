@@ -39,8 +39,8 @@ pub const HASTA: &str = "hasta";
 pub const PORTADOR: &str = "portador";
 pub const PERSONA: &str = "personal_id";
 pub const CONTRATISTA: &str = "contratista_id";
-pub const CONTRASENA: &str = "contrasena";
-pub const CONTRASENA_ACTUAL: &str = "contrasena_actual";
+pub const CLAVE: &str = "clave";
+pub const CLAVE_ACTUAL: &str = "clave_actual";
 pub const ACTIVO: &str = "activo";
 pub const DESDE: &str = "desde";
 
@@ -94,10 +94,8 @@ impl CampoDelError for ErrorUsuario {
         match self {
             Self::CedulaVacia | Self::CedulaInvalida | Self::CedulaRepetida => Some(CEDULA),
             Self::NombreVacio | Self::NombreInvalido => Some(NOMBRE),
-            Self::ContrasenaCorta | Self::ContrasenaLarga | Self::ContrasenaIgualALaCedula => {
-                Some(CONTRASENA)
-            }
-            Self::ContrasenaActualIncorrecta => Some(CONTRASENA_ACTUAL),
+            Self::ClaveCorta | Self::ClaveLarga | Self::ClaveIgualALaCedula => Some(CLAVE),
+            Self::ClaveActualIncorrecta => Some(CLAVE_ACTUAL),
             Self::NoSeDesactivaASiMismo => Some(ACTIVO),
             Self::YaHayUsuarios => None,
         }

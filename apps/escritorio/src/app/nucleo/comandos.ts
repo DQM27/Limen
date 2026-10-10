@@ -182,12 +182,12 @@ export function crearPrimerUsuario(usuario: UsuarioEntrada): Promise<UsuarioActu
 }
 
 /**
- * Entra con cédula y contraseña. Si falla, el error nunca dice cuál de las
+ * Entra con cédula y clave. Si falla, el error nunca dice cuál de las
  * dos estaba mal (`credenciales_invalidas`), o que hay que esperar
  * (`inicio_bloqueado`).
  */
-export function iniciarSesion(cedula: string, contrasena: string): Promise<UsuarioActual> {
-  return invocar<UsuarioActual>('iniciar_sesion', { cedula, contrasena });
+export function iniciarSesion(cedula: string, clave: string): Promise<UsuarioActual> {
+  return invocar<UsuarioActual>('iniciar_sesion', { cedula, clave });
 }
 
 export function cerrarSesion(): Promise<void> {
@@ -199,9 +199,9 @@ export function usuarioActual(): Promise<UsuarioActual | null> {
   return invocar<UsuarioActual | null>('usuario_actual');
 }
 
-/** Cambia la contraseña propia: lo único permitido con una temporal. */
-export function cambiarContrasena(contrasenaActual: string, contrasena: string): Promise<void> {
-  return invocar<void>('cambiar_contrasena', { contrasenaActual, contrasena });
+/** Cambia la clave propia: lo único permitido con una temporal. */
+export function cambiarClave(claveActual: string, clave: string): Promise<void> {
+  return invocar<void>('cambiar_clave', { claveActual, clave });
 }
 
 // --- Usuarios (se administran en el equipo hasta que exista el panel de la nube) ---
@@ -210,7 +210,7 @@ export function listarUsuarios(): Promise<Usuario[]> {
   return invocar<Usuario[]>('listar_usuarios');
 }
 
-/** Registra un usuario con una contraseña temporal y devuelve su identificador. */
+/** Registra un usuario con una clave temporal y devuelve su identificador. */
 export function registrarUsuario(usuario: UsuarioEntrada): Promise<string> {
   return invocar<string>('registrar_usuario', { usuario });
 }
@@ -220,9 +220,9 @@ export function editarUsuario(id: string, nombre: string, activo: boolean): Prom
   return invocar<Cambio[]>('editar_usuario', { id, nombre, activo });
 }
 
-/** Le pone una contraseña temporal a otro usuario (por ejemplo, si la olvidó). */
-export function restablecerContrasena(id: string, contrasena: string): Promise<void> {
-  return invocar<void>('restablecer_contrasena', { id, contrasena });
+/** Le pone una clave temporal a otro usuario (por ejemplo, si la olvidó). */
+export function restablecerClave(id: string, clave: string): Promise<void> {
+  return invocar<void>('restablecer_clave', { id, clave });
 }
 
 // --- Historial de ingresos ---

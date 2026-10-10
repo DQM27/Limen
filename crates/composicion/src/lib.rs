@@ -40,13 +40,13 @@ use limen_aplicacion::casos_de_uso::proveedores::{
     RenombrarEmpresaProveedora,
 };
 use limen_aplicacion::casos_de_uso::usuarios::{
-    CambiarContrasena, CrearPrimerUsuario, EditarUsuario, HayUsuarios, IniciarSesion,
-    ListarUsuarios, RegistrarUsuario, RestablecerContrasena,
+    CambiarClave, CrearPrimerUsuario, EditarUsuario, HayUsuarios, IniciarSesion, ListarUsuarios,
+    RegistrarUsuario, RestablecerClave,
 };
 use limen_aplicacion::puertos::{
-    Consultas, Contrasenas, ErrorPersistencia, FabricaUnidadDeTrabajo, GeneradorIds, Reloj,
+    Claves, Consultas, ErrorPersistencia, FabricaUnidadDeTrabajo, GeneradorIds, Reloj,
 };
-use limen_infra_plataforma::{ContrasenasArgon2, IdsV7, RelojConfiable};
+use limen_infra_plataforma::{ClavesArgon2, IdsV7, RelojConfiable};
 use limen_infra_surreal::AlmacenSurreal;
 
 /// Con qué se abre la aplicación.
@@ -61,8 +61,8 @@ pub struct Config {
 pub enum ErrorArranque {
     #[error("No se pudo abrir la base de datos: {0}")]
     Base(#[from] ErrorPersistencia),
-    #[error("No se pudo preparar el cifrado de contraseñas: {0}")]
-    Contrasenas(String),
+    #[error("No se pudo preparar el cifrado de claves: {0}")]
+    Claves(String),
 }
 
 macro_rules! grupo {
@@ -151,15 +151,15 @@ grupo! {
 }
 
 /// Usuarios e inicio de sesión (bloque L). Es el único grupo que cifra
-/// contraseñas, por eso lleva además el cifrador `C`.
+/// claves, por eso lleva además el cifrador `C`.
 pub struct Usuarios<F, R, G, C> {
     pub hay_usuarios: HayUsuarios<F>,
     pub crear_primero: CrearPrimerUsuario<F, R, G, C>,
     pub iniciar_sesion: IniciarSesion<F, R, C>,
     pub registrar: RegistrarUsuario<F, R, G, C>,
     pub editar: EditarUsuario<F, R, G>,
-    pub cambiar_contrasena: CambiarContrasena<F, R, G, C>,
-    pub restablecer_contrasena: RestablecerContrasena<F, R, G, C>,
+    pub cambiar_clave: CambiarClave<F, R, G, C>,
+    pub restablecer_clave: RestablecerClave<F, R, G, C>,
     pub listar: ListarUsuarios<F>,
 }
 
@@ -172,8 +172,8 @@ impl<F, R, G, C> fmt::Debug for Usuarios<F, R, G, C> {
 /// Todo lo que la aplicación sabe hacer, agrupado por módulo.
 ///
 /// `F` es la base de datos, `R` el reloj, `G` el generador de IDs y `C` el
-/// cifrador de contraseñas (Argon2id si no se dice otro).
-pub struct Aplicacion<F, R, G, C = ContrasenasArgon2> {
+/// cifrador de claves (Argon2id si no se dice otro).
+pub struct Aplicacion<F, R, G, C = ClavesArgon2> {
     pub empresas: Empresas<F, R, G>,
     pub contratistas: Contratistas<F, R, G>,
     pub gafetes: Gafetes<F, R, G>,
@@ -203,14 +203,14 @@ where
     F: FabricaUnidadDeTrabajo + Consultas + Clone,
     R: Reloj + Clone,
     G: GeneradorIds + Clone,
-    C: Contrasenas + Clone,
+    C: Claves + Clone,
 {
     /// Conecta todos los casos de uso con las piezas dadas.
-    pub fn nueva(almacen: &F, reloj: &R, ids: &G, contrasenas: &C) -> Self {
+    pub fn nueva(almacen: &F, reloj: &R, ids: &G, claves: &C) -> Self {
         let a = || almacen.clone();
         let r = || reloj.clone();
         let i = || ids.clone();
-        let c = || contrasenas.clone();
+        let c = || claves.clone();
         Self {
             empresas: Empresas {
                 registrar: RegistrarEmpresa::new(a(), r(), i()),
@@ -259,8 +259,8 @@ where
                 iniciar_sesion: IniciarSesion::new(a(), r(), c()),
                 registrar: RegistrarUsuario::new(a(), r(), i(), c()),
                 editar: EditarUsuario::new(a(), r(), i()),
-                cambiar_contrasena: CambiarContrasena::new(a(), r(), i(), c()),
-                restablecer_contrasena: RestablecerContrasena::new(a(), r(), i(), c()),
+                cambiar_clave: CambiarClave::new(a(), r(), i(), c()),
+                restablecer_clave: RestablecerClave::new(a(), r(), i(), c()),
                 listar: ListarUsuarios::new(a()),
             },
             quienes_estan_adentro: QuienesEstanAdentro::new(a()),
@@ -272,7 +272,7 @@ where
 }
 
 /// La aplicación con los adaptadores reales.
-pub type AplicacionLimen = Aplicacion<AlmacenSurreal, RelojConfiable, IdsV7, ContrasenasArgon2>;
+pub type AplicacionLimen = Aplicacion<AlmacenSurreal, RelojConfiable, IdsV7, ClavesArgon2>;
 
 impl AplicacionLimen {
     /// Abre (o crea) la base de este equipo y arma la aplicación. El reloj
@@ -280,7 +280,7 @@ impl AplicacionLimen {
     /// [`RelojConfiable::sincronizar_en_segundo_plano`]).
     pub async fn abrir(config: &Config, reloj: &RelojConfiable) -> Result<Self, ErrorArranque> {
         let almacen = AlmacenSurreal::en_disco(&config.ruta_base).await?;
-        let contrasenas = ContrasenasArgon2::new().map_err(ErrorArranque::Contrasenas)?;
-        Ok(Self::nueva(&almacen, reloj, &IdsV7, &contrasenas))
+        let claves = ClavesArgon2::new().map_err(ErrorArranque::Claves)?;
+        Ok(Self::nueva(&almacen, reloj, &IdsV7, &claves))
     }
 }

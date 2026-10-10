@@ -30,7 +30,7 @@ use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
 use limen_dominio::presencia::{Identidad, Via};
 use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofGuardado, PrestamoKofId};
 use limen_dominio::tipo_ingreso::TipoIngreso;
-use limen_dominio::usuario::{HashContrasena, IntentosFallidos, Usuario, UsuarioGuardado};
+use limen_dominio::usuario::{HashClave, IntentosFallidos, Usuario, UsuarioGuardado};
 use limen_dominio::visitante::Visitante;
 use surrealdb::types::{RecordId, RecordIdKey, SurrealValue};
 use uuid::Uuid;
@@ -769,9 +769,9 @@ pub struct UsuarioDatos {
     pub cedula: String,
     pub nombre: String,
     pub activo: bool,
-    /// Hash Argon2id en formato PHC; nunca la contraseña.
-    pub contrasena: String,
-    pub debe_cambiar_contrasena: bool,
+    /// Hash Argon2id en formato PHC; nunca la clave.
+    pub clave: String,
+    pub debe_cambiar_clave: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
@@ -780,8 +780,8 @@ pub struct UsuarioLeido {
     pub cedula: String,
     pub nombre: String,
     pub activo: bool,
-    pub contrasena: String,
-    pub debe_cambiar_contrasena: bool,
+    pub clave: String,
+    pub debe_cambiar_clave: bool,
 }
 
 impl From<&Usuario> for UsuarioDatos {
@@ -790,8 +790,8 @@ impl From<&Usuario> for UsuarioDatos {
             cedula: usuario.cedula().as_str().to_owned(),
             nombre: usuario.nombre().as_str().to_owned(),
             activo: usuario.activo(),
-            contrasena: usuario.contrasena().as_str().to_owned(),
-            debe_cambiar_contrasena: usuario.debe_cambiar_contrasena(),
+            clave: usuario.clave().as_str().to_owned(),
+            debe_cambiar_clave: usuario.debe_cambiar_clave(),
         }
     }
 }
@@ -807,8 +807,8 @@ impl TryFrom<UsuarioLeido> for Usuario {
             cedula: Cedula::normalizar(&leido.cedula).map_err(|e| corrupto(e.to_string()))?,
             nombre: NombrePersona::nuevo(&leido.nombre).map_err(|e| corrupto(e.to_string()))?,
             activo: leido.activo,
-            contrasena: HashContrasena::desde_texto(leido.contrasena),
-            debe_cambiar_contrasena: leido.debe_cambiar_contrasena,
+            clave: HashClave::desde_texto(leido.clave),
+            debe_cambiar_clave: leido.debe_cambiar_clave,
         }))
     }
 }

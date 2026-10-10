@@ -1,12 +1,12 @@
 //! Consultas de lectura sobre `SurrealDB` (puerto `Consultas`).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use limen_aplicacion::puertos::{
     AccionAuditada, CambioHistorial, Consultas, EntradaHistorial, ErrorPersistencia,
-    FilaContratista, IngresoAbierto, MovimientoHistorial, PersonaAdentro, RegistroAuditado,
-    ResumenGafete,
+    FilaContratista, IngresoAbierto, MarcaVista, MovimientoHistorial, PersonaAdentro,
+    RegistroAuditado, ResumenGafete,
 };
 use limen_dominio::busqueda::{
     Buscable, Criterio, MINIMO_DIGITOS_PARA_SUBCADENA, Nivel, cuantos_hasta, relevantes,
@@ -34,7 +34,7 @@ use crate::registros::clave_gafete;
 use crate::registros::{
     ContratistaLeido, EmpresaLeida, EmpresaProveedoraLeida, GafeteDatos, HechoLeido,
     PersonalKofLeido, TABLA_AUDITORIA, TABLA_INGRESO_CONTRATISTA, TABLA_INGRESO_CORREO,
-    TABLA_INGRESO_PROVEEDOR, TABLA_PRESTAMO_KOF, medio_de, numero_de, uuid_de,
+    TABLA_INGRESO_PROVEEDOR, TABLA_PRESTAMO_KOF, TABLA_USUARIO, medio_de, numero_de, uuid_de,
 };
 
 /// Sólo el nombre plegado de una fila: lo que necesita la búsqueda
@@ -72,19 +72,20 @@ struct FilaAdentro {
     /// Sólo lo trae la consulta de contratistas.
     sin_gafete: Option<bool>,
     entrada_en: DateTime<Utc>,
+    entrada_operador: uuid::Uuid,
 }
 
 const ADENTRO_CONTRATISTAS: &str = "SELECT id, cedula, contratista.nombre AS nombre, \
     contratista.empresa.nombre AS procedencia, placa, gafete, \
-    entrega_gafete = 'SIN_GAFETE' AS sin_gafete, entrada_en \
+    entrega_gafete = 'SIN_GAFETE' AS sin_gafete, entrada_en, entrada_operador \
     FROM ingreso_contratista WHERE salida_en = NONE";
 const ADENTRO_PROVEEDORES: &str = "SELECT id, cedula, nombre, empresa.nombre AS procedencia, \
-    placa, gafete, entrada_en FROM ingreso_proveedor WHERE salida_en = NONE";
+    placa, gafete, entrada_en, entrada_operador FROM ingreso_proveedor WHERE salida_en = NONE";
 const ADENTRO_KOF: &str = "SELECT id, codigo_empleado AS cedula, nombre, \
-    'Personal KOF' AS procedencia, gafete, entrega_en AS entrada_en \
-    FROM prestamo_kof WHERE devolucion_en = NONE";
+    'Personal KOF' AS procedencia, gafete, entrega_en AS entrada_en, \
+    entrega_operador AS entrada_operador FROM prestamo_kof WHERE devolucion_en = NONE";
 const ADENTRO_CORREO: &str = "SELECT id, cedula, nombre, motivo AS procedencia, \
-    placa, gafete, entrada_en FROM ingreso_correo WHERE salida_en = NONE";
+    placa, gafete, entrada_en, entrada_operador FROM ingreso_correo WHERE salida_en = NONE";
 
 /// Una fila del historial: lo mismo que "adentro", más la salida.
 #[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
@@ -98,25 +99,28 @@ struct FilaMovimiento {
     /// Sólo lo trae la consulta de contratistas.
     sin_gafete: Option<bool>,
     entrada_en: DateTime<Utc>,
+    entrada_operador: uuid::Uuid,
     salida_en: Option<DateTime<Utc>>,
+    salida_operador: Option<uuid::Uuid>,
 }
 
 /// El rango se enlaza como parámetros (`$desde`, `$hasta`, `$limite`): nunca se
 /// concatena. La condición es `[desde, hasta)` sobre la entrada.
 const HISTORIAL_CONTRATISTAS: &str = "SELECT id, cedula, contratista.nombre AS nombre, \
     contratista.empresa.nombre AS procedencia, placa, gafete, \
-    entrega_gafete = 'SIN_GAFETE' AS sin_gafete, entrada_en, salida_en \
-    FROM ingreso_contratista WHERE entrada_en >= $desde AND entrada_en < $hasta \
+    entrega_gafete = 'SIN_GAFETE' AS sin_gafete, entrada_en, entrada_operador, salida_en, \
+    salida_operador FROM ingreso_contratista WHERE entrada_en >= $desde AND entrada_en < $hasta \
     ORDER BY entrada_en DESC LIMIT $limite";
 const HISTORIAL_PROVEEDORES: &str = "SELECT id, cedula, nombre, empresa.nombre AS procedencia, \
-    placa, gafete, entrada_en, salida_en FROM ingreso_proveedor \
+    placa, gafete, entrada_en, entrada_operador, salida_en, salida_operador FROM ingreso_proveedor \
     WHERE entrada_en >= $desde AND entrada_en < $hasta ORDER BY entrada_en DESC LIMIT $limite";
 const HISTORIAL_CORREO: &str = "SELECT id, cedula, nombre, motivo AS procedencia, placa, gafete, \
-    entrada_en, salida_en FROM ingreso_correo \
+    entrada_en, entrada_operador, salida_en, salida_operador FROM ingreso_correo \
     WHERE entrada_en >= $desde AND entrada_en < $hasta ORDER BY entrada_en DESC LIMIT $limite";
 const HISTORIAL_KOF: &str = "SELECT id, codigo_empleado AS cedula, nombre, \
-    'Personal KOF' AS procedencia, gafete, entrega_en AS entrada_en, devolucion_en AS salida_en \
-    FROM prestamo_kof WHERE entrega_en >= $desde AND entrega_en < $hasta \
+    'Personal KOF' AS procedencia, gafete, entrega_en AS entrada_en, \
+    entrega_operador AS entrada_operador, devolucion_en AS salida_en, \
+    devolucion_operador AS salida_operador FROM prestamo_kof WHERE entrega_en >= $desde AND entrega_en < $hasta \
     ORDER BY entrega_en DESC LIMIT $limite";
 
 /// Extremos de un rango abierto: antes de que existiera cualquier movimiento y
@@ -133,6 +137,7 @@ impl FilaMovimiento {
         ingreso: fn(uuid::Uuid) -> IngresoAbierto,
         identidad: fn(&str) -> Result<Identidad, String>,
         registra_medio: bool,
+        operadores: &Operadores,
     ) -> Result<Option<MovimientoHistorial>, ErrorPersistencia> {
         let corrupto = |detalle: String| dato_corrupto(tabla, detalle);
         let Some(nombre) = self.nombre else {
@@ -150,9 +155,33 @@ impl FilaMovimiento {
             },
             gafete: self.gafete.map(|n| numero_de(n, tabla)).transpose()?,
             sin_gafete: self.sin_gafete.unwrap_or(false),
-            entrada: self.entrada_en,
-            salida: self.salida_en,
+            entrada: operadores.vista(self.entrada_en, self.entrada_operador),
+            salida: match (self.salida_en, self.salida_operador) {
+                (Some(en), Some(operador)) => Some(operadores.vista(en, operador)),
+                _ => None,
+            },
         }))
+    }
+}
+
+/// El nombre de cada usuario de este equipo, para mostrar quién registró
+/// cada marca. Los usuarios son pocos: se traen todos de una vez.
+struct Operadores(HashMap<uuid::Uuid, NombrePersona>);
+
+/// Sólo el ID y el nombre de un usuario.
+#[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
+struct FilaOperador {
+    id: RecordId,
+    nombre: String,
+}
+
+impl Operadores {
+    fn vista(&self, en: DateTime<Utc>, operador: uuid::Uuid) -> MarcaVista {
+        MarcaVista {
+            en,
+            operador: OperadorId::desde_uuid(operador),
+            nombre_operador: self.0.get(&operador).cloned(),
+        }
     }
 }
 
@@ -179,6 +208,7 @@ impl FilaAdentro {
         ingreso: fn(uuid::Uuid) -> IngresoAbierto,
         identidad: fn(&str) -> Result<Identidad, String>,
         registra_medio: bool,
+        operadores: &Operadores,
     ) -> Result<Option<PersonaAdentro>, ErrorPersistencia> {
         let corrupto = |detalle: String| dato_corrupto(tabla, detalle);
         let Some(nombre) = self.nombre else {
@@ -196,7 +226,7 @@ impl FilaAdentro {
             },
             gafete: self.gafete.map(|n| numero_de(n, tabla)).transpose()?,
             sin_gafete: self.sin_gafete.unwrap_or(false),
-            desde: self.entrada_en,
+            entrada: operadores.vista(self.entrada_en, self.entrada_operador),
         }))
     }
 }
@@ -309,6 +339,22 @@ fn siguiente(digitos: &str) -> String {
 }
 
 impl AlmacenSurreal {
+    async fn operadores(&self) -> Result<Operadores, ErrorPersistencia> {
+        let mut respuesta = self
+            .db()
+            .query("SELECT id, nombre FROM usuario")
+            .await
+            .map_err(tecnica)?;
+        let filas: Vec<FilaOperador> = respuesta.take(0).map_err(tecnica)?;
+        let mut nombres = HashMap::with_capacity(filas.len());
+        for fila in filas {
+            let nombre = NombrePersona::nuevo(&fila.nombre)
+                .map_err(|e| dato_corrupto(TABLA_USUARIO, e.to_string()))?;
+            nombres.insert(uuid_de(&fila.id, TABLA_USUARIO)?, nombre);
+        }
+        Ok(Operadores(nombres))
+    }
+
     async fn filas_adentro(&self, consulta: &str) -> Result<Vec<FilaAdentro>, ErrorPersistencia> {
         let mut respuesta = self.db().query(consulta).await.map_err(tecnica)?;
         respuesta.take(0).map_err(tecnica)
@@ -411,6 +457,7 @@ impl AlmacenSurreal {
 
 impl Consultas for AlmacenSurreal {
     async fn quienes_estan_adentro(&self) -> Result<Vec<PersonaAdentro>, ErrorPersistencia> {
+        let operadores = self.operadores().await?;
         let mut adentro = Vec::new();
         for fila in self.filas_adentro(ADENTRO_CONTRATISTAS).await? {
             adentro.extend(fila.a_persona(
@@ -418,6 +465,7 @@ impl Consultas for AlmacenSurreal {
                 |uuid| IngresoAbierto::Contratista(IngresoId::desde_uuid(uuid)),
                 de_cedula,
                 true,
+                &operadores,
             )?);
         }
         for fila in self.filas_adentro(ADENTRO_PROVEEDORES).await? {
@@ -426,6 +474,7 @@ impl Consultas for AlmacenSurreal {
                 |uuid| IngresoAbierto::Proveedor(IngresoProveedorId::desde_uuid(uuid)),
                 de_cedula,
                 true,
+                &operadores,
             )?);
         }
         for fila in self.filas_adentro(ADENTRO_CORREO).await? {
@@ -434,6 +483,7 @@ impl Consultas for AlmacenSurreal {
                 |uuid| IngresoAbierto::Correo(IngresoCorreoId::desde_uuid(uuid)),
                 de_cedula,
                 true,
+                &operadores,
             )?);
         }
         for fila in self.filas_adentro(ADENTRO_KOF).await? {
@@ -443,11 +493,13 @@ impl Consultas for AlmacenSurreal {
                 |uuid| IngresoAbierto::Kof(PrestamoKofId::desde_uuid(uuid)),
                 de_empleado,
                 false,
+                &operadores,
             )?);
         }
         adentro.sort_by(|a, b| {
-            b.desde
-                .cmp(&a.desde)
+            b.entrada
+                .en
+                .cmp(&a.entrada.en)
                 .then_with(|| a.identidad.to_string().cmp(&b.identidad.to_string()))
         });
         Ok(adentro)
@@ -603,6 +655,7 @@ impl Consultas for AlmacenSurreal {
         let desde = desde.map_or_else(|| extremo(SEGUNDOS_EXTREMO_INICIAL), Ok)?;
         let hasta = hasta.map_or_else(|| extremo(SEGUNDOS_EXTREMO_FINAL), Ok)?;
         let limite = i64::try_from(limite).unwrap_or(i64::MAX);
+        let operadores = self.operadores().await?;
         let mut movimientos = Vec::new();
         for fila in self
             .filas_de_historial(HISTORIAL_CONTRATISTAS, desde, hasta, limite)
@@ -613,6 +666,7 @@ impl Consultas for AlmacenSurreal {
                 |uuid| IngresoAbierto::Contratista(IngresoId::desde_uuid(uuid)),
                 de_cedula,
                 true,
+                &operadores,
             )?);
         }
         for fila in self
@@ -624,6 +678,7 @@ impl Consultas for AlmacenSurreal {
                 |uuid| IngresoAbierto::Proveedor(IngresoProveedorId::desde_uuid(uuid)),
                 de_cedula,
                 true,
+                &operadores,
             )?);
         }
         for fila in self
@@ -635,6 +690,7 @@ impl Consultas for AlmacenSurreal {
                 |uuid| IngresoAbierto::Correo(IngresoCorreoId::desde_uuid(uuid)),
                 de_cedula,
                 true,
+                &operadores,
             )?);
         }
         for fila in self
@@ -647,12 +703,14 @@ impl Consultas for AlmacenSurreal {
                 |uuid| IngresoAbierto::Kof(PrestamoKofId::desde_uuid(uuid)),
                 de_empleado,
                 false,
+                &operadores,
             )?);
         }
         // Cada vía ya trajo lo más reciente; juntas se ordenan y se corta.
         movimientos.sort_by(|a, b| {
             b.entrada
-                .cmp(&a.entrada)
+                .en
+                .cmp(&a.entrada.en)
                 .then_with(|| a.identidad.to_string().cmp(&b.identidad.to_string()))
         });
         movimientos.truncate(usize::try_from(limite).unwrap_or(usize::MAX));

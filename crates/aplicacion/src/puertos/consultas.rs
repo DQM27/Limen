@@ -50,6 +50,19 @@ impl IngresoAbierto {
     }
 }
 
+/// Una marca de entrada o salida tal como se muestra: cuándo ocurrió y quién
+/// la registró. La entrada y la salida pueden ser de operadores distintos.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MarcaVista {
+    /// El instante del evento: fecha y hora juntas, en UTC. La pantalla lo
+    /// muestra en la hora de Costa Rica.
+    pub en: DateTime<Utc>,
+    pub operador: OperadorId,
+    /// El nombre del usuario que la registró. `None` si ese usuario no está
+    /// en este equipo (por ejemplo, el de otro equipo que todavía no llegó).
+    pub nombre_operador: Option<NombrePersona>,
+}
+
 /// Una persona que está adentro ahora, por cualquier vía. La pantalla
 /// "dentro" las junta a todas en un solo lugar (por ejemplo, para contar a
 /// todos en una emergencia).
@@ -68,7 +81,8 @@ pub struct PersonaAdentro {
     /// Entró sin gafete (S/G) aunque le correspondía uno: lo decidió el
     /// operador (E3). Sólo pasa con contratistas.
     pub sin_gafete: bool,
-    pub desde: DateTime<Utc>,
+    /// Cuándo entró y quién lo registró.
+    pub entrada: MarcaVista,
 }
 
 /// Un cambio guardado en el historial de un registro.
@@ -107,9 +121,10 @@ pub struct MovimientoHistorial {
     /// Entró sin gafete (S/G) aunque le correspondía uno: lo decidió el
     /// operador (E3). Sólo pasa con contratistas.
     pub sin_gafete: bool,
-    pub entrada: DateTime<Utc>,
-    /// `None` mientras la persona siga adentro.
-    pub salida: Option<DateTime<Utc>>,
+    /// Cuándo entró y quién lo registró.
+    pub entrada: MarcaVista,
+    /// Cuándo salió y quién lo registró; `None` mientras siga adentro.
+    pub salida: Option<MarcaVista>,
 }
 
 /// Un contratista con el nombre de su empresa: una fila de la grilla.

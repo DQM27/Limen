@@ -567,7 +567,7 @@ resuelve con una tabla `conexion` actualizada cada 2 minutos con la app en prime
   conexión** y sincronizan al volver. Por eso el plan barato es viable.
 - Los respaldos de SurrealDB Cloud no se pueden descargar; por eso hay exportación
   propia.
-- Login de humanos: `DEFINE ACCESS` tipo `RECORD` (contraseña con Argon2) y JWT de
+- Login de humanos: `DEFINE ACCESS` tipo `RECORD` (clave con Argon2) y JWT de
   Google validado contra sus claves públicas (JWKS).
 - Lo que antes eran Edge Functions de administración se resuelve con `PERMISSIONS`,
   `DEFINE FUNCTION` y `DEFINE API`. Sólo la verificación de firmas de equipos y el

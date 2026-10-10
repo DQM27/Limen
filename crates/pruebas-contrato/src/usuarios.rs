@@ -9,7 +9,7 @@ use limen_aplicacion::puertos::{
 use limen_dominio::cedula::Cedula;
 use limen_dominio::nombre::NombrePersona;
 use limen_dominio::operador::OperadorId;
-use limen_dominio::usuario::{HashContrasena, IntentosFallidos, Usuario, UsuarioGuardado};
+use limen_dominio::usuario::{HashClave, IntentosFallidos, Usuario, UsuarioGuardado};
 use uuid::Uuid;
 
 // --- Datos de ejemplo ---
@@ -28,8 +28,8 @@ fn usuario(n: u128, cedula_texto: &str, nombre: &str) -> Usuario {
         cedula: cedula(cedula_texto),
         nombre: NombrePersona::nuevo(nombre).unwrap(),
         activo: true,
-        contrasena: HashContrasena::desde_texto(format!("$argon2id$v=19$hash-{n}")),
-        debe_cambiar_contrasena: false,
+        clave: HashClave::desde_texto(format!("$argon2id$v=19$hash-{n}")),
+        debe_cambiar_clave: false,
     })
 }
 

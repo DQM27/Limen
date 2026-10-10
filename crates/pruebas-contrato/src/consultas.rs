@@ -6,14 +6,14 @@
 use chrono::NaiveDate;
 use limen_aplicacion::puertos::{
     AccionAuditada, Consultas, EntradaAuditoria, FabricaUnidadDeTrabajo, IngresoAbierto,
-    RegistroAuditado, RegistroAuditoria,
+    MarcaVista, RegistroAuditado, RegistroAuditoria,
 };
 use limen_aplicacion::puertos::{
     RepositorioEmpresas, RepositorioEmpresasProveedoras, RepositorioGafetes,
 };
 use limen_aplicacion::puertos::{
     RepositorioIngresos, RepositorioIngresosCorreo, RepositorioIngresosProveedor,
-    RepositorioPersonalKof, RepositorioPrestamosKof, UnidadDeTrabajo,
+    RepositorioPersonalKof, RepositorioPrestamosKof, RepositorioUsuarios, UnidadDeTrabajo,
 };
 use limen_dominio::auditoria::CambioCampo;
 use limen_dominio::busqueda::{Criterio, relevantes};
@@ -38,16 +38,34 @@ use limen_dominio::operador::OperadorId;
 use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
 use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofGuardado, PrestamoKofId};
 use limen_dominio::tipo_ingreso::TipoIngreso;
+use limen_dominio::usuario::{HashClave, Usuario, UsuarioGuardado};
 use limen_dominio::visitante::Visitante;
 use uuid::Uuid;
 
 use super::{contratista, id_contratista, sembrar};
 
+/// Una marca del operador 900 (MARTA SOLANO, ver [`usuario`]).
 fn marca(texto: &str) -> Marca {
+    marca_de(900, texto)
+}
+
+fn marca_de(operador: u128, texto: &str) -> Marca {
     Marca {
         en: texto.parse().unwrap(),
-        operador: OperadorId::desde_uuid(Uuid::from_u128(900)),
+        operador: OperadorId::desde_uuid(Uuid::from_u128(operador)),
     }
+}
+
+/// Un usuario del equipo, que registra marcas.
+fn usuario(operador: u128, cedula_texto: &str, nombre: &str) -> Usuario {
+    Usuario::restaurar(UsuarioGuardado {
+        id: OperadorId::desde_uuid(Uuid::from_u128(operador)),
+        cedula: cedula(cedula_texto),
+        nombre: NombrePersona::nuevo(nombre).unwrap(),
+        activo: true,
+        clave: HashClave::desde_texto(format!("$argon2id$v=19$hash-{operador}")),
+        debe_cambiar_clave: false,
+    })
 }
 
 fn cedula(texto: &str) -> Cedula {
@@ -62,6 +80,10 @@ fn cedula(texto: &str) -> Cedula {
 async fn sembrar_las_cuatro_vias<F: FabricaUnidadDeTrabajo>(fabrica: &F) {
     // La empresa 1 se llama ACME; el contratista 1 es ANA.
     sembrar(fabrica, &[contratista(1, "111111111", "ANA")]).await;
+    let mut uow = fabrica.nueva();
+    uow.usuarios()
+        .guardar(&usuario(900, "900000000", "MARTA SOLANO"));
+    uow.confirmar().await.unwrap();
     let proveedora = EmpresaProveedoraId::desde_uuid(Uuid::from_u128(3001));
     let mut uow = fabrica.nueva();
     uow.empresas_proveedoras()
@@ -199,9 +221,13 @@ pub async fn quienes_estan_adentro_junta_las_cuatro_vias_del_mas_reciente_al_mas
         "llegó en carro"
     );
     assert_eq!(
-        contratista.desde,
-        marca("2026-10-09T08:00:00Z").en,
-        "desde cuándo"
+        contratista.entrada,
+        MarcaVista {
+            en: instante("2026-10-09T08:00:00Z"),
+            operador: OperadorId::desde_uuid(Uuid::from_u128(900)),
+            nombre_operador: Some(NombrePersona::nuevo("MARTA SOLANO").unwrap()),
+        },
+        "cuándo entró y quién lo registró"
     );
 }
 
@@ -299,9 +325,13 @@ pub async fn dentro_y_el_historial_distinguen_a_quien_entro_sin_gafete<
 
 /// Además de lo de `sembrar_las_cuatro_vias` (todo del 9 de octubre, abierto),
 /// un ingreso de contratista y uno por correo ya cerrados del día anterior.
+/// Al contratista le marcó la salida otro usuario (LUIS MORA); a la visita,
+/// uno que no está en este equipo.
 async fn sembrar_historial<F: FabricaUnidadDeTrabajo>(fabrica: &F) {
     sembrar_las_cuatro_vias(fabrica).await;
     let mut uow = fabrica.nueva();
+    uow.usuarios()
+        .guardar(&usuario(901, "901000000", "LUIS MORA"));
     uow.ingresos()
         .guardar(&IngresoContratista::restaurar(IngresoGuardado {
             id: IngresoId::desde_uuid(Uuid::from_u128(5002)),
@@ -310,7 +340,7 @@ async fn sembrar_historial<F: FabricaUnidadDeTrabajo>(fabrica: &F) {
             medio: Medio::APie,
             gafete: EntregaGafete::NoAplica,
             entrada: marca("2026-10-08T14:00:00Z"),
-            salida: Some(marca("2026-10-08T15:00:00Z")),
+            salida: Some(marca_de(901, "2026-10-08T15:00:00Z")),
         }));
     uow.ingresos_correo()
         .guardar(&IngresoCorreo::restaurar(IngresoCorreoGuardado {
@@ -323,7 +353,7 @@ async fn sembrar_historial<F: FabricaUnidadDeTrabajo>(fabrica: &F) {
             medio: Medio::APie,
             gafete: NumeroGafete::nuevo(2).unwrap(),
             entrada: marca("2026-10-08T09:00:00Z"),
-            salida: Some(marca("2026-10-08T10:00:00Z")),
+            salida: Some(marca_de(902, "2026-10-08T10:00:00Z")),
         }));
     uow.confirmar().await.unwrap();
 }
@@ -393,13 +423,30 @@ pub async fn historial_de_ingresos_junta_las_cuatro_vias_y_trae_cada_fila<
     let cerrado = todo.get(4).unwrap();
     assert_eq!(
         cerrado.entrada,
-        instante("2026-10-08T14:00:00Z"),
-        "su entrada del día anterior"
+        MarcaVista {
+            en: instante("2026-10-08T14:00:00Z"),
+            operador: OperadorId::desde_uuid(Uuid::from_u128(900)),
+            nombre_operador: Some(NombrePersona::nuevo("MARTA SOLANO").unwrap()),
+        },
+        "su entrada del día anterior y quién la registró"
     );
     assert_eq!(
         cerrado.salida,
-        Some(instante("2026-10-08T15:00:00Z")),
-        "la salida del que ya se fue"
+        Some(MarcaVista {
+            en: instante("2026-10-08T15:00:00Z"),
+            operador: OperadorId::desde_uuid(Uuid::from_u128(901)),
+            nombre_operador: Some(NombrePersona::nuevo("LUIS MORA").unwrap()),
+        }),
+        "la salida la registró otro operador"
+    );
+    let visita_cerrada = todo.get(5).unwrap();
+    assert_eq!(
+        visita_cerrada
+            .salida
+            .as_ref()
+            .map(|salida| (salida.operador, salida.nombre_operador.clone())),
+        Some((OperadorId::desde_uuid(Uuid::from_u128(902)), None)),
+        "un operador que no está en este equipo queda sin nombre, pero con su ID"
     );
     assert_eq!(
         todo.get(1).unwrap().procedencia,
