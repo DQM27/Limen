@@ -7,6 +7,7 @@
 
 mod auditoria;
 mod consultas;
+mod contrasenas;
 mod hechos;
 mod persistencia;
 mod reloj;
@@ -16,11 +17,13 @@ pub use consultas::{
     CambioHistorial, Consultas, EntradaHistorial, FilaContratista, IngresoAbierto,
     MovimientoHistorial, PersonaAdentro, ResumenGafete,
 };
+pub use contrasenas::Contrasenas;
 pub use hechos::RegistroHechos;
 pub use persistencia::{
     ErrorPersistencia, FabricaUnidadDeTrabajo, RepositorioContratistas, RepositorioEmpresas,
     RepositorioEmpresasProveedoras, RepositorioGafetes, RepositorioIngresos,
-    RepositorioIngresosCorreo, RepositorioIngresosProveedor, RepositorioPersonalKof,
-    RepositorioPresencias, RepositorioPrestamosKof, RepositorioReloj, Restriccion, UnidadDeTrabajo,
+    RepositorioIngresosCorreo, RepositorioIngresosProveedor, RepositorioIntentosInicio,
+    RepositorioPersonalKof, RepositorioPresencias, RepositorioPrestamosKof, RepositorioReloj,
+    RepositorioUsuarios, Restriccion, UnidadDeTrabajo,
 };
 pub use reloj::{GeneradorIds, Reloj};

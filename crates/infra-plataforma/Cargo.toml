@@ -1,6 +1,6 @@
 [package]
 name = "limen-infra-plataforma"
-description = "Adaptadores de plataforma de Limen: reloj real y generador de IDs"
+description = "Adaptadores de plataforma de Limen: reloj real, generador de IDs y cifrado de contraseñas"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,6 +12,9 @@ limen-aplicacion.workspace = true
 chrono = { workspace = true, features = ["clock"] }
 chrono-tz.workspace = true
 uuid.workspace = true
+argon2.workspace = true
+password-hash.workspace = true
+limen-dominio.workspace = true
 
 [lints]
 workspace = true

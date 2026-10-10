@@ -21,6 +21,7 @@ pub enum RegistroAuditado {
     EmpresaProveedora(EmpresaProveedoraId),
     Gafete(TipoGafete, NumeroGafete),
     PersonalKof(PersonalKofId),
+    Usuario(OperadorId),
 }
 
 impl RegistroAuditado {
@@ -32,6 +33,7 @@ impl RegistroAuditado {
             Self::EmpresaProveedora(_) => "empresa_proveedora",
             Self::Gafete(..) => "gafete",
             Self::PersonalKof(_) => "personal_kof",
+            Self::Usuario(_) => "usuario",
         }
     }
 
@@ -43,6 +45,7 @@ impl RegistroAuditado {
             Self::EmpresaProveedora(id) => id.to_string(),
             Self::Gafete(tipo, numero) => format!("{tipo}-{numero}"),
             Self::PersonalKof(id) => id.to_string(),
+            Self::Usuario(id) => id.to_string(),
         }
     }
 }

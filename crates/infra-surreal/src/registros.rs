@@ -30,6 +30,7 @@ use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
 use limen_dominio::presencia::{Identidad, Via};
 use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofGuardado, PrestamoKofId};
 use limen_dominio::tipo_ingreso::TipoIngreso;
+use limen_dominio::usuario::{HashContrasena, IntentosFallidos, Usuario, UsuarioGuardado};
 use limen_dominio::visitante::Visitante;
 use surrealdb::types::{RecordId, RecordIdKey, SurrealValue};
 use uuid::Uuid;
@@ -51,6 +52,8 @@ pub const TABLA_PERSONAL_KOF_CON_PRESTAMO: &str = "personal_kof_con_prestamo";
 pub const TABLA_RELOJ: &str = "reloj";
 pub const TABLA_AUDITORIA: &str = "auditoria";
 pub const TABLA_HECHO: &str = "hecho";
+pub const TABLA_USUARIO: &str = "usuario";
+pub const TABLA_INTENTO_INICIO: &str = "intento_inicio";
 
 // --- IDs ---
 //
@@ -118,6 +121,15 @@ pub fn id_prestamo(tipo: TipoGafete, numero: NumeroGafete) -> RecordId {
 
 pub fn id_presencia(identidad: &Identidad) -> RecordId {
     id_natural(TABLA_PRESENCIA, identidad.clave())
+}
+
+pub fn id_usuario(id: OperadorId) -> RecordId {
+    id_registro(TABLA_USUARIO, id.uuid())
+}
+
+/// Intentos fallidos de inicio de sesión de una cédula.
+pub fn id_intento_inicio(cedula: &Cedula) -> RecordId {
+    id_natural(TABLA_INTENTO_INICIO, cedula.as_str().to_owned())
 }
 
 /// Un solo registro guarda la hora del último movimiento del equipo.
@@ -748,6 +760,84 @@ impl TryFrom<PrestamoKofLeido> for PrestamoKof {
 #[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
 pub struct RelojDatos {
     pub en: DateTime<Utc>,
+}
+
+// --- Usuarios ---
+
+#[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
+pub struct UsuarioDatos {
+    pub cedula: String,
+    pub nombre: String,
+    pub activo: bool,
+    /// Hash Argon2id en formato PHC; nunca la contraseña.
+    pub contrasena: String,
+    pub debe_cambiar_contrasena: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
+pub struct UsuarioLeido {
+    pub id: RecordId,
+    pub cedula: String,
+    pub nombre: String,
+    pub activo: bool,
+    pub contrasena: String,
+    pub debe_cambiar_contrasena: bool,
+}
+
+impl From<&Usuario> for UsuarioDatos {
+    fn from(usuario: &Usuario) -> Self {
+        Self {
+            cedula: usuario.cedula().as_str().to_owned(),
+            nombre: usuario.nombre().as_str().to_owned(),
+            activo: usuario.activo(),
+            contrasena: usuario.contrasena().as_str().to_owned(),
+            debe_cambiar_contrasena: usuario.debe_cambiar_contrasena(),
+        }
+    }
+}
+
+impl TryFrom<UsuarioLeido> for Usuario {
+    type Error = ErrorPersistencia;
+
+    fn try_from(leido: UsuarioLeido) -> Result<Self, ErrorPersistencia> {
+        let tabla = TABLA_USUARIO;
+        let corrupto = |detalle: String| dato_corrupto(tabla, detalle);
+        Ok(Self::restaurar(UsuarioGuardado {
+            id: OperadorId::desde_uuid(uuid_de(&leido.id, tabla)?),
+            cedula: Cedula::normalizar(&leido.cedula).map_err(|e| corrupto(e.to_string()))?,
+            nombre: NombrePersona::nuevo(&leido.nombre).map_err(|e| corrupto(e.to_string()))?,
+            activo: leido.activo,
+            contrasena: HashContrasena::desde_texto(leido.contrasena),
+            debe_cambiar_contrasena: leido.debe_cambiar_contrasena,
+        }))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, SurrealValue)]
+pub struct IntentoInicioDatos {
+    pub cantidad: i64,
+    pub ultimo: DateTime<Utc>,
+}
+
+impl From<IntentosFallidos> for IntentoInicioDatos {
+    fn from(intentos: IntentosFallidos) -> Self {
+        Self {
+            cantidad: i64::from(intentos.cantidad),
+            ultimo: intentos.ultimo,
+        }
+    }
+}
+
+impl TryFrom<IntentoInicioDatos> for IntentosFallidos {
+    type Error = ErrorPersistencia;
+
+    fn try_from(datos: IntentoInicioDatos) -> Result<Self, ErrorPersistencia> {
+        Ok(Self {
+            cantidad: u32::try_from(datos.cantidad)
+                .map_err(|e| dato_corrupto(TABLA_INTENTO_INICIO, e))?,
+            ultimo: datos.ultimo,
+        })
+    }
 }
 
 // --- Auditoría ---

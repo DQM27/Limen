@@ -6,8 +6,8 @@ use limen_aplicacion::puertos::{
     EntradaAuditoria, ErrorPersistencia, RegistroAuditoria, RegistroHechos,
     RepositorioContratistas, RepositorioEmpresas, RepositorioEmpresasProveedoras,
     RepositorioGafetes, RepositorioIngresos, RepositorioIngresosCorreo,
-    RepositorioIngresosProveedor, RepositorioPersonalKof, RepositorioPresencias,
-    RepositorioPrestamosKof, RepositorioReloj,
+    RepositorioIngresosProveedor, RepositorioIntentosInicio, RepositorioPersonalKof,
+    RepositorioPresencias, RepositorioPrestamosKof, RepositorioReloj, RepositorioUsuarios,
 };
 use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::{Contratista, ContratistaId};
@@ -18,9 +18,11 @@ use limen_dominio::hecho::Hecho;
 use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoId};
 use limen_dominio::ingreso_correo::{IngresoCorreo, IngresoCorreoId};
 use limen_dominio::ingreso_proveedor::{IngresoProveedor, IngresoProveedorId};
+use limen_dominio::operador::OperadorId;
 use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
 use limen_dominio::presencia::{Identidad, Via};
 use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofId};
+use limen_dominio::usuario::{IntentosFallidos, Usuario};
 use surrealdb::Surreal;
 use surrealdb::engine::local::Db;
 use surrealdb::types::{RecordId, SurrealValue, Value};
@@ -29,12 +31,12 @@ use crate::error::{dato_corrupto, tecnica};
 use crate::registros::{
     AuditoriaRegistro, ContratistaDatos, ContratistaLeido, EmpresaDatos, EmpresaLeida,
     EmpresaProveedoraLeida, GafeteDatos, HechoDatos, IngresoCorreoDatos, IngresoCorreoLeido,
-    IngresoDatos, IngresoLeido, IngresoProveedorDatos, IngresoProveedorLeido, PersonalKofDatos,
-    PersonalKofLeido, PresenciaDatos, PrestamoDatos, PrestamoKofDatos, PrestamoKofLeido,
-    RelojDatos, TABLA_AUDITORIA, TABLA_GAFETE, TABLA_HECHO, TABLA_PRESENCIA, id_contratista,
-    id_empresa, id_empresa_proveedora, id_gafete, id_ingreso, id_ingreso_correo,
-    id_ingreso_proveedor, id_kof_con_prestamo, id_personal_kof, id_presencia, id_prestamo,
-    id_prestamo_kof, id_registro, id_reloj,
+    IngresoDatos, IngresoLeido, IngresoProveedorDatos, IngresoProveedorLeido, IntentoInicioDatos,
+    PersonalKofDatos, PersonalKofLeido, PresenciaDatos, PrestamoDatos, PrestamoKofDatos,
+    PrestamoKofLeido, RelojDatos, TABLA_AUDITORIA, TABLA_GAFETE, TABLA_HECHO, TABLA_PRESENCIA,
+    UsuarioDatos, UsuarioLeido, id_contratista, id_empresa, id_empresa_proveedora, id_gafete,
+    id_ingreso, id_ingreso_correo, id_ingreso_proveedor, id_intento_inicio, id_kof_con_prestamo,
+    id_personal_kof, id_presencia, id_prestamo, id_prestamo_kof, id_registro, id_reloj, id_usuario,
 };
 
 /// Una escritura anotada, pendiente de confirmar.
@@ -755,6 +757,140 @@ impl RepositorioReloj for RelojSurreal {
     fn anotar_movimiento(&mut self, en: DateTime<Utc>) {
         self.pendientes
             .push(Escritura::guardar(id_reloj(), RelojDatos { en }));
+    }
+}
+
+// --- Usuarios ---
+
+#[derive(Debug)]
+pub struct UsuariosSurreal {
+    db: Surreal<Db>,
+    pub(crate) pendientes: Vec<Escritura>,
+}
+
+impl UsuariosSurreal {
+    pub(crate) const fn new(db: Surreal<Db>) -> Self {
+        Self {
+            db,
+            pendientes: Vec::new(),
+        }
+    }
+
+    async fn varios(
+        &self,
+        consulta: &'static str,
+        cedula: Option<&Cedula>,
+    ) -> Result<Vec<Usuario>, ErrorPersistencia> {
+        let mut respuesta = self
+            .db
+            .query(consulta)
+            .bind(("cedula", cedula.map(|cedula| cedula.as_str().to_owned())))
+            .await
+            .map_err(tecnica)?;
+        let leidos: Vec<UsuarioLeido> = respuesta.take(0).map_err(tecnica)?;
+        leidos.into_iter().map(Usuario::try_from).collect()
+    }
+}
+
+impl RepositorioUsuarios for UsuariosSurreal {
+    async fn obtener(&self, id: OperadorId) -> Result<Option<Usuario>, ErrorPersistencia> {
+        let mut respuesta = self
+            .db
+            .query("SELECT * FROM ONLY $id")
+            .bind(("id", id_usuario(id)))
+            .await
+            .map_err(tecnica)?;
+        let leido: Option<UsuarioLeido> = respuesta.take(0).map_err(tecnica)?;
+        leido.map(Usuario::try_from).transpose()
+    }
+
+    async fn obtener_por_cedula(
+        &self,
+        cedula: &Cedula,
+    ) -> Result<Option<Usuario>, ErrorPersistencia> {
+        let usuarios = self
+            .varios(
+                "SELECT * FROM usuario WHERE cedula = $cedula LIMIT 1",
+                Some(cedula),
+            )
+            .await?;
+        Ok(usuarios.into_iter().next())
+    }
+
+    async fn cedula_en_uso(&self, cedula: &Cedula) -> Result<bool, ErrorPersistencia> {
+        let mut respuesta = self
+            .db
+            .query("SELECT VALUE id FROM usuario WHERE cedula = $cedula LIMIT 1")
+            .bind(("cedula", cedula.as_str().to_owned()))
+            .await
+            .map_err(tecnica)?;
+        let encontrados: Vec<RecordId> = respuesta.take(0).map_err(tecnica)?;
+        Ok(!encontrados.is_empty())
+    }
+
+    async fn hay_usuarios(&self) -> Result<bool, ErrorPersistencia> {
+        let mut respuesta = self
+            .db
+            .query("SELECT VALUE id FROM usuario LIMIT 1")
+            .await
+            .map_err(tecnica)?;
+        let encontrados: Vec<RecordId> = respuesta.take(0).map_err(tecnica)?;
+        Ok(!encontrados.is_empty())
+    }
+
+    async fn todos(&self) -> Result<Vec<Usuario>, ErrorPersistencia> {
+        self.varios("SELECT * FROM usuario ORDER BY nombre, cedula", None)
+            .await
+    }
+
+    fn guardar(&mut self, usuario: &Usuario) {
+        self.pendientes.push(Escritura::guardar(
+            id_usuario(usuario.id()),
+            UsuarioDatos::from(usuario),
+        ));
+    }
+}
+
+#[derive(Debug)]
+pub struct IntentosInicioSurreal {
+    db: Surreal<Db>,
+    pub(crate) pendientes: Vec<Escritura>,
+}
+
+impl IntentosInicioSurreal {
+    pub(crate) const fn new(db: Surreal<Db>) -> Self {
+        Self {
+            db,
+            pendientes: Vec::new(),
+        }
+    }
+}
+
+impl RepositorioIntentosInicio for IntentosInicioSurreal {
+    async fn obtener(
+        &self,
+        cedula: &Cedula,
+    ) -> Result<Option<IntentosFallidos>, ErrorPersistencia> {
+        let mut respuesta = self
+            .db
+            .query("SELECT cantidad, ultimo FROM ONLY $id")
+            .bind(("id", id_intento_inicio(cedula)))
+            .await
+            .map_err(tecnica)?;
+        let leido: Option<IntentoInicioDatos> = respuesta.take(0).map_err(tecnica)?;
+        leido.map(IntentosFallidos::try_from).transpose()
+    }
+
+    fn anotar(&mut self, cedula: &Cedula, intentos: IntentosFallidos) {
+        self.pendientes.push(Escritura::guardar(
+            id_intento_inicio(cedula),
+            IntentoInicioDatos::from(intentos),
+        ));
+    }
+
+    fn borrar(&mut self, cedula: &Cedula) {
+        self.pendientes
+            .push(Escritura::Borrar(id_intento_inicio(cedula)));
     }
 }
 

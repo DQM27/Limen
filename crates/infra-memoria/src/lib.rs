@@ -10,7 +10,8 @@
 //! - `confirmar()` aplica todo o nada;
 //! - al confirmar se revisan las mismas restricciones que la base (cédula de
 //!   contratista, nombre de empresa y de empresa proveedora, número de
-//!   gafete, presencia única y gafete prestado), paso a paso como ella.
+//!   gafete, presencia única, gafete prestado y cédula de usuario), paso a
+//!   paso como ella.
 //!
 //! La batería de `limen-pruebas-contrato` corre contra este doble y contra
 //! `SurrealDB` para garantizar que se comportan igual.
@@ -22,13 +23,14 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use chrono::{DateTime, NaiveDate, NaiveTime, TimeDelta, TimeZone, Utc};
 use limen_aplicacion::puertos::{
-    CambioHistorial, Consultas, EntradaAuditoria, EntradaHistorial, ErrorPersistencia,
+    CambioHistorial, Consultas, Contrasenas, EntradaAuditoria, EntradaHistorial, ErrorPersistencia,
     FabricaUnidadDeTrabajo, FilaContratista, GeneradorIds, IngresoAbierto, MovimientoHistorial,
     PersonaAdentro, RegistroAuditado, RegistroAuditoria, RegistroHechos, Reloj,
     RepositorioContratistas, RepositorioEmpresas, RepositorioEmpresasProveedoras,
     RepositorioGafetes, RepositorioIngresos, RepositorioIngresosCorreo,
-    RepositorioIngresosProveedor, RepositorioPersonalKof, RepositorioPresencias,
-    RepositorioPrestamosKof, RepositorioReloj, Restriccion, ResumenGafete, UnidadDeTrabajo,
+    RepositorioIngresosProveedor, RepositorioIntentosInicio, RepositorioPersonalKof,
+    RepositorioPresencias, RepositorioPrestamosKof, RepositorioReloj, RepositorioUsuarios,
+    Restriccion, ResumenGafete, UnidadDeTrabajo,
 };
 use limen_dominio::busqueda::{Criterio, relevantes};
 use limen_dominio::cedula::Cedula;
@@ -40,9 +42,11 @@ use limen_dominio::hecho::{Hecho, HechoId};
 use limen_dominio::ingreso_contratista::{EntregaGafete, IngresoContratista, IngresoId};
 use limen_dominio::ingreso_correo::{IngresoCorreo, IngresoCorreoId};
 use limen_dominio::ingreso_proveedor::{IngresoProveedor, IngresoProveedorId};
+use limen_dominio::operador::OperadorId;
 use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
 use limen_dominio::presencia::{Identidad, Via};
 use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofId};
+use limen_dominio::usuario::{ContrasenaNueva, HashContrasena, IntentosFallidos, Usuario};
 use uuid::Uuid;
 
 type ClaveGafete = (TipoGafete, NumeroGafete);
@@ -64,6 +68,9 @@ struct Contenido {
     /// Personas con un provisional sin devolver (clave natural).
     kof_con_prestamo: BTreeSet<PersonalKofId>,
     ultimo_movimiento: Option<DateTime<Utc>>,
+    usuarios: BTreeMap<OperadorId, Usuario>,
+    /// Intentos fallidos de inicio de sesión, por cédula.
+    intentos_inicio: BTreeMap<String, IntentosFallidos>,
     auditoria: Vec<EntradaAuditoria>,
     hechos: BTreeMap<HechoId, Hecho>,
 }
@@ -127,6 +134,12 @@ impl AlmacenMemoria {
     pub fn sembrar_empresa_proveedora(&self, empresa: EmpresaProveedora) {
         self.sembrar(|c| {
             c.empresas_proveedoras.insert(empresa.id(), empresa);
+        });
+    }
+
+    pub fn sembrar_usuario(&self, usuario: Usuario) {
+        self.sembrar(|c| {
+            c.usuarios.insert(usuario.id(), usuario);
         });
     }
 
@@ -202,6 +215,15 @@ impl AlmacenMemoria {
 
     pub fn personal_kof(&self) -> Vec<PersonalKof> {
         self.mirar(|c| c.personal_kof.values().cloned().collect())
+    }
+
+    pub fn usuarios(&self) -> Vec<Usuario> {
+        self.mirar(|c| c.usuarios.values().cloned().collect())
+    }
+
+    /// Los intentos fallidos de inicio de sesión de una cédula.
+    pub fn intentos_inicio(&self, cedula: &Cedula) -> Option<IntentosFallidos> {
+        self.mirar(|c| c.intentos_inicio.get(cedula.as_str()).copied())
     }
 
     pub fn prestamos_kof(&self) -> Vec<PrestamoKof> {
@@ -617,6 +639,14 @@ impl FabricaUnidadDeTrabajo for AlmacenMemoria {
                 almacen: self.clone(),
                 pendiente: None,
             },
+            usuarios: UsuariosMemoria {
+                almacen: self.clone(),
+                pendientes: Vec::new(),
+            },
+            intentos_inicio: IntentosInicioMemoria {
+                almacen: self.clone(),
+                pendientes: Vec::new(),
+            },
             auditoria: AuditoriaMemoria {
                 pendientes: Vec::new(),
             },
@@ -641,6 +671,8 @@ pub struct UowMemoria {
     personal_kof: PersonalKofMemoria,
     prestamos_kof: PrestamosKofMemoria,
     reloj: RelojMemoria,
+    usuarios: UsuariosMemoria,
+    intentos_inicio: IntentosInicioMemoria,
     auditoria: AuditoriaMemoria,
     hechos: HechosMemoria,
 }
@@ -716,6 +748,13 @@ impl UowMemoria {
         if let Some(en) = self.reloj.pendiente {
             nuevo.ultimo_movimiento = Some(en);
         }
+        aplicar_usuarios(&mut nuevo, self.usuarios.pendientes)?;
+        for (cedula, intentos) in self.intentos_inicio.pendientes {
+            match intentos {
+                Some(intentos) => nuevo.intentos_inicio.insert(cedula, intentos),
+                None => nuevo.intentos_inicio.remove(&cedula),
+            };
+        }
         nuevo.auditoria.extend(self.auditoria.pendientes);
         for hecho in self.hechos.pendientes {
             // Como `CREATE` en la base: un hecho nunca se reemplaza.
@@ -733,6 +772,23 @@ impl UowMemoria {
         drop(datos);
         Ok(())
     }
+}
+
+fn aplicar_usuarios(
+    contenido: &mut Contenido,
+    usuarios: Vec<Usuario>,
+) -> Result<(), ErrorPersistencia> {
+    for usuario in usuarios {
+        let ocupada = contenido
+            .usuarios
+            .values()
+            .any(|otro| otro.id() != usuario.id() && otro.cedula() == usuario.cedula());
+        if ocupada {
+            return Err(ErrorPersistencia::Conflicto(Restriccion::CedulaUsuario));
+        }
+        contenido.usuarios.insert(usuario.id(), usuario);
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone)]
@@ -835,6 +891,8 @@ impl UnidadDeTrabajo for UowMemoria {
     type PersonalKof = PersonalKofMemoria;
     type PrestamosKof = PrestamosKofMemoria;
     type Reloj = RelojMemoria;
+    type Usuarios = UsuariosMemoria;
+    type IntentosInicio = IntentosInicioMemoria;
     type Auditoria = AuditoriaMemoria;
     type Hechos = HechosMemoria;
 
@@ -880,6 +938,14 @@ impl UnidadDeTrabajo for UowMemoria {
 
     fn reloj(&mut self) -> &mut RelojMemoria {
         &mut self.reloj
+    }
+
+    fn usuarios(&mut self) -> &mut UsuariosMemoria {
+        &mut self.usuarios
+    }
+
+    fn intentos_inicio(&mut self) -> &mut IntentosInicioMemoria {
+        &mut self.intentos_inicio
     }
 
     fn auditoria(&mut self) -> &mut AuditoriaMemoria {
@@ -1204,6 +1270,115 @@ impl RepositorioIngresosCorreo for IngresosCorreoMemoria {
 
     fn guardar(&mut self, ingreso: &IngresoCorreo) {
         self.pendientes.push(ingreso.clone());
+    }
+}
+
+#[derive(Debug)]
+pub struct UsuariosMemoria {
+    almacen: AlmacenMemoria,
+    pendientes: Vec<Usuario>,
+}
+
+impl RepositorioUsuarios for UsuariosMemoria {
+    fn obtener(
+        &self,
+        id: OperadorId,
+    ) -> impl Future<Output = Result<Option<Usuario>, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|c| c.usuarios.get(&id).cloned()))
+    }
+
+    fn obtener_por_cedula(
+        &self,
+        cedula: &Cedula,
+    ) -> impl Future<Output = Result<Option<Usuario>, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|c| {
+            c.usuarios
+                .values()
+                .find(|usuario| usuario.cedula() == cedula)
+                .cloned()
+        }))
+    }
+
+    fn cedula_en_uso(
+        &self,
+        cedula: &Cedula,
+    ) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|c| {
+            c.usuarios
+                .values()
+                .any(|usuario| usuario.cedula() == cedula)
+        }))
+    }
+
+    fn hay_usuarios(&self) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|c| !c.usuarios.is_empty()))
+    }
+
+    fn todos(&self) -> impl Future<Output = Result<Vec<Usuario>, ErrorPersistencia>> + Send {
+        std::future::ready(self.almacen.leer(|c| {
+            let mut usuarios: Vec<Usuario> = c.usuarios.values().cloned().collect();
+            usuarios.sort_by(|a, b| {
+                a.nombre()
+                    .as_str()
+                    .cmp(b.nombre().as_str())
+                    .then_with(|| a.cedula().as_str().cmp(b.cedula().as_str()))
+            });
+            usuarios
+        }))
+    }
+
+    fn guardar(&mut self, usuario: &Usuario) {
+        self.pendientes.push(usuario.clone());
+    }
+}
+
+#[derive(Debug)]
+pub struct IntentosInicioMemoria {
+    almacen: AlmacenMemoria,
+    /// `None` borra los intentos de la cédula.
+    pendientes: Vec<(String, Option<IntentosFallidos>)>,
+}
+
+impl RepositorioIntentosInicio for IntentosInicioMemoria {
+    fn obtener(
+        &self,
+        cedula: &Cedula,
+    ) -> impl Future<Output = Result<Option<IntentosFallidos>, ErrorPersistencia>> + Send {
+        std::future::ready(
+            self.almacen
+                .leer(|c| c.intentos_inicio.get(cedula.as_str()).copied()),
+        )
+    }
+
+    fn anotar(&mut self, cedula: &Cedula, intentos: IntentosFallidos) {
+        self.pendientes
+            .push((cedula.as_str().to_owned(), Some(intentos)));
+    }
+
+    fn borrar(&mut self, cedula: &Cedula) {
+        self.pendientes.push((cedula.as_str().to_owned(), None));
+    }
+}
+
+/// Cifrador de mentira para las pruebas: instantáneo y predecible. El de
+/// verdad (Argon2id) está en `infra-plataforma`.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ContrasenasFalsas;
+
+impl ContrasenasFalsas {
+    /// El "hash" que este cifrador le da a `texto`.
+    pub fn hash_de(texto: &str) -> HashContrasena {
+        HashContrasena::desde_texto(format!("falso:{texto}"))
+    }
+}
+
+impl Contrasenas for ContrasenasFalsas {
+    fn cifrar(&self, contrasena: &ContrasenaNueva) -> Result<HashContrasena, String> {
+        Ok(Self::hash_de(contrasena.as_str()))
+    }
+
+    fn verificar(&self, contrasena: &str, hash: Option<&HashContrasena>) -> bool {
+        hash.is_some_and(|hash| hash == &Self::hash_de(contrasena))
     }
 }
 

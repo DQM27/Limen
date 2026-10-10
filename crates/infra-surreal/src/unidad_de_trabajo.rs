@@ -11,7 +11,8 @@ use crate::error::{al_confirmar, tecnica};
 use crate::repositorios::{
     AuditoriaSurreal, ContratistasSurreal, EmpresasProveedorasSurreal, EmpresasSurreal, Escritura,
     GafetesSurreal, HechosSurreal, IngresosCorreoSurreal, IngresosProveedorSurreal,
-    IngresosSurreal, PersonalKofSurreal, PresenciasSurreal, PrestamosKofSurreal, RelojSurreal,
+    IngresosSurreal, IntentosInicioSurreal, PersonalKofSurreal, PresenciasSurreal,
+    PrestamosKofSurreal, RelojSurreal, UsuariosSurreal,
 };
 
 impl FabricaUnidadDeTrabajo for AlmacenSurreal {
@@ -32,6 +33,8 @@ impl FabricaUnidadDeTrabajo for AlmacenSurreal {
             personal_kof: PersonalKofSurreal::new(db.clone()),
             prestamos_kof: PrestamosKofSurreal::new(db.clone()),
             reloj: RelojSurreal::new(db.clone()),
+            usuarios: UsuariosSurreal::new(db.clone()),
+            intentos_inicio: IntentosInicioSurreal::new(db.clone()),
             auditoria: AuditoriaSurreal::default(),
             hechos: HechosSurreal::default(),
         }
@@ -52,6 +55,8 @@ pub struct UowSurreal {
     personal_kof: PersonalKofSurreal,
     prestamos_kof: PrestamosKofSurreal,
     reloj: RelojSurreal,
+    usuarios: UsuariosSurreal,
+    intentos_inicio: IntentosInicioSurreal,
     auditoria: AuditoriaSurreal,
     hechos: HechosSurreal,
 }
@@ -68,6 +73,8 @@ impl UnidadDeTrabajo for UowSurreal {
     type PersonalKof = PersonalKofSurreal;
     type PrestamosKof = PrestamosKofSurreal;
     type Reloj = RelojSurreal;
+    type Usuarios = UsuariosSurreal;
+    type IntentosInicio = IntentosInicioSurreal;
     type Auditoria = AuditoriaSurreal;
     type Hechos = HechosSurreal;
 
@@ -115,6 +122,14 @@ impl UnidadDeTrabajo for UowSurreal {
         &mut self.reloj
     }
 
+    fn usuarios(&mut self) -> &mut UsuariosSurreal {
+        &mut self.usuarios
+    }
+
+    fn intentos_inicio(&mut self) -> &mut IntentosInicioSurreal {
+        &mut self.intentos_inicio
+    }
+
     fn auditoria(&mut self) -> &mut AuditoriaSurreal {
         &mut self.auditoria
     }
@@ -139,6 +154,8 @@ impl UnidadDeTrabajo for UowSurreal {
             self.personal_kof.pendientes,
             self.prestamos_kof.pendientes,
             self.reloj.pendientes,
+            self.usuarios.pendientes,
+            self.intentos_inicio.pendientes,
             self.auditoria.pendientes,
             self.hechos.pendientes,
         ]

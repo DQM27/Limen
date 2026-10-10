@@ -4,8 +4,9 @@
 
 pub use limen_dominio::operador::OperadorId;
 
-/// Sesión abierta de un operador. Sólo la construye el caso de uso de
-/// inicio de sesión (todavía no existe); mientras tanto, `nueva`.
+/// Sesión abierta de un operador. En la aplicación la construyen el inicio
+/// de sesión y la creación del primer usuario; `nueva` queda para las
+/// pruebas y para los adaptadores que restauran una sesión ya abierta.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sesion {
     operador: OperadorId,

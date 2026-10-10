@@ -23,9 +23,11 @@ use limen_dominio::ingreso_proveedor::{IngresoProveedor, IngresoProveedorId};
 use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
 use limen_dominio::presencia::{Identidad, Via};
 use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofId};
+use limen_dominio::usuario::{IntentosFallidos, Usuario};
 
 use super::auditoria::RegistroAuditoria;
 use super::hechos::RegistroHechos;
+use crate::sesion::OperadorId;
 
 /// Restricciones de unicidad que también hace cumplir la base. Si dos
 /// equipos guardan lo mismo a la vez, la regla del dominio no alcanza a
@@ -46,6 +48,8 @@ pub enum Restriccion {
     PresenciaPersona,
     /// El gafete ya está prestado.
     GafetePrestado,
+    /// Ya hay un usuario con esa cédula.
+    CedulaUsuario,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -77,6 +81,8 @@ pub trait UnidadDeTrabajo: Send {
     type PersonalKof: RepositorioPersonalKof;
     type PrestamosKof: RepositorioPrestamosKof;
     type Reloj: RepositorioReloj;
+    type Usuarios: RepositorioUsuarios;
+    type IntentosInicio: RepositorioIntentosInicio;
     type Auditoria: RegistroAuditoria;
     type Hechos: RegistroHechos;
 
@@ -91,6 +97,8 @@ pub trait UnidadDeTrabajo: Send {
     fn personal_kof(&mut self) -> &mut Self::PersonalKof;
     fn prestamos_kof(&mut self) -> &mut Self::PrestamosKof;
     fn reloj(&mut self) -> &mut Self::Reloj;
+    fn usuarios(&mut self) -> &mut Self::Usuarios;
+    fn intentos_inicio(&mut self) -> &mut Self::IntentosInicio;
     fn auditoria(&mut self) -> &mut Self::Auditoria;
     fn hechos(&mut self) -> &mut Self::Hechos;
 
@@ -324,4 +332,49 @@ pub trait RepositorioPrestamosKof: Send + Sync {
 
     /// Anota la devolución de un préstamo.
     fn anotar_devolucion(&mut self, prestamo: &PrestamoKof);
+}
+
+/// Usuarios del sistema (bloque L).
+pub trait RepositorioUsuarios: Send + Sync {
+    fn obtener(
+        &self,
+        id: OperadorId,
+    ) -> impl Future<Output = Result<Option<Usuario>, ErrorPersistencia>> + Send;
+
+    fn obtener_por_cedula(
+        &self,
+        cedula: &Cedula,
+    ) -> impl Future<Output = Result<Option<Usuario>, ErrorPersistencia>> + Send;
+
+    /// Si algún usuario tiene la cédula (la cédula de un usuario no se
+    /// edita, así que no hace falta excluir a nadie).
+    fn cedula_en_uso(
+        &self,
+        cedula: &Cedula,
+    ) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send;
+
+    /// Si hay al menos un usuario (activo o no).
+    fn hay_usuarios(&self) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send;
+
+    /// Todos los usuarios, por nombre.
+    fn todos(&self) -> impl Future<Output = Result<Vec<Usuario>, ErrorPersistencia>> + Send;
+
+    /// Anota el alta o el cambio. Al confirmar falla con
+    /// ([`Restriccion::CedulaUsuario`]) si la cédula ya está en uso.
+    fn guardar(&mut self, usuario: &Usuario);
+}
+
+/// Intentos fallidos de inicio de sesión por cédula (regla L6). Son del
+/// equipo: no se sincronizan.
+pub trait RepositorioIntentosInicio: Send + Sync {
+    fn obtener(
+        &self,
+        cedula: &Cedula,
+    ) -> impl Future<Output = Result<Option<IntentosFallidos>, ErrorPersistencia>> + Send;
+
+    /// Anota la nueva cuenta de intentos de la cédula.
+    fn anotar(&mut self, cedula: &Cedula, intentos: IntentosFallidos);
+
+    /// Anota que la cédula ya no tiene intentos fallidos.
+    fn borrar(&mut self, cedula: &Cedula);
 }

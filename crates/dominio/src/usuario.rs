@@ -351,6 +351,13 @@ impl ErrorInicioSesion {
             Self::Desactivado => "usuario_desactivado",
         }
     }
+
+    /// Si este rechazo cuenta como intento fallido para el bloqueo (L6):
+    /// sí la contraseña equivocada o la cédula desconocida; no el usuario
+    /// desactivado (sabía la contraseña) ni el que ya estaba bloqueado.
+    pub const fn suma_intento(self) -> bool {
+        matches!(self, Self::CredencialesInvalidas)
+    }
 }
 
 /// Intentos fallidos seguidos con una cédula (L6).
@@ -398,15 +405,16 @@ pub fn sumar_fallo(previos: Option<IntentosFallidos>, ahora: DateTime<Utc>) -> I
 }
 
 /// Decide un inicio de sesión ya verificado: `usuario` es el de la cédula
-/// (si existe) y `contrasena_correcta`, lo que dijo el cifrador.
+/// (si existe) y `contrasena_correcta`, lo que dijo el cifrador. Devuelve
+/// el usuario que entra.
 pub fn decidir_inicio(
     usuario: Option<&Usuario>,
     contrasena_correcta: bool,
-) -> Result<(), ErrorInicioSesion> {
+) -> Result<&Usuario, ErrorInicioSesion> {
     match usuario {
         Some(usuario) if contrasena_correcta => {
             if usuario.activo() {
-                Ok(())
+                Ok(usuario)
             } else {
                 Err(ErrorInicioSesion::Desactivado)
             }
@@ -585,7 +593,8 @@ mod tests {
     fn el_inicio_no_revela_si_la_cedula_existe() {
         let mut desactivado = ana();
         desactivado.editar("ana mora", false, id(2)).unwrap();
-        assert_eq!(decidir_inicio(Some(&ana()), true), Ok(()));
+        let usuario = ana();
+        assert_eq!(decidir_inicio(Some(&usuario), true), Ok(&usuario));
         assert_eq!(
             decidir_inicio(Some(&ana()), false),
             Err(ErrorInicioSesion::CredencialesInvalidas)
@@ -604,6 +613,13 @@ mod tests {
             decidir_inicio(Some(&desactivado), true),
             Err(ErrorInicioSesion::Desactivado)
         );
+    }
+
+    #[test]
+    fn solo_la_contrasena_equivocada_suma_intento() {
+        assert!(ErrorInicioSesion::CredencialesInvalidas.suma_intento());
+        assert!(!ErrorInicioSesion::Desactivado.suma_intento());
+        assert!(!ErrorInicioSesion::Bloqueado { minutos: 1 }.suma_intento());
     }
 
     #[test]
