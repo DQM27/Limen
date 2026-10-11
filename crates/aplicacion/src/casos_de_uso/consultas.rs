@@ -10,6 +10,7 @@ use limen_dominio::empresa::Empresa;
 use limen_dominio::empresa_proveedora::EmpresaProveedora;
 use limen_dominio::gafete::{NumeroGafete, Portador, TipoGafete};
 use limen_dominio::nombre::NombrePersona;
+use limen_dominio::permanencia::lleva_demasiado_adentro;
 use limen_dominio::personal_kof::PersonalKof;
 use limen_dominio::praind::DIAS_ADVERTENCIA_PRAIND;
 use limen_dominio::rango_fechas::{Atajo, ErrorRango, RangoFechas};
@@ -33,18 +34,44 @@ pub(crate) fn limitar(pedido: usize) -> usize {
     pedido.clamp(1, MAXIMO_RESULTADOS)
 }
 
-#[derive(Debug)]
-pub struct QuienesEstanAdentro<C> {
-    consultas: C,
+/// Una persona que está adentro y lo que el dominio decide sobre su
+/// permanencia: la pantalla sólo lo muestra, no lo calcula.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PersonaAdentroVista {
+    pub persona: PersonaAdentro,
+    /// Lleva más de 12 horas adentro (E13): probablemente falta registrar su
+    /// salida.
+    pub demasiado_tiempo: bool,
 }
 
-impl<C: Consultas> QuienesEstanAdentro<C> {
-    pub const fn new(consultas: C) -> Self {
-        Self { consultas }
+#[derive(Debug)]
+pub struct QuienesEstanAdentro<C, R> {
+    consultas: C,
+    reloj: R,
+}
+
+impl<C: Consultas, R: Reloj> QuienesEstanAdentro<C, R> {
+    pub const fn new(consultas: C, reloj: R) -> Self {
+        Self { consultas, reloj }
     }
 
     pub async fn ejecutar(&self) -> Result<Vec<PersonaAdentro>, ErrorConsulta> {
         Ok(self.consultas.quienes_estan_adentro().await?)
+    }
+
+    /// Lo mismo, con la marca de quien lleva demasiado tiempo adentro.
+    pub async fn con_permanencia(&self) -> Result<Vec<PersonaAdentroVista>, ErrorConsulta> {
+        let ahora = self.reloj.ahora();
+        Ok(self
+            .consultas
+            .quienes_estan_adentro()
+            .await?
+            .into_iter()
+            .map(|persona| PersonaAdentroVista {
+                demasiado_tiempo: lleva_demasiado_adentro(persona.entrada.en, ahora),
+                persona,
+            })
+            .collect())
     }
 }
 

@@ -73,6 +73,8 @@ reconstruir cómo estaba el contratista el día que entró.
 | E11 | Cada entrada y salida (las cuatro vías; para el personal KOF, la entrega y la devolución del provisional) queda como un **hecho** que nunca se edita ni se borra. Se guarda junto con el movimiento o no se guarda ninguno; lo que quedó mal se corrige con otro hecho. | ✅ |
 | E12 | Cada marca (entrada y salida; para el personal KOF, entrega y devolución) guarda **su propio responsable** y su instante: quien registra la salida puede ser otro operador que el de la entrada. "Dentro" y el historial muestran los dos con el nombre del usuario; si ese usuario no está en el equipo, queda su ID. El instante se guarda como uno solo (fecha y hora juntas, UTC, para que ordene bien y no se descuadre a medianoche); la pantalla lo muestra en columnas separadas de fecha y hora, en la hora de Costa Rica. | ✅ |
 
+| E13 | Quien lleva **más de 12 horas** adentro (exactamente 12 todavía no) se marca para revisión, porque casi siempre falta registrar su salida (`permanencia::lleva_demasiado_adentro`). "Dentro" lo resalta; sólo marca: no cierra el ingreso ni bloquea nada. Lo decide el dominio, no la pantalla. | ✅ |
+
 ## F. Gafetes
 
 | Código | Regla | Estado |

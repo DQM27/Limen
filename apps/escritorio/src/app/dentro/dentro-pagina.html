@@ -1,0 +1,51 @@
+<!-- El título no se ve (la barra lateral ya dice dónde está la persona) pero
+     queda para los lectores de pantalla. -->
+<h1 class="solo-lectores">Dentro</h1>
+
+@if (error(); as mensaje) {
+  <p class="error" role="alert">{{ mensaje }}</p>
+}
+
+<app-tabla
+  id="dentro"
+  etiqueta="Dentro"
+  marcador="Cédula, nombre, empresa…"
+  mensajeVacio="No hay nadie adentro"
+  [columnas]="columnas"
+  [filas]="visibles()"
+  [cargando]="cargando()"
+  [idFila]="idFila"
+  [claseFila]="claseFila"
+  [seleccionMultiple]="true"
+  (seleccionCambia)="seleccionadas.set($event)"
+>
+  <mat-button-toggle-group
+    controles
+    class="filtro"
+    aria-label="Filtrar por gafete"
+    hideSingleSelectionIndicator
+    [value]="filtro()"
+    (change)="cambiarFiltro($event.value)"
+  >
+    <mat-button-toggle value="todos">Todos</mat-button-toggle>
+    <mat-button-toggle value="con">Con gafete</mat-button-toggle>
+    <mat-button-toggle value="sin">Sin gafete</mat-button-toggle>
+  </mat-button-toggle-group>
+
+  @if (seleccionadas().length > 0) {
+    <button acciones mat-flat-button type="button" class="salida-masiva" (click)="salidaMasiva()">
+      Registrar salida ({{ seleccionadas().length }})
+    </button>
+  }
+  <button
+    acciones
+    mat-icon-button
+    type="button"
+    class="actualizar"
+    aria-label="Actualizar"
+    matTooltip="Actualizar"
+    (click)="actualizar()"
+  >
+    <mat-icon aria-hidden="true">refresh</mat-icon>
+  </button>
+</app-tabla>

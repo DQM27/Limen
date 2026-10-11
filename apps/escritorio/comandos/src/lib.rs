@@ -95,7 +95,7 @@ where
 
     /// Quién está adentro ahora, por las cuatro vías juntas.
     pub async fn dentro(&self) -> Result<Vec<PersonaAdentroDto>, ErrorJson> {
-        let adentro = self.app.quienes_estan_adentro.ejecutar().await?;
+        let adentro = self.app.quienes_estan_adentro.con_permanencia().await?;
         Ok(adentro.iter().map(PersonaAdentroDto::from).collect())
     }
 

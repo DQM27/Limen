@@ -1,0 +1,26 @@
+:host {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.error {
+  margin: 0;
+  color: var(--mat-sys-error);
+}
+
+// Los controles se ven como parte de la fila de herramientas, de la misma altura.
+.salida-masiva {
+  --mat-button-filled-container-height: 34px;
+}
+
+.filtro {
+  --mat-button-toggle-height: 34px;
+  --mat-button-toggle-label-text-size: 13px;
+}
+
+.actualizar {
+  --mat-icon-button-state-layer-size: 34px;
+}

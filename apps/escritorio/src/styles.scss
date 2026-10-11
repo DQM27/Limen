@@ -78,3 +78,32 @@ h1 {
   margin: 0 0 8px;
   font: var(--mat-sys-headline-small);
 }
+
+// Las filas y celdas de la grilla viven fuera de los componentes, así que su
+// estilo tiene que ser global.
+
+// Una fila que pide revisión (por ejemplo, quien lleva demasiado tiempo adentro).
+.ag-row.fila-demasiado-tiempo {
+  background-color: var(--mat-sys-error-container);
+}
+
+// El botón de una celda de acción ("Salida" en Dentro).
+.boton-salida {
+  height: 26px;
+  padding: 0 12px;
+  border: 1px solid var(--mat-sys-outline);
+  border-radius: 13px;
+  background: transparent;
+  color: var(--mat-sys-primary);
+  font: var(--mat-sys-label-medium);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--mat-sys-secondary-container);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 1px;
+  }
+}

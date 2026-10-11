@@ -10,10 +10,10 @@
 //! - los nombres de los campos, en `snake_case`.
 
 use chrono::{NaiveDate, SecondsFormat};
-use limen_aplicacion::casos_de_uso::consultas::GafeteListado;
 use limen_aplicacion::casos_de_uso::consultas::{
     AtajoConRango, ContratistaEnLista, Historial, MAXIMO_MOVIMIENTOS,
 };
+use limen_aplicacion::casos_de_uso::consultas::{GafeteListado, PersonaAdentroVista};
 use limen_aplicacion::casos_de_uso::contratistas::{ComandoContratista, ComandoValidarContratista};
 use limen_aplicacion::casos_de_uso::correo::ComandoEntradaCorreo;
 use limen_aplicacion::casos_de_uso::gafetes::CambioGafete;
@@ -22,7 +22,7 @@ use limen_aplicacion::casos_de_uso::ingresos::{
 };
 use limen_aplicacion::casos_de_uso::proveedores::ComandoEntradaProveedor;
 use limen_aplicacion::errores::ErrorCaso;
-use limen_aplicacion::puertos::{IngresoAbierto, MarcaVista, MovimientoHistorial, PersonaAdentro};
+use limen_aplicacion::puertos::{IngresoAbierto, MarcaVista, MovimientoHistorial};
 use limen_dominio::acceso::ResultadoAcceso;
 use limen_dominio::auditoria::CambioCampo;
 use limen_dominio::cedula::Cedula;
@@ -86,6 +86,9 @@ pub struct PersonaAdentroDto {
     pub entrada: String,
     /// Quién registró la entrada.
     pub entrada_por: OperadorDto,
+    /// Lleva más de 12 horas adentro (E13): probablemente falta registrar su
+    /// salida. Lo decide el dominio.
+    pub demasiado_tiempo: bool,
 }
 
 /// Quién registró una marca (entrada o salida).
@@ -132,8 +135,9 @@ fn instante(en: chrono::DateTime<chrono::Utc>) -> String {
     en.to_rfc3339_opts(SecondsFormat::Secs, true)
 }
 
-impl From<&PersonaAdentro> for PersonaAdentroDto {
-    fn from(persona: &PersonaAdentro) -> Self {
+impl From<&PersonaAdentroVista> for PersonaAdentroDto {
+    fn from(vista: &PersonaAdentroVista) -> Self {
+        let persona = &vista.persona;
         let (medio, placa) = medio_y_placa(persona.medio.as_ref());
         Self {
             via: persona.ingreso.via().codigo(),
@@ -147,6 +151,7 @@ impl From<&PersonaAdentro> for PersonaAdentroDto {
             sin_gafete: persona.sin_gafete,
             entrada: instante(persona.entrada.en),
             entrada_por: OperadorDto::from(&persona.entrada),
+            demasiado_tiempo: vista.demasiado_tiempo,
         }
     }
 }

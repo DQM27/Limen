@@ -152,6 +152,7 @@ mod tests {
                     "id": "00000000-0000-0000-0000-000000000384",
                     "nombre": null,
                 },
+                "demasiado_tiempo": false,
             }]),
             "la fila de la lista dentro"
         );

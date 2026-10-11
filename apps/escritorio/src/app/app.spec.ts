@@ -52,11 +52,12 @@ describe('carcasa de la app', () => {
     const proximamente = enlaces.filter((a) => a.getAttribute('aria-disabled') === 'true');
 
     expect(disponibles.map((a) => a.textContent?.trim())).toEqual([
+      expect.stringContaining('Dentro'),
       expect.stringContaining('Contratistas'),
       expect.stringContaining('Gafetes'),
     ]);
     expect(disponibles.every((a) => a.hasAttribute('href'))).toBe(true);
-    expect(proximamente).toHaveLength(5);
+    expect(proximamente).toHaveLength(4);
     // Lo que no existe aún se anuncia como tal y no recibe el foco del teclado
     // (un enlace sin `href` no entra en el orden de tabulación).
     expect(proximamente.every((a) => a.getAttribute('aria-label')?.endsWith('próximamente'))).toBe(
@@ -104,7 +105,7 @@ describe('carcasa de la app', () => {
     expect(raiz.querySelector('.carcasa > .barra + main#contenido')).not.toBeNull();
     // Reducida, el enlace conserva su nombre accesible aunque no se vea el texto.
     expect(raiz.querySelector('nav a[routerLink], nav a[href]')?.getAttribute('aria-label')).toBe(
-      'Contratistas',
+      'Dentro',
     );
   });
 

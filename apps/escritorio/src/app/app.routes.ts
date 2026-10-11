@@ -3,6 +3,11 @@ import { Routes } from '@angular/router';
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'contratistas' },
   {
+    path: 'dentro',
+    title: 'Dentro · Limen',
+    loadComponent: () => import('./dentro/dentro-pagina').then((m) => m.DentroPagina),
+  },
+  {
     path: 'contratistas',
     title: 'Contratistas · Limen',
     loadComponent: () =>

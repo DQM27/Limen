@@ -182,7 +182,7 @@ pub struct Aplicacion<F, R, G, C = ClavesArgon2> {
     pub kof: Kof<F, R, G>,
     pub usuarios: Usuarios<F, R, G, C>,
     /// Quién está adentro ahora.
-    pub quienes_estan_adentro: QuienesEstanAdentro<F>,
+    pub quienes_estan_adentro: QuienesEstanAdentro<F, R>,
     /// Qué cambió en un registro, quién y cuándo.
     pub historial: HistorialDeCambios<F>,
     /// Los ingresos y salidas de las cuatro vías en un rango de fechas.
@@ -257,7 +257,7 @@ where
                 iniciar_sesion: IniciarSesion::new(a(), r(), c()),
                 cambiar_clave: CambiarClave::new(a(), r(), i(), c()),
             },
-            quienes_estan_adentro: QuienesEstanAdentro::new(a()),
+            quienes_estan_adentro: QuienesEstanAdentro::new(a(), r()),
             historial: HistorialDeCambios::new(a()),
             historial_de_ingresos: ListarHistorial::new(a(), r()),
             atajos_de_fecha: AtajosDeFecha::new(r()),

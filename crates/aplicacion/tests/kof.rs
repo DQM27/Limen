@@ -326,7 +326,7 @@ mod tests {
             .ejecutar(&sesion(), ana, 3)
             .await
             .unwrap();
-        let adentro = QuienesEstanAdentro::new(almacen.clone())
+        let adentro = QuienesEstanAdentro::new(almacen.clone(), reloj_a(ENTREGA))
             .ejecutar()
             .await
             .unwrap();
@@ -338,7 +338,7 @@ mod tests {
 
         devolver(&almacen).ejecutar(&sesion(), id).await.unwrap();
         assert!(
-            QuienesEstanAdentro::new(almacen.clone())
+            QuienesEstanAdentro::new(almacen.clone(), reloj_a(ENTREGA))
                 .ejecutar()
                 .await
                 .unwrap()

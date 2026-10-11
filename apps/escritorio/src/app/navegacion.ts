@@ -13,7 +13,7 @@ export interface Seccion {
  * pantalla nueva sólo agrega su `ruta`.
  */
 export const SECCIONES: readonly Seccion[] = [
-  { etiqueta: 'Dentro', icono: 'groups' },
+  { etiqueta: 'Dentro', icono: 'groups', ruta: '/dentro' },
   { etiqueta: 'Contratistas', icono: 'engineering', ruta: '/contratistas' },
   { etiqueta: 'Proveedores', icono: 'local_shipping' },
   { etiqueta: 'Correo', icono: 'mail' },

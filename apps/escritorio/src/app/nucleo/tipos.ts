@@ -193,6 +193,8 @@ export interface PersonaAdentro {
   entrada: string;
   /** Quién registró la entrada. */
   entrada_por: Operador;
+  /** Lleva más de 12 horas adentro: probablemente falta registrar su salida. Lo decide el núcleo. */
+  demasiado_tiempo: boolean;
 }
 
 /** Quién registró una marca (entrada o salida). */

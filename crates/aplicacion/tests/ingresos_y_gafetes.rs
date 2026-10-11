@@ -4,7 +4,7 @@
 #[cfg(test)]
 mod tests {
     use chrono::{DateTime, NaiveDate, Utc};
-    use limen_aplicacion::casos_de_uso::consultas::ListarGafetes;
+    use limen_aplicacion::casos_de_uso::consultas::{ListarGafetes, QuienesEstanAdentro};
     use limen_aplicacion::casos_de_uso::contratistas::{ComandoContratista, RegistrarContratista};
     use limen_aplicacion::casos_de_uso::gafetes::{CambiarGafete, CambioGafete, RegistrarGafetes};
     use limen_aplicacion::casos_de_uso::ingresos::{
@@ -1034,5 +1034,31 @@ mod tests {
             listado[1].asignado.is_none(),
             "uno disponible no tiene a quién"
         );
+    }
+
+    // --- Quién lleva demasiado tiempo adentro (E13) ---
+
+    #[tokio::test]
+    async fn marca_a_quien_lleva_mas_de_doce_horas_adentro() {
+        let almacen = preparado().await;
+        let ana = llamado(&almacen, "111111111", "ana solano", true).await;
+        entrada(&almacen)
+            .ejecutar(&sesion(), &a_pie(ana, Some(25)))
+            .await
+            .unwrap();
+
+        // Entró a las 14:00 UTC: 11 horas después todavía no, 13 horas sí.
+        let a_las_11_horas =
+            QuienesEstanAdentro::new(almacen.clone(), reloj_a("2026-10-10T01:00:00Z"));
+        let a_las_13_horas =
+            QuienesEstanAdentro::new(almacen.clone(), reloj_a("2026-10-10T03:00:00Z"));
+
+        let temprano = a_las_11_horas.con_permanencia().await.unwrap();
+        let tarde = a_las_13_horas.con_permanencia().await.unwrap();
+
+        assert_eq!(temprano.len(), 1);
+        assert!(!temprano[0].demasiado_tiempo, "11 horas todavía no");
+        assert!(tarde[0].demasiado_tiempo, "13 horas sí");
+        assert_eq!(tarde[0].persona.nombre.as_str(), "ANA SOLANO");
     }
 }
