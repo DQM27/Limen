@@ -16,6 +16,7 @@ import {
   type ResultadoGestionGafete,
 } from './dialogo-gestion-gafete';
 import { etiquetaDeEstadoGafete, TIPOS_DE_GAFETE, textoAsignado } from './etiquetas';
+import { CambiosDeLaNube } from '../nucleo/cambios-de-la-nube';
 
 /** Lo que se avisa al operador tras cada cambio de estado. */
 function avisoDeCambio(numero: number, cambio: ResultadoGestionGafete['cambio']): string {
@@ -76,6 +77,8 @@ export class GafetesPagina {
 
   constructor() {
     void this.cargar();
+    // Lo que registran los demás equipos llega de la nube: se vuelve a cargar.
+    inject(CambiosDeLaNube).alLlegar(() => void this.cargar());
   }
 
   protected cambiarTipo(tipo: TipoGafete): void {

@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, type OnInit, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  type OnInit,
+  signal,
+} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
@@ -9,6 +16,7 @@ import { etiquetaDeVia, textoGafete, textoMedio, textoOperador } from '../dentro
 import { atajosDeFecha, listarHistorial } from '../nucleo/comandos';
 import { esErrorApp } from '../nucleo/tauri';
 import type { AtajoFecha, Historial, Movimiento } from '../nucleo/tipos';
+import { CambiosDeLaNube } from '../nucleo/cambios-de-la-nube';
 
 /** El campo del rango al que el núcleo atribuye un error. */
 type CampoFecha = 'desde' | 'hasta';
@@ -112,6 +120,11 @@ export class HistorialPagina implements OnInit {
       valueGetter: (p) => (p.data?.salida_por ? textoOperador(p.data.salida_por) : ''),
     },
   ];
+
+  constructor() {
+    // Lo que registran los demás equipos llega de la nube: se vuelve a cargar.
+    inject(CambiosDeLaNube).alLlegar(() => void this.cargar());
+  }
 
   ngOnInit(): void {
     void this.iniciar();

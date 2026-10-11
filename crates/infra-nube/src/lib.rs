@@ -10,6 +10,7 @@
 //! La configuración sale de variables de entorno ([`ConfigNube::desde_entorno`]),
 //! nunca del código: el repositorio es público.
 
+mod bajada;
 mod sincronizacion;
 mod subida;
 
@@ -21,7 +22,7 @@ use surrealdb::engine::any::{Any, connect};
 use surrealdb::opt::auth::{Database, Namespace, Root};
 
 pub use sincronizacion::{CADA, REINTENTO, sincronizar};
-pub use subida::{Copia, Subida, TABLAS};
+pub use subida::{Copia, TABLAS};
 
 /// Elige el proveedor de cifrado de las conexiones seguras (`ring`). Con
 /// `ring` y `aws-lc-rs` a la vez en el árbol de dependencias, `rustls` no
@@ -105,6 +106,8 @@ pub enum ErrorNube {
     Consulta(String),
     #[error("No se pudo subir a la nube: {0}")]
     Subida(String),
+    #[error("No se pudo bajar de la nube: {0}")]
+    Bajada(String),
 }
 
 impl ConfigNube {

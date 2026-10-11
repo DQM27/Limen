@@ -94,9 +94,10 @@ equipo sin cambiar el flujo de datos.
 
 1. ✅ Conectar y aplicar el esquema (`crates/infra-nube`, herramienta `limen-nube`).
 2. ✅ **Unidades operativas y equipos** en el dominio y en el esquema (sección 7).
-3. ✅ Subida continua (sección 8). A mano sigue estando `limen-nube subir`, que copia la
-   base entera.
-4. Bajada: carga inicial de un equipo nuevo, en vivo y recuperación por cursor.
+3. ✅ Subida continua (sección 8). A mano está `limen-nube subir`, que usa el mismo
+   camino.
+4. ✅ Bajada: carga inicial de un equipo nuevo, casi en vivo (cada 5 segundos) y al
+   volver la conexión (sección 9).
 5. Indicador de incidente al unir lo de varios equipos.
 6. Usuarios desde la nube (L4, L5) y la hora de la nube para los equipos sin NTP.
 
@@ -152,5 +153,26 @@ importa; con dos, el historial del 25 de Brisas se mezclaría con el del 25 de l
   espera.
 - **Límite:** el registro de cambios guarda 30 días. Un equipo que pase más de 30 días
   sin conexión debe volver a copiarse entero con `limen-nube subir`.
-- **Todavía no baja nada:** con una sola PC por unidad, la nube refleja al equipo. Bajar
-  en vivo lo de los demás equipos es el paso 4.
+- **La copia entera nunca borra en la nube**, porque allí también está lo de los demás
+  equipos. Los borrados viajan sólo por el registro de cambios, que dice exactamente qué
+  se borró.
+
+## 9. Bajada, como quedó
+
+- En cada vuelta (cada 5 segundos) la app **primero sube y después baja**: si el equipo
+  cambió algo sin conexión, la nube recibe su versión antes de que el equipo repase lo
+  que cambió allá, y el repaso termina en lo más reciente.
+- Baja con el **registro de cambios de la nube**, desde el último que bajó
+  (`sincronizacion:⟨bajada-tabla⟩`). Lo mismo sirve en vivo y al volver la red.
+- Baja los **catálogos completos** y, de lo que es de una unidad, **sólo lo de la suya**
+  (filtra por el campo `unidad`).
+- **Equipo nuevo:** la primera vez baja todo lo que le corresponde y arranca al día.
+- **Sin rebotes:** lo que llega y ya está igual no se escribe
+  (`AlmacenSurreal::aplicar_de_la_nube`), así no se anota en el registro del equipo y no
+  vuelve a subir. Hechos y auditoría sólo se agregan.
+- **Pantallas:** cuando lo que bajó cambió algo, el núcleo manda el evento
+  `nube-cambios` y Dentro (con Proveedores, Correo y KOF), Contratistas, Gafetes e
+  Historial vuelven a cargar.
+- **Choques:** si dos equipos cambian lo mismo, queda el último que llegó a la nube. Los
+  choques de reglas entre equipos (la misma persona adentro dos veces, el mismo gafete
+  prestado dos veces) todavía no se marcan como incidente: es el paso 5.

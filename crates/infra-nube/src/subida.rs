@@ -1,9 +1,13 @@
-//! Subida de la base de un equipo a la nube: copia lo que el equipo tiene,
-//! con los mismos IDs, sobre el mismo esquema.
+//! Subida del equipo a la nube: lo que el equipo registra, con los mismos IDs,
+//! sobre el mismo esquema (paso 3 de `docs/nube.md`).
 //!
-//! Es la carga inicial (pasos 3 y 5 de `docs/nube.md`): se puede repetir y
-//! no duplica nada. La sincronización continua (subir lo pendiente al
-//! registrar, bajar en vivo) se construye después, encima de esto.
+//! Un solo camino, que usan la app (cada pocos segundos) y la herramienta
+//! `limen-nube subir`: la primera vez cada tabla se copia entera y después
+//! sube lo anotado en el registro de cambios. Se puede repetir sin duplicar.
+//!
+//! La copia entera sólo crea o reemplaza: **nunca borra en la nube**, porque
+//! en la nube también está lo de los demás equipos. Los borrados viajan sólo
+//! por el registro de cambios, que dice exactamente qué se borró.
 //!
 //! No sube lo que es del equipo y no de la nube: los intentos de inicio de
 //! sesión, el reloj del equipo y los usuarios (los usuarios son globales y
@@ -20,13 +24,10 @@ const POR_LOTE: usize = 200;
 /// Cómo se copia cada tabla.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Copia {
-    /// Catálogos y registros que cambian (un ingreso recibe su salida): se
-    /// crean o se reemplazan por ID.
+    /// Catálogos, registros que cambian (un ingreso recibe su salida) y el
+    /// estado que se borra al terminar (quién está adentro, los préstamos
+    /// abiertos): se crean o se reemplazan por ID, y lo borrado se borra.
     Reemplazar,
-    /// Estado que se borra al terminar (quién está adentro, los préstamos
-    /// abiertos): lo de la unidad en la nube se deja igual al del equipo, y
-    /// así no queda adentro alguien que ya salió.
-    Estado,
     /// Hechos y auditoría: nunca se editan. Se agregan los que faltan y los
     /// que ya están no se tocan.
     Agregar,
@@ -44,40 +45,14 @@ pub const TABLAS: [(&str, Copia); 14] = [
     ("ingreso_proveedor", Copia::Reemplazar),
     ("ingreso_correo", Copia::Reemplazar),
     ("prestamo_kof", Copia::Reemplazar),
-    ("prestamo_gafete", Copia::Estado),
-    ("presencia", Copia::Estado),
-    ("personal_kof_con_prestamo", Copia::Estado),
+    ("prestamo_gafete", Copia::Reemplazar),
+    ("presencia", Copia::Reemplazar),
+    ("personal_kof_con_prestamo", Copia::Reemplazar),
     ("hecho", Copia::Agregar),
     ("auditoria", Copia::Agregar),
 ];
 
-/// Cuántas filas de una tabla se subieron.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Subida {
-    pub tabla: &'static str,
-    pub filas: usize,
-}
-
 impl Nube {
-    /// Sube a la nube todo lo que tiene la base de este equipo (ver
-    /// [`TABLAS`]). Si falla una tabla, se detiene ahí: lo ya subido queda y
-    /// repetir la subida no lo duplica.
-    pub async fn subir_equipo(&self, almacen: &AlmacenSurreal) -> Result<Vec<Subida>, ErrorNube> {
-        let mut subidas = Vec::with_capacity(TABLAS.len());
-        for (tabla, copia) in TABLAS {
-            let filas = filas_para_subir(tabla, almacen).await?;
-            let cuantas = filas.len();
-            self.copiar(tabla, copia, filas, almacen.unidad().as_str())
-                .await
-                .map_err(|e| ErrorNube::Subida(format!("{tabla}: {e}")))?;
-            subidas.push(Subida {
-                tabla,
-                filas: cuantas,
-            });
-        }
-        Ok(subidas)
-    }
-
     /// Sube lo que cambió en el equipo desde la última vez: las altas, los
     /// cambios y los borrados que anotó el registro de cambios de cada tabla
     /// (ver `limen_infra_surreal::Entrada`), en orden. Devuelve cuántos
@@ -95,7 +70,7 @@ impl Nube {
             let ya_subido = almacen.subido_hasta(tabla).await.map_err(|e| error(&e))?;
             if ya_subido.is_none() {
                 let filas = filas_para_subir(tabla, almacen).await?;
-                self.copiar(tabla, copia, filas, almacen.unidad().as_str())
+                self.copiar(tabla, copia, filas)
                     .await
                     .map_err(|e| error(&e))?;
                 almacen
@@ -174,31 +149,20 @@ impl Nube {
         Ok(())
     }
 
+    /// Copia filas enteras: crea o reemplaza, nunca borra.
     async fn copiar(
         &self,
         tabla: &'static str,
         copia: Copia,
         filas: Vec<Value>,
-        unidad: &str,
     ) -> Result<(), surrealdb::Error> {
         // Las tablas salen de `TABLAS`, nunca de un dato: los valores van
         // siempre como parámetros.
-        if copia == Copia::Estado {
-            self.db
-                .query(format!(
-                    "BEGIN TRANSACTION; DELETE {tabla} WHERE unidad = $unidad; \
-                     FOR $fila IN $filas {{ CREATE $fila.id CONTENT $fila; }}; \
-                     COMMIT TRANSACTION;"
-                ))
-                .bind(("unidad", unidad.to_owned()))
-                .bind(("filas", filas))
-                .await?
-                .check()?;
-            return Ok(());
-        }
         let sentencia = match copia {
             Copia::Agregar => format!("INSERT IGNORE INTO {tabla} $filas;"),
-            _ => "FOR $fila IN $filas { UPSERT $fila.id CONTENT $fila; };".to_owned(),
+            Copia::Reemplazar => {
+                "FOR $fila IN $filas { UPSERT $fila.id CONTENT $fila; };".to_owned()
+            }
         };
         for lote in filas.chunks(POR_LOTE) {
             self.db
@@ -323,27 +287,13 @@ mod tests {
         cuantos(nube, &format!("SELECT VALUE id FROM {tabla}")).await
     }
 
-    fn filas_de(subidas: &[Subida], tabla: &str) -> usize {
-        subidas
-            .iter()
-            .find(|subida| subida.tabla == tabla)
-            .map_or(0, |subida| subida.filas)
-    }
-
     #[tokio::test]
     async fn la_base_del_equipo_sube_con_los_mismos_ids() {
         let equipo = equipo_con_datos().await;
         let nube = nube().await;
 
-        let subidas = nube.subir_equipo(&equipo).await.unwrap();
+        nube.subir_cambios(&equipo).await.unwrap();
 
-        assert_eq!(
-            subidas.len(),
-            TABLAS.len(),
-            "dice cuánto subió de cada tabla"
-        );
-        assert_eq!(filas_de(&subidas, "gafete"), 1);
-        assert_eq!(filas_de(&subidas, "hecho"), 1);
         assert_eq!(
             cuantos(
                 &nube,
@@ -367,31 +317,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn subir_otra_vez_no_duplica_y_quien_salio_no_queda_adentro() {
-        let equipo = equipo_con_datos().await;
+    async fn la_primera_subida_de_un_equipo_no_borra_lo_de_los_demas() {
         let nube = nube().await;
-        nube.subir_equipo(&equipo).await.unwrap();
+        let otro = equipo_con_datos().await;
+        nube.subir_cambios(&otro).await.unwrap();
 
-        // La persona sale y devuelve el gafete en el equipo.
-        let mut uow = equipo.nueva();
-        uow.presencias().anotar_salida(&cedula());
-        uow.gafetes()
-            .anotar_devolucion(TipoGafete::Contratista, NumeroGafete::nuevo(25).unwrap());
-        uow.confirmar().await.unwrap();
-        nube.subir_equipo(&equipo).await.unwrap();
+        let nuevo = AlmacenSurreal::en_memoria().await.unwrap();
+        nube.subir_cambios(&nuevo).await.unwrap();
 
-        assert_eq!(en_la_nube(&nube, "gafete").await, 1, "no duplica");
-        assert_eq!(en_la_nube(&nube, "hecho").await, 1, "ni los hechos");
         assert_eq!(
             en_la_nube(&nube, "presencia").await,
-            0,
-            "quien salió en el equipo ya no está adentro en la nube"
+            1,
+            "quien entró en el otro equipo sigue adentro en la nube"
         );
-        assert_eq!(
-            en_la_nube(&nube, "prestamo_gafete").await,
-            0,
-            "y el gafete ya no está prestado"
-        );
+        assert_eq!(en_la_nube(&nube, "prestamo_gafete").await, 1);
     }
 
     #[tokio::test]

@@ -2,14 +2,15 @@
 //!
 //! Sólo hace tres cosas: arranca la aplicación de este equipo con
 //! `AplicacionLimen::arrancar`, la guarda como estado compartido y registra
-//! los comandos. Las reglas viven en `crates/dominio` y la lógica de cada comando
+//! los comandos. Además, cuando bajan cambios de la nube, se lo avisa a la
+//! interfaz (`nube-cambios`) para que recargue lo que muestra. Las reglas viven en `crates/dominio` y la lógica de cada comando
 //! en `limen-escritorio-comandos`.
 
 mod comandos;
 mod estado;
 
 use limen_composicion::{AplicacionLimen, Config};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 use estado::Estado;
 
@@ -19,6 +20,9 @@ const CARPETA_BASE: &str = "base";
 const ARCHIVO_DESFASE_RELOJ: &str = "reloj-desfase.txt";
 /// La identidad del equipo: su unidad operativa y su ID.
 const ARCHIVO_EQUIPO: &str = "equipo.txt";
+/// El evento con que la interfaz se entera de que bajaron cambios de la nube
+/// (de otros equipos) y recarga lo que muestra.
+const EVENTO_CAMBIOS_DE_LA_NUBE: &str = "nube-cambios";
 /// Cuánto puede seguir oculta la ventana si la interfaz no la muestra.
 const ESPERA_MAXIMA_VENTANA_OCULTA: std::time::Duration = std::time::Duration::from_secs(5);
 
@@ -29,11 +33,19 @@ const ESPERA_MAXIMA_VENTANA_OCULTA: std::time::Duration = std::time::Duration::f
 fn preparar_estado(app: &tauri::App) -> Result<Estado, Box<dyn std::error::Error>> {
     let datos = app.path().app_data_dir()?;
     std::fs::create_dir_all(&datos)?;
-    let aplicacion = tauri::async_runtime::block_on(AplicacionLimen::arrancar(&Config {
-        ruta_base: datos.join(CARPETA_BASE),
-        ruta_desfase_reloj: datos.join(ARCHIVO_DESFASE_RELOJ),
-        ruta_equipo: datos.join(ARCHIVO_EQUIPO),
-    }))?;
+    let ventanas = app.handle().clone();
+    let avisar_a_la_interfaz = move || {
+        // Si la ventana ya se cerró, no hay a quién avisar.
+        drop(ventanas.emit(EVENTO_CAMBIOS_DE_LA_NUBE, ()));
+    };
+    let aplicacion = tauri::async_runtime::block_on(AplicacionLimen::arrancar(
+        &Config {
+            ruta_base: datos.join(CARPETA_BASE),
+            ruta_desfase_reloj: datos.join(ARCHIVO_DESFASE_RELOJ),
+            ruta_equipo: datos.join(ARCHIVO_EQUIPO),
+        },
+        avisar_a_la_interfaz,
+    ))?;
     Ok(Estado::new(aplicacion))
 }
 

@@ -19,7 +19,7 @@ use std::process::ExitCode;
 
 use std::path::Path;
 
-use limen_infra_nube::{ConfigNube, ErrorNube, EstadoNube, Nube, Subida};
+use limen_infra_nube::{ConfigNube, ErrorNube, EstadoNube, Nube};
 use limen_infra_plataforma::origen_del_equipo;
 use limen_infra_surreal::AlmacenSurreal;
 
@@ -35,8 +35,8 @@ async fn main() -> ExitCode {
             return ExitCode::FAILURE;
         };
         return match subir(Path::new(&carpeta)).await {
-            Ok(subidas) => {
-                mostrar_subida(&subidas);
+            Ok(subidos) => {
+                mostrar_subida(subidos);
                 ExitCode::SUCCESS
             }
             Err(error) => {
@@ -81,8 +81,9 @@ async fn esquema() -> Result<EstadoNube, ErrorNube> {
 }
 
 /// Abre la base del equipo (lo que también la convierte si es de antes de
-/// las unidades operativas), deja el esquema de la nube al día y sube todo.
-async fn subir(carpeta: &Path) -> Result<Vec<Subida>, String> {
+/// las unidades operativas), deja el esquema de la nube al día y sube lo que
+/// falte, por el mismo camino que la app.
+async fn subir(carpeta: &Path) -> Result<usize, String> {
     let ruta_equipo = carpeta.join("equipo.txt");
     if !ruta_equipo.is_file() {
         return Err(format!(
@@ -96,19 +97,17 @@ async fn subir(carpeta: &Path) -> Result<Vec<Subida>, String> {
         .map_err(|e| format!("No se pudo abrir la base del equipo (¿está la app abierta?): {e}"))?;
     let nube = conectar().await.map_err(|e| e.to_string())?;
     nube.aplicar_esquema().await.map_err(|e| e.to_string())?;
-    nube.subir_equipo(&almacen).await.map_err(|e| e.to_string())
+    nube.subir_cambios(&almacen)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[expect(
     clippy::print_stdout,
     reason = "es una herramienta de consola: su resultado es lo que imprime"
 )]
-fn mostrar_subida(subidas: &[Subida]) {
-    for subida in subidas {
-        println!("{:>28}  {}", subida.tabla, subida.filas);
-    }
-    let total: usize = subidas.iter().map(|s| s.filas).sum();
-    println!("Listo: {total} filas en la nube.");
+fn mostrar_subida(subidos: usize) {
+    println!("Listo: {subidos} cambios subidos a la nube.");
 }
 
 #[expect(

@@ -18,6 +18,7 @@ import {
   type DatosFormularioContratista,
   type ResultadoFormularioContratista,
 } from './formulario-contratista';
+import { CambiosDeLaNube } from '../nucleo/cambios-de-la-nube';
 
 /** El buscador general sólo mira lo que identifica a la persona. */
 const fueraDelBuscador = (): string => '';
@@ -89,6 +90,8 @@ export class ContratistasPagina {
 
   constructor() {
     void this.cargar();
+    // Lo que registran los demás equipos llega de la nube: se vuelve a cargar.
+    inject(CambiosDeLaNube).alLlegar(() => void this.cargar());
   }
 
   /**

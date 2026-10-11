@@ -313,16 +313,21 @@ impl AplicacionLimen {
     /// Si el equipo tiene configurada la nube (variables `LIMEN_NUBE_*`, ver
     /// `docs/nube.md`), lanza además la sincronización en segundo plano: lo
     /// que se registra sube a la nube a los pocos segundos, y sin conexión se
-    /// acumula y sube al volver. Sin esa configuración la app trabaja igual,
-    /// sólo en el equipo. Hay que llamarlo dentro del runtime de `tokio`.
-    pub async fn arrancar(config: &Config) -> Result<Self, ErrorArranque> {
+    /// acumula y sube al volver. También baja lo que registran los demás
+    /// equipos, y entonces llama a `al_llegar` (la app refresca sus
+    /// pantallas). Sin esa configuración la app trabaja igual, sólo en el
+    /// equipo. Hay que llamarlo dentro del runtime de `tokio`.
+    pub async fn arrancar<F>(config: &Config, al_llegar: F) -> Result<Self, ErrorArranque>
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
         let reloj = RelojConfiable::new(leer_desfase(&config.ruta_desfase_reloj));
         reloj.sincronizar_en_segundo_plano(&SERVIDORES_NTP, config.ruta_desfase_reloj.clone());
         let (aplicacion, almacen) = Self::abrir_con_almacen(config, &reloj).await?;
         match ConfigNube::desde_entorno(|nombre| std::env::var(nombre).ok()) {
             Ok(nube) => {
                 instalar_cifrado();
-                tokio::spawn(sincronizar(almacen, nube));
+                tokio::spawn(sincronizar(almacen, nube, al_llegar));
             }
             Err(motivo) => log::info!("sin sincronización con la nube: {motivo}"),
         }

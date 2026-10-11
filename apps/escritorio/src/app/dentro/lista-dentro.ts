@@ -29,6 +29,7 @@ import {
   textoOperador,
   type FiltroGafete,
 } from './etiquetas';
+import { CambiosDeLaNube } from '../nucleo/cambios-de-la-nube';
 
 /** El mensaje de un error del núcleo, o uno general si falló otra cosa. */
 function mensajeDe(error: unknown, general: string): string {
@@ -188,6 +189,11 @@ export class ListaDentro implements OnInit {
           return [columna];
       }
     });
+  }
+
+  constructor() {
+    // Lo que registran los demás equipos llega de la nube: se vuelve a cargar.
+    inject(CambiosDeLaNube).alLlegar(() => void this.cargar());
   }
 
   ngOnInit(): void {
