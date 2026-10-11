@@ -26,6 +26,7 @@ pub mod medio;
 pub mod movimiento;
 pub mod nombre;
 pub mod operador;
+pub mod origen;
 pub mod permanencia;
 pub mod personal_kof;
 pub mod praind;

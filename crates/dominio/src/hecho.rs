@@ -14,6 +14,10 @@
 //! equipo pueda reconstruirlo; una salida sólo dice qué registro se cerró,
 //! cuándo y quién.
 //!
+//! Cada hecho dice también su **origen**: en qué unidad operativa y desde qué
+//! equipo se registró (M4). Es lo que permite repartir a cada equipo sólo
+//! lo de su unidad y saber, ante un choque, de qué equipo vino cada uno.
+//!
 //! Cada hecho guarda además si la hora con que se selló era confiable y la
 //! hora cruda del reloj del equipo en ese momento (E5, ver
 //! [`crate::reloj::sellar_hora`]): un hecho con hora dudosa no se pierde ni
@@ -28,6 +32,7 @@ use crate::ingreso_contratista::IngresoContratista;
 use crate::ingreso_correo::IngresoCorreo;
 use crate::ingreso_proveedor::IngresoProveedor;
 use crate::movimiento::Marca;
+use crate::origen::Origen;
 use crate::presencia::Via;
 use crate::prestamo_kof::PrestamoKof;
 use crate::reloj::HoraSellada;
@@ -96,6 +101,7 @@ impl From<HoraSellada> for CalidadHora {
 pub struct Hecho {
     id: HechoId,
     suceso: Suceso,
+    origen: Origen,
     hora: CalidadHora,
 }
 
@@ -103,59 +109,121 @@ impl Hecho {
     /// La entrada de un contratista, con el ingreso tal como se abrió.
     pub fn entrada_contratista(
         id: HechoId,
+        origen: &Origen,
         ingreso: &IngresoContratista,
         hora: CalidadHora,
     ) -> Self {
-        Self::restaurar(id, Suceso::EntradaContratista(ingreso.clone()), hora)
+        Self::restaurar(
+            id,
+            Suceso::EntradaContratista(ingreso.clone()),
+            origen.clone(),
+            hora,
+        )
     }
 
-    pub fn entrada_proveedor(id: HechoId, ingreso: &IngresoProveedor, hora: CalidadHora) -> Self {
-        Self::restaurar(id, Suceso::EntradaProveedor(ingreso.clone()), hora)
+    pub fn entrada_proveedor(
+        id: HechoId,
+        origen: &Origen,
+        ingreso: &IngresoProveedor,
+        hora: CalidadHora,
+    ) -> Self {
+        Self::restaurar(
+            id,
+            Suceso::EntradaProveedor(ingreso.clone()),
+            origen.clone(),
+            hora,
+        )
     }
 
-    pub fn entrada_correo(id: HechoId, ingreso: &IngresoCorreo, hora: CalidadHora) -> Self {
-        Self::restaurar(id, Suceso::EntradaCorreo(ingreso.clone()), hora)
+    pub fn entrada_correo(
+        id: HechoId,
+        origen: &Origen,
+        ingreso: &IngresoCorreo,
+        hora: CalidadHora,
+    ) -> Self {
+        Self::restaurar(
+            id,
+            Suceso::EntradaCorreo(ingreso.clone()),
+            origen.clone(),
+            hora,
+        )
     }
 
-    pub fn entrega_kof(id: HechoId, prestamo: &PrestamoKof, hora: CalidadHora) -> Self {
-        Self::restaurar(id, Suceso::EntregaKof(prestamo.clone()), hora)
+    pub fn entrega_kof(
+        id: HechoId,
+        origen: &Origen,
+        prestamo: &PrestamoKof,
+        hora: CalidadHora,
+    ) -> Self {
+        Self::restaurar(
+            id,
+            Suceso::EntregaKof(prestamo.clone()),
+            origen.clone(),
+            hora,
+        )
     }
 
     /// La salida de un contratista; `None` si el ingreso sigue abierto.
     pub fn salida_contratista(
         id: HechoId,
+        origen: &Origen,
         ingreso: &IngresoContratista,
         hora: CalidadHora,
     ) -> Option<Self> {
-        ingreso
-            .salida()
-            .map(|marca| Self::salida(id, Via::Contratista, ingreso.id().uuid(), marca, hora))
+        ingreso.salida().map(|marca| {
+            Self::salida(
+                id,
+                origen,
+                Via::Contratista,
+                ingreso.id().uuid(),
+                marca,
+                hora,
+            )
+        })
     }
 
     pub fn salida_proveedor(
         id: HechoId,
+        origen: &Origen,
         ingreso: &IngresoProveedor,
         hora: CalidadHora,
     ) -> Option<Self> {
         ingreso
             .salida()
-            .map(|marca| Self::salida(id, Via::Proveedor, ingreso.id().uuid(), marca, hora))
+            .map(|marca| Self::salida(id, origen, Via::Proveedor, ingreso.id().uuid(), marca, hora))
     }
 
-    pub fn salida_correo(id: HechoId, ingreso: &IngresoCorreo, hora: CalidadHora) -> Option<Self> {
+    pub fn salida_correo(
+        id: HechoId,
+        origen: &Origen,
+        ingreso: &IngresoCorreo,
+        hora: CalidadHora,
+    ) -> Option<Self> {
         ingreso
             .salida()
-            .map(|marca| Self::salida(id, Via::Correo, ingreso.id().uuid(), marca, hora))
+            .map(|marca| Self::salida(id, origen, Via::Correo, ingreso.id().uuid(), marca, hora))
     }
 
     /// La devolución del provisional, que es la salida del personal KOF.
-    pub fn devolucion_kof(id: HechoId, prestamo: &PrestamoKof, hora: CalidadHora) -> Option<Self> {
+    pub fn devolucion_kof(
+        id: HechoId,
+        origen: &Origen,
+        prestamo: &PrestamoKof,
+        hora: CalidadHora,
+    ) -> Option<Self> {
         prestamo
             .devolucion()
-            .map(|marca| Self::salida(id, Via::Kof, prestamo.id().uuid(), marca, hora))
+            .map(|marca| Self::salida(id, origen, Via::Kof, prestamo.id().uuid(), marca, hora))
     }
 
-    fn salida(id: HechoId, via: Via, registro: Uuid, marca: Marca, hora: CalidadHora) -> Self {
+    fn salida(
+        id: HechoId,
+        origen: &Origen,
+        via: Via,
+        registro: Uuid,
+        marca: Marca,
+        hora: CalidadHora,
+    ) -> Self {
         Self::restaurar(
             id,
             Suceso::Salida(Salida {
@@ -163,13 +231,24 @@ impl Hecho {
                 registro,
                 marca,
             }),
+            origen.clone(),
             hora,
         )
     }
 
     /// Reconstruye un hecho leído de la base.
-    pub const fn restaurar(id: HechoId, suceso: Suceso, hora: CalidadHora) -> Self {
-        Self { id, suceso, hora }
+    pub const fn restaurar(id: HechoId, suceso: Suceso, origen: Origen, hora: CalidadHora) -> Self {
+        Self {
+            id,
+            suceso,
+            origen,
+            hora,
+        }
+    }
+
+    /// En qué unidad operativa y desde qué equipo se registró (M4).
+    pub const fn origen(&self) -> &Origen {
+        &self.origen
     }
 
     /// Si la hora era confiable y la hora cruda del equipo.
@@ -233,6 +312,7 @@ mod tests {
     use crate::ingreso_contratista::{EntregaGafete, IngresoGuardado, IngresoId};
     use crate::medio::Medio;
     use crate::operador::OperadorId;
+    use crate::origen::{EquipoId, UnidadOperativaId};
 
     fn marca(texto: &str, operador: u128) -> Marca {
         Marca {
@@ -257,6 +337,13 @@ mod tests {
         HechoId::desde_uuid(Uuid::from_u128(n))
     }
 
+    fn origen() -> Origen {
+        Origen {
+            unidad: UnidadOperativaId::nueva("BRISAS").unwrap(),
+            equipo: EquipoId::desde_uuid(Uuid::from_u128(99)),
+        }
+    }
+
     fn hora() -> CalidadHora {
         CalidadHora {
             confiable: true,
@@ -267,7 +354,7 @@ mod tests {
     #[test]
     fn la_entrada_guarda_el_ingreso_tal_como_se_abrio() {
         let abierto = ingreso(None);
-        let hecho = Hecho::entrada_contratista(id(1), &abierto, hora());
+        let hecho = Hecho::entrada_contratista(id(1), &origen(), &abierto, hora());
         assert_eq!(hecho.id(), id(1));
         assert_eq!(hecho.suceso(), &Suceso::EntradaContratista(abierto));
         assert!(hecho.es_entrada(), "una entrada es entrada");
@@ -275,22 +362,29 @@ mod tests {
         assert_eq!(hecho.registro(), Uuid::from_u128(7));
         assert_eq!(hecho.marca(), marca("2026-10-09T08:00:00Z", 1));
         assert_eq!(hecho.hora(), hora(), "con la calidad de su hora");
+        assert_eq!(hecho.origen(), &origen(), "y de dónde viene");
     }
 
     #[test]
     fn la_salida_dice_que_registro_se_cerro_cuando_y_quien() {
         let salida = marca("2026-10-09T17:00:00Z", 2);
-        let hecho = Hecho::salida_contratista(id(2), &ingreso(Some(salida)), hora()).unwrap();
+        let hecho =
+            Hecho::salida_contratista(id(2), &origen(), &ingreso(Some(salida)), hora()).unwrap();
         assert!(!hecho.es_entrada(), "una salida no es entrada");
         assert_eq!(hecho.via(), Via::Contratista);
         assert_eq!(hecho.registro(), Uuid::from_u128(7));
         assert_eq!(hecho.marca(), salida);
+        assert_eq!(
+            hecho.origen(),
+            &origen(),
+            "también la salida dice de dónde viene"
+        );
     }
 
     #[test]
     fn un_ingreso_abierto_no_tiene_hecho_de_salida() {
         assert_eq!(
-            Hecho::salida_contratista(id(3), &ingreso(None), hora()),
+            Hecho::salida_contratista(id(3), &origen(), &ingreso(None), hora()),
             None
         );
     }

@@ -49,7 +49,10 @@ use limen_aplicacion::casos_de_uso::usuarios::{CambiarClave, IniciarSesion};
 use limen_aplicacion::puertos::{
     Claves, Consultas, ErrorPersistencia, FabricaUnidadDeTrabajo, GeneradorIds, Reloj,
 };
-use limen_infra_plataforma::{ClavesArgon2, IdsV7, RelojConfiable, SERVIDORES_NTP, leer_desfase};
+use limen_aplicacion::sesion::Origen;
+use limen_infra_plataforma::{
+    ClavesArgon2, IdsV7, RelojConfiable, SERVIDORES_NTP, leer_desfase, origen_del_equipo,
+};
 use limen_infra_surreal::AlmacenSurreal;
 
 /// Con qué se abre la aplicación.
@@ -60,7 +63,14 @@ pub struct Config {
     /// Archivo con el último desfase medido del reloj del equipo (E5), para
     /// arrancar ya corregido.
     pub ruta_desfase_reloj: PathBuf,
+    /// Archivo con la identidad del equipo: su unidad operativa y su ID
+    /// (M4). Si no existe, se crea con [`UNIDAD_POR_OMISION`].
+    pub ruta_equipo: PathBuf,
 }
+
+/// La unidad operativa de un equipo que arranca por primera vez. Por ahora
+/// hay una sola; con el bloque M la unidad llegará al vincular el equipo.
+pub const UNIDAD_POR_OMISION: &str = "BRISAS";
 
 /// No se pudo arrancar la aplicación.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -69,6 +79,8 @@ pub enum ErrorArranque {
     Base(#[from] ErrorPersistencia),
     #[error("No se pudo preparar el cifrado de claves: {0}")]
     Claves(String),
+    #[error("No se pudo leer la identidad del equipo: {0}")]
+    Equipo(String),
     /// Sólo al desarrollar (ver [`semilla`]).
     #[error("No se pudo sembrar la base de desarrollo: {0}")]
     Semilla(String),
@@ -215,7 +227,9 @@ where
     C: Claves + Clone,
 {
     /// Conecta todos los casos de uso con las piezas dadas.
-    pub fn nueva(almacen: &F, reloj: &R, ids: &G, claves: &C) -> Self {
+    /// `origen` es dónde está este equipo: la unidad operativa y su ID. Va
+    /// en cada sesión que se abre aquí y, con ella, en cada hecho (M4).
+    pub fn nueva(almacen: &F, reloj: &R, ids: &G, claves: &C, origen: &Origen) -> Self {
         let a = || almacen.clone();
         let r = || reloj.clone();
         let i = || ids.clone();
@@ -268,7 +282,7 @@ where
                 devolver_gafete: DevolverGafeteKof::new(a(), r(), i()),
             },
             usuarios: Usuarios {
-                iniciar_sesion: IniciarSesion::new(a(), r(), c()),
+                iniciar_sesion: IniciarSesion::new(a(), r(), c(), origen.clone()),
                 cambiar_clave: CambiarClave::new(a(), r(), i(), c()),
             },
             quienes_estan_adentro: QuienesEstanAdentro::new(a(), r()),
@@ -301,15 +315,18 @@ impl AplicacionLimen {
     }
 
     /// Abre (o crea) la base de este equipo y arma la aplicación con este
-    /// reloj, sin sincronizarlo (las pruebas no salen a la red).
+    /// reloj, sin sincronizarlo (las pruebas no salen a la red). La identidad
+    /// del equipo (unidad operativa e ID) sale de `config.ruta_equipo`.
     pub async fn abrir(config: &Config, reloj: &RelojConfiable) -> Result<Self, ErrorArranque> {
-        let almacen = AlmacenSurreal::en_disco(&config.ruta_base).await?;
+        let origen = origen_del_equipo(&config.ruta_equipo, UNIDAD_POR_OMISION)
+            .map_err(ErrorArranque::Equipo)?;
+        let almacen = AlmacenSurreal::en_disco(&config.ruta_base, origen.unidad.clone()).await?;
         let claves = ClavesArgon2::new().map_err(ErrorArranque::Claves)?;
         // Sólo al desarrollar: la versión para producción no trae la semilla.
         #[cfg(debug_assertions)]
         semilla::sembrar_usuarios(&almacen, &claves)
             .await
             .map_err(ErrorArranque::Semilla)?;
-        Ok(Self::nueva(&almacen, reloj, &IdsV7, &claves))
+        Ok(Self::nueva(&almacen, reloj, &IdsV7, &claves, &origen))
     }
 }

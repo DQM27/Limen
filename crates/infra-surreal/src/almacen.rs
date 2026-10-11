@@ -3,6 +3,7 @@
 use std::path::Path;
 
 use limen_aplicacion::puertos::{ErrorPersistencia, RegistroAuditado};
+use limen_dominio::origen::UnidadOperativaId;
 use surrealdb::Surreal;
 use surrealdb::engine::local::{Db, Mem, SurrealKv};
 
@@ -16,18 +17,29 @@ pub const ESQUEMA: &str = include_str!("esquema/esquema.surql");
 pub const NAMESPACE: &str = "limen";
 pub const BASE: &str = "principal";
 
-/// La base de datos embebida. Clonarla comparte la misma conexión: es lo
-/// que reciben la composición y la fábrica de Unit of Work.
+/// La unidad operativa de las bases en memoria (pruebas).
+pub const UNIDAD_DE_PRUEBAS: &str = "PRUEBAS";
+
+/// La base de datos embebida de un equipo. Clonarla comparte la misma
+/// conexión: es lo que reciben la composición y la fábrica de Unit of Work.
+///
+/// Conoce la unidad operativa del equipo (M4): la base local sólo guarda lo
+/// de esa unidad, y la usa en las claves de los gafetes y en el campo
+/// `unidad` de cada registro de la unidad.
 #[derive(Debug, Clone)]
 pub struct AlmacenSurreal {
     db: Surreal<Db>,
+    unidad: UnidadOperativaId,
 }
 
 impl AlmacenSurreal {
-    /// Base en memoria, nueva y vacía, con el esquema aplicado. Para pruebas.
+    /// Base en memoria, nueva y vacía, con el esquema aplicado, de la unidad
+    /// [`UNIDAD_DE_PRUEBAS`]. Para pruebas.
     pub async fn en_memoria() -> Result<Self, ErrorPersistencia> {
         let db = Surreal::new::<Mem>(()).await.map_err(tecnica)?;
-        Self::preparar(db).await
+        let unidad = UnidadOperativaId::nueva(UNIDAD_DE_PRUEBAS)
+            .map_err(|e| ErrorPersistencia::Tecnica(e.to_string()))?;
+        Self::preparar(db, unidad).await
     }
 
     /// Base en disco (`SurrealKV`) en `ruta`, con el esquema aplicado. Si no
@@ -37,21 +49,32 @@ impl AlmacenSurreal {
     /// algún clon del almacén, y al soltar el último el motor lo libera en
     /// segundo plano (no hay un cierre que se pueda esperar). Abrir la misma
     /// ruta dos veces a la vez falla con un error técnico.
-    pub async fn en_disco(ruta: &Path) -> Result<Self, ErrorPersistencia> {
+    pub async fn en_disco(
+        ruta: &Path,
+        unidad: UnidadOperativaId,
+    ) -> Result<Self, ErrorPersistencia> {
         let ruta = ruta.to_str().ok_or_else(|| {
             ErrorPersistencia::Tecnica(format!("ruta no válida: {}", ruta.display()))
         })?;
         let db = Surreal::new::<SurrealKv>(ruta).await.map_err(tecnica)?;
-        Self::preparar(db).await
+        Self::preparar(db, unidad).await
     }
 
-    async fn preparar(db: Surreal<Db>) -> Result<Self, ErrorPersistencia> {
+    async fn preparar(
+        db: Surreal<Db>,
+        unidad: UnidadOperativaId,
+    ) -> Result<Self, ErrorPersistencia> {
         db.use_ns(NAMESPACE).use_db(BASE).await.map_err(tecnica)?;
         db.query(ESQUEMA)
             .await
             .and_then(surrealdb::IndexedResults::check)
             .map_err(tecnica)?;
-        Ok(Self { db })
+        Ok(Self { db, unidad })
+    }
+
+    /// La unidad operativa de este equipo.
+    pub const fn unidad(&self) -> &UnidadOperativaId {
+        &self.unidad
     }
 
     /// Historial de auditoría de un registro, del
@@ -87,11 +110,16 @@ mod tests {
         AccionAuditada, Consultas, EntradaAuditoria, FabricaUnidadDeTrabajo, RegistroAuditoria,
         RegistroHechos, UnidadDeTrabajo,
     };
+    use limen_aplicacion::puertos::{RepositorioGafetes, RepositorioPresencias};
     use limen_dominio::auditoria::CambioCampo;
+    use limen_dominio::cedula::Cedula;
     use limen_dominio::empresa::EmpresaId;
+    use limen_dominio::gafete::{Gafete, NumeroGafete, TipoGafete};
     use limen_dominio::hecho::{CalidadHora, Hecho, HechoId, Salida, Suceso};
     use limen_dominio::movimiento::Marca;
     use limen_dominio::operador::OperadorId;
+    use limen_dominio::origen::{EquipoId, Origen};
+    use limen_dominio::presencia::Identidad;
     use limen_dominio::presencia::Via;
     use uuid::Uuid;
 
@@ -114,6 +142,10 @@ mod tests {
                 registro: Uuid::from_u128(5),
                 marca: Marca { en: en(), operador },
             }),
+            Origen {
+                unidad: almacen.unidad().clone(),
+                equipo: EquipoId::desde_uuid(Uuid::from_u128(6)),
+            },
             CalidadHora {
                 confiable: true,
                 hora_equipo: en(),
@@ -156,6 +188,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn lo_de_la_unidad_lleva_su_unidad_y_el_gafete_la_lleva_en_la_clave() {
+        let almacen = AlmacenSurreal::en_memoria().await.unwrap();
+        let numero = NumeroGafete::nuevo(25).unwrap();
+        let gafete = Gafete::registrar(TipoGafete::Contratista, numero, false).unwrap();
+        let cedula = Cedula::normalizar("111111111").unwrap();
+        let mut uow = almacen.nueva();
+        uow.gafetes().agregar(&gafete);
+        uow.gafetes()
+            .anotar_prestamo(TipoGafete::Contratista, numero, en());
+        uow.presencias()
+            .anotar_entrada(&Identidad::from(&cedula), Via::Contratista, en());
+        uow.confirmar().await.unwrap();
+
+        let mut respuesta = almacen
+            .db()
+            .query(
+                "SELECT VALUE unidad FROM gafete:`PRUEBAS-CONTRATISTA-25`; \
+                 SELECT VALUE unidad FROM prestamo_gafete:`PRUEBAS-CONTRATISTA-25`; \
+                 SELECT VALUE unidad FROM presencia;",
+            )
+            .await
+            .unwrap();
+        for (i, que) in ["el gafete", "su préstamo", "la presencia"]
+            .into_iter()
+            .enumerate()
+        {
+            let unidades: Vec<String> = respuesta.take(i).unwrap();
+            assert_eq!(unidades, ["PRUEBAS"], "{que} lleva la unidad");
+        }
+        assert!(
+            almacen
+                .nueva()
+                .gafetes()
+                .prestado(TipoGafete::Contratista, numero)
+                .await
+                .unwrap(),
+            "y se encuentra por su clave con la unidad"
+        );
+    }
+
+    #[tokio::test]
     async fn la_base_no_deja_editar_ni_borrar_un_hecho() {
         let almacen = con_un_hecho_y_una_auditoria().await;
         let hecho = "hecho:u'00000000-0000-0000-0000-000000000001'";
@@ -167,6 +240,7 @@ mod tests {
                  registro: u'00000000-0000-0000-0000-000000000005', \
                  en: d'2026-10-09T17:00:00Z', \
                  operador: u'00000000-0000-0000-0000-000000000009', \
+                 unidad: 'PRUEBAS', equipo: u'00000000-0000-0000-0000-000000000006', \
                  hora_confiable: true, hora_equipo: d'2026-10-09T17:00:00Z' }};"
             ),
             format!("DELETE {hecho};"),
@@ -220,7 +294,8 @@ mod tests {
         let almacen = con_un_hecho_y_una_auditoria().await;
         let errores = errores_de(
             &almacen,
-            "CREATE presencia:x CONTENT { via: 'CONTRATISTA', desde: d'2026-10-09T08:00:00Z' }; DELETE presencia:x;",
+            "CREATE presencia:x CONTENT { unidad: 'PRUEBAS', via: 'CONTRATISTA', desde: d'2026-10-09T08:00:00Z' }; \
+             DELETE presencia:x;",
         )
         .await;
         assert_eq!(

@@ -26,6 +26,7 @@ use limen_dominio::medio::{Medio, Placa};
 use limen_dominio::movimiento::Marca;
 use limen_dominio::nombre::NombrePersona;
 use limen_dominio::operador::OperadorId;
+use limen_dominio::origen::{EquipoId, Origen, UnidadOperativaId};
 use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
 use limen_dominio::presencia::{Identidad, Via};
 use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofGuardado, PrestamoKofId};
@@ -54,6 +55,21 @@ pub const TABLA_AUDITORIA: &str = "auditoria";
 pub const TABLA_HECHO: &str = "hecho";
 pub const TABLA_USUARIO: &str = "usuario";
 pub const TABLA_INTENTO_INICIO: &str = "intento_inicio";
+
+/// Las tablas cuyos registros son de una unidad operativa (M4): cada fila
+/// lleva el campo `unidad`, que es lo que permite repartirle a cada equipo
+/// sólo lo de la suya. Lo pone la Unit of Work al confirmar. Los hechos
+/// también son de la unidad, pero la traen en su propio origen.
+pub const TABLAS_DE_LA_UNIDAD: [&str; 8] = [
+    TABLA_GAFETE,
+    TABLA_PRESTAMO_GAFETE,
+    TABLA_PRESENCIA,
+    TABLA_INGRESO_CONTRATISTA,
+    TABLA_INGRESO_PROVEEDOR,
+    TABLA_INGRESO_CORREO,
+    TABLA_PRESTAMO_KOF,
+    TABLA_PERSONAL_KOF_CON_PRESTAMO,
+];
 
 // --- IDs ---
 //
@@ -106,17 +122,19 @@ pub fn id_ingreso_proveedor(id: IngresoProveedorId) -> RecordId {
     id_registro(TABLA_INGRESO_PROVEEDOR, id.uuid())
 }
 
-/// Clave natural de un gafete: `TIPO-NÚMERO` (por ejemplo `CONTRATISTA-25`).
-pub fn clave_gafete(tipo: TipoGafete, numero: NumeroGafete) -> String {
-    format!("{tipo}-{numero}")
+/// Clave natural de un gafete: `UNIDAD-TIPO-NÚMERO` (por ejemplo
+/// `BRISAS-CONTRATISTA-25`). Los gafetes son de cada unidad operativa (M4):
+/// el 25 de Brisas y el 25 de otra unidad son gafetes distintos.
+pub fn clave_gafete(unidad: &UnidadOperativaId, tipo: TipoGafete, numero: NumeroGafete) -> String {
+    format!("{unidad}-{tipo}-{numero}")
 }
 
-pub fn id_gafete(tipo: TipoGafete, numero: NumeroGafete) -> RecordId {
-    id_natural(TABLA_GAFETE, clave_gafete(tipo, numero))
+pub fn id_gafete(unidad: &UnidadOperativaId, tipo: TipoGafete, numero: NumeroGafete) -> RecordId {
+    id_natural(TABLA_GAFETE, clave_gafete(unidad, tipo, numero))
 }
 
-pub fn id_prestamo(tipo: TipoGafete, numero: NumeroGafete) -> RecordId {
-    id_natural(TABLA_PRESTAMO_GAFETE, clave_gafete(tipo, numero))
+pub fn id_prestamo(unidad: &UnidadOperativaId, tipo: TipoGafete, numero: NumeroGafete) -> RecordId {
+    id_natural(TABLA_PRESTAMO_GAFETE, clave_gafete(unidad, tipo, numero))
 }
 
 pub fn id_presencia(identidad: &Identidad) -> RecordId {
@@ -896,6 +914,9 @@ pub struct HechoDatos {
     pub registro: Uuid,
     pub en: DateTime<Utc>,
     pub operador: Uuid,
+    /// Origen (M4): la unidad operativa y el equipo que lo registró.
+    pub unidad: String,
+    pub equipo: Uuid,
     /// Si la hora era confiable al sellarla (E5).
     pub hora_confiable: bool,
     /// La hora cruda del reloj del equipo al sellarla.
@@ -914,6 +935,8 @@ pub struct HechoLeido {
     pub registro: Uuid,
     pub en: DateTime<Utc>,
     pub operador: Uuid,
+    pub unidad: String,
+    pub equipo: Uuid,
     /// Si la hora era confiable al sellarla (E5).
     pub hora_confiable: bool,
     /// La hora cruda del reloj del equipo al sellarla.
@@ -933,6 +956,8 @@ impl From<&Hecho> for HechoDatos {
             registro: hecho.registro(),
             en: marca.en,
             operador: marca.operador.uuid(),
+            unidad: hecho.origen().unidad.to_string(),
+            equipo: hecho.origen().equipo.uuid(),
             hora_confiable: hecho.hora().confiable,
             hora_equipo: hecho.hora().hora_equipo,
             ingreso_contratista: None,
@@ -1046,7 +1071,13 @@ impl TryFrom<HechoLeido> for Hecho {
             confiable: datos.hora_confiable,
             hora_equipo: datos.hora_equipo,
         };
-        Ok(Self::restaurar(id, suceso, hora))
+        let origen = Origen {
+            unidad: UnidadOperativaId::nueva(&datos.unidad).map_err(|_| {
+                dato_corrupto(TABLA_HECHO, format!("unidad inválida: {}", datos.unidad))
+            })?,
+            equipo: EquipoId::desde_uuid(datos.equipo),
+        };
+        Ok(Self::restaurar(id, suceso, origen, hora))
     }
 }
 

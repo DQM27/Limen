@@ -17,6 +17,8 @@ use estado::Estado;
 const CARPETA_BASE: &str = "base";
 /// El último desfase medido del reloj del equipo, para la próxima apertura.
 const ARCHIVO_DESFASE_RELOJ: &str = "reloj-desfase.txt";
+/// La identidad del equipo: su unidad operativa y su ID.
+const ARCHIVO_EQUIPO: &str = "equipo.txt";
 /// Cuánto puede seguir oculta la ventana si la interfaz no la muestra.
 const ESPERA_MAXIMA_VENTANA_OCULTA: std::time::Duration = std::time::Duration::from_secs(5);
 
@@ -30,6 +32,7 @@ fn preparar_estado(app: &tauri::App) -> Result<Estado, Box<dyn std::error::Error
     let aplicacion = tauri::async_runtime::block_on(AplicacionLimen::arrancar(&Config {
         ruta_base: datos.join(CARPETA_BASE),
         ruta_desfase_reloj: datos.join(ARCHIVO_DESFASE_RELOJ),
+        ruta_equipo: datos.join(ARCHIVO_EQUIPO),
     }))?;
     Ok(Estado::new(aplicacion))
 }

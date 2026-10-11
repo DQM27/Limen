@@ -513,8 +513,8 @@ leyendo el estado, no recorren los hechos.
 
 Pendiente para cuando exista lo que lo necesita:
 
-- **Unidad operativa y equipo** de cada hecho: con el bloque M (equipos). Qué es global
-  y qué es de cada unidad, en [`nube.md`](nube.md).
+- La **unidad operativa y el equipo** de cada hecho ya están (su `Origen`, que llega con
+  la sesión). Qué es global y qué es de cada unidad, en [`nube.md`](nube.md).
 - **`CHANGEFEED`** sobre `hecho`, el **estado de sincronización** (pendiente o
   confirmado) y el **indicador de incidente**: con la sincronización (paso 7).
 - Los cambios de catálogo (contratistas, empresas, gafetes) no son hechos: quedan en la

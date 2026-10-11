@@ -29,7 +29,7 @@ mod tests {
     use limen_dominio::movimiento::ErrorSalida;
     use limen_dominio::presencia::{Via, YaEstaAdentro};
     use limen_dominio::tipo_ingreso::TipoIngreso;
-    use limen_infra_memoria::{AlmacenMemoria, IdsSecuenciales, RelojFijo};
+    use limen_infra_memoria::{AlmacenMemoria, IdsSecuenciales, RelojFijo, origen_de_pruebas};
     use uuid::Uuid;
 
     // --- Preparación ---
@@ -50,7 +50,10 @@ mod tests {
     }
 
     fn sesion() -> Sesion {
-        Sesion::nueva(OperadorId::desde_uuid(Uuid::from_u128(900)))
+        Sesion::nueva(
+            OperadorId::desde_uuid(Uuid::from_u128(900)),
+            origen_de_pruebas(),
+        )
     }
 
     fn numero(n: u32) -> NumeroGafete {
@@ -733,6 +736,11 @@ mod tests {
             assert_eq!(hecho.via(), via, "la vía del hecho");
             assert_eq!(hecho.registro(), registro, "el registro del hecho");
             assert_eq!(hecho.marca().operador, sesion().operador(), "quién");
+            assert_eq!(
+                hecho.origen(),
+                sesion().origen(),
+                "dónde: la unidad y el equipo de la sesión"
+            );
         }
         assert!(entro.es_entrada(), "primero la entrada");
         assert!(!salio.es_entrada(), "después la salida");

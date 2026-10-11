@@ -18,7 +18,7 @@ use crate::puertos::{
     RegistroAuditado, RegistroAuditoria, Reloj, RepositorioIntentosInicio, RepositorioUsuarios,
     UnidadDeTrabajo,
 };
-use crate::sesion::{OperadorId, Sesion};
+use crate::sesion::{OperadorId, Origen, Sesion};
 
 pub type ErrorUsuarios = ErrorCaso<ErrorUsuario>;
 pub type ErrorInicio = ErrorCaso<ErrorInicioSesion>;
@@ -41,9 +41,9 @@ pub struct SesionIniciada {
 }
 
 impl SesionIniciada {
-    fn de(usuario: &Usuario) -> Self {
+    fn de(usuario: &Usuario, origen: Origen) -> Self {
         Self {
-            sesion: Sesion::nueva(usuario.id()),
+            sesion: Sesion::nueva(usuario.id(), origen),
             cedula: usuario.cedula().to_string(),
             nombre: usuario.nombre().to_string(),
             debe_cambiar_clave: usuario.debe_cambiar_clave(),
@@ -58,14 +58,17 @@ pub struct IniciarSesion<F, R, C> {
     fabrica: F,
     reloj: R,
     claves: C,
+    /// Dónde está este equipo: toda sesión que se abre aquí lo lleva.
+    origen: Origen,
 }
 
 impl<F: FabricaUnidadDeTrabajo, R: Reloj, C: Claves> IniciarSesion<F, R, C> {
-    pub const fn new(fabrica: F, reloj: R, claves: C) -> Self {
+    pub const fn new(fabrica: F, reloj: R, claves: C, origen: Origen) -> Self {
         Self {
             fabrica,
             reloj,
             claves,
+            origen,
         }
     }
 
@@ -87,7 +90,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, C: Claves> IniciarSesion<F, R, C> {
 
         match decidir_inicio(usuario.as_ref(), correcta) {
             Ok(usuario) => {
-                let iniciada = SesionIniciada::de(usuario);
+                let iniciada = SesionIniciada::de(usuario, self.origen.clone());
                 if intentos.is_some() {
                     uow.intentos_inicio().borrar(&cedula);
                     uow.confirmar().await?;

@@ -1,11 +1,14 @@
 //! Adaptadores de plataforma: lo único del núcleo que lee la hora del
-//! sistema, genera IDs al azar y cifra claves. El dominio y la
+//! sistema, genera IDs al azar, cifra claves y guarda la identidad del
+//! equipo. El dominio y la
 //! aplicación los reciben por los puertos `Reloj`, `GeneradorIds` y
 //! `Claves`.
 
+mod equipo;
 mod reloj;
 mod sntp;
 
+pub use equipo::origen_del_equipo;
 pub use reloj::{RelojConfiable, SERVIDORES_NTP, guardar_desfase, leer_desfase};
 pub use sntp::{Medicion, medir as medir_sntp};
 

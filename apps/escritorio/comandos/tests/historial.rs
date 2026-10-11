@@ -13,7 +13,9 @@ mod tests {
     use limen_escritorio_comandos::{
         Comandos, ContratistaEntrada, EntradaContratistaEntrada, campos,
     };
-    use limen_infra_memoria::{AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo};
+    use limen_infra_memoria::{
+        AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo, origen_de_pruebas,
+    };
     use serde_json::json;
     use uuid::Uuid;
 
@@ -23,7 +25,10 @@ mod tests {
     const MARTA: OperadorId = OperadorId::desde_uuid(Uuid::from_u128(901));
 
     fn sesion() -> Sesion {
-        Sesion::nueva(OperadorId::desde_uuid(Uuid::from_u128(900)))
+        Sesion::nueva(
+            OperadorId::desde_uuid(Uuid::from_u128(900)),
+            origen_de_pruebas(),
+        )
     }
 
     /// Comandos con el reloj fijo el viernes 9 de octubre de 2026 a las 08:00
@@ -42,7 +47,13 @@ mod tests {
             "2026-10-09T14:00:00Z".parse().unwrap(),
             NaiveDate::from_ymd_opt(2026, 10, 9).unwrap(),
         );
-        let app = Aplicacion::nueva(&almacen, &reloj, &almacen.ids(), &ClavesFalsas);
+        let app = Aplicacion::nueva(
+            &almacen,
+            &reloj,
+            &almacen.ids(),
+            &ClavesFalsas,
+            &origen_de_pruebas(),
+        );
         app.gafetes
             .registrar
             .ejecutar(&sesion(), TipoGafete::Contratista, 1, 5)
@@ -86,7 +97,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let de_marta = Sesion::nueva(MARTA);
+        let de_marta = Sesion::nueva(MARTA, origen_de_pruebas());
         comandos
             .registrar_salida(&de_marta, "CONTRATISTA", &registrada.ingreso_id)
             .await

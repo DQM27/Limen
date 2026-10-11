@@ -24,13 +24,18 @@ mod tests {
     use limen_dominio::personal_kof::PersonalKofId;
     use limen_dominio::tipo_ingreso::TipoIngreso;
     use limen_dominio::usuario::ErrorInicioSesion;
-    use limen_infra_memoria::{AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo};
+    use limen_infra_memoria::{
+        AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo, origen_de_pruebas,
+    };
     use limen_infra_plataforma::{ClavesArgon2, IdsV7, RelojConfiable};
     use limen_infra_surreal::AlmacenSurreal;
     use uuid::Uuid;
 
     fn sesion() -> Sesion {
-        Sesion::nueva(OperadorId::desde_uuid(Uuid::from_u128(900)))
+        Sesion::nueva(
+            OperadorId::desde_uuid(Uuid::from_u128(900)),
+            origen_de_pruebas(),
+        )
     }
 
     /// La aplicación se comparte entre pantallas y comandos: tiene que poder
@@ -340,6 +345,7 @@ mod tests {
             &RelojConfiable::new(None),
             &IdsV7,
             &ClavesArgon2::new().unwrap(),
+            &origen_de_pruebas(),
         );
         un_dia_en_la_porteria(&app).await;
     }
@@ -352,7 +358,13 @@ mod tests {
 
         let almacen = AlmacenSurreal::en_memoria().await.unwrap();
         let claves = ClavesArgon2::new().unwrap();
-        let app = AplicacionLimen::nueva(&almacen, &RelojConfiable::new(None), &IdsV7, &claves);
+        let app = AplicacionLimen::nueva(
+            &almacen,
+            &RelojConfiable::new(None),
+            &IdsV7,
+            &claves,
+            &origen_de_pruebas(),
+        );
         assert!(
             semilla::sembrar_usuarios(&almacen, &claves).await.unwrap(),
             "la base vacía se siembra"
@@ -394,7 +406,13 @@ mod tests {
             "2026-10-09T14:00:00Z".parse().unwrap(),
             NaiveDate::from_ymd_opt(2026, 10, 9).unwrap(),
         );
-        let app = Aplicacion::nueva(&almacen, &reloj, &almacen.ids(), &ClavesFalsas);
+        let app = Aplicacion::nueva(
+            &almacen,
+            &reloj,
+            &almacen.ids(),
+            &ClavesFalsas,
+            &origen_de_pruebas(),
+        );
         un_dia_en_la_porteria(&app).await;
     }
 
@@ -404,6 +422,7 @@ mod tests {
         let config = Config {
             ruta_base: carpeta.clone(),
             ruta_desfase_reloj: carpeta.join("reloj-desfase.txt"),
+            ruta_equipo: carpeta.join("equipo.txt"),
         };
         {
             let app = AplicacionLimen::abrir(&config, &RelojConfiable::new(None))
@@ -458,6 +477,7 @@ mod tests {
         let config = Config {
             ruta_base: archivo.join("base"),
             ruta_desfase_reloj: archivo.join("reloj-desfase.txt"),
+            ruta_equipo: std::env::temp_dir().join(format!("limen-equipo-{}", Uuid::now_v7())),
         };
         let error = AplicacionLimen::abrir(&config, &RelojConfiable::new(None))
             .await
@@ -476,7 +496,13 @@ mod tests {
         let almacen = AlmacenMemoria::new();
         let hoy = NaiveDate::from_ymd_opt(2026, 10, 9).unwrap();
         let reloj = RelojFijo::new("2026-10-09T14:00:00Z".parse().unwrap(), hoy);
-        let app = Aplicacion::nueva(&almacen, &reloj, &almacen.ids(), &ClavesFalsas);
+        let app = Aplicacion::nueva(
+            &almacen,
+            &reloj,
+            &almacen.ids(),
+            &ClavesFalsas,
+            &origen_de_pruebas(),
+        );
         let sesion = sesion();
         let acme = app
             .empresas

@@ -20,7 +20,7 @@ mod tests {
     use limen_dominio::empresa::{Empresa, EmpresaId, ErrorEmpresa, NombreEmpresa};
     use limen_dominio::presencia::Via;
     use limen_dominio::tipo_ingreso::TipoIngreso;
-    use limen_infra_memoria::{AlmacenMemoria, IdsSecuenciales, RelojFijo};
+    use limen_infra_memoria::{AlmacenMemoria, IdsSecuenciales, RelojFijo, origen_de_pruebas};
     use uuid::Uuid;
 
     // --- Preparación común ---
@@ -45,7 +45,10 @@ mod tests {
     }
 
     fn sesion() -> Sesion {
-        Sesion::nueva(OperadorId::desde_uuid(Uuid::from_u128(900)))
+        Sesion::nueva(
+            OperadorId::desde_uuid(Uuid::from_u128(900)),
+            origen_de_pruebas(),
+        )
     }
 
     /// Almacén con la empresa ACME ya registrada.

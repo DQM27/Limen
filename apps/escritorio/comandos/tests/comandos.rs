@@ -20,7 +20,9 @@ mod tests {
         TipoErrorJson, campos, nombre_empresa_al_escribir, nombre_persona_al_escribir,
         placa_al_escribir,
     };
-    use limen_infra_memoria::{AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo};
+    use limen_infra_memoria::{
+        AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo, origen_de_pruebas,
+    };
     use serde_json::json;
     use uuid::Uuid;
 
@@ -28,7 +30,10 @@ mod tests {
     type Prueba = Comandos<AlmacenMemoria, RelojFijo, IdsSecuenciales, ClavesFalsas>;
 
     fn sesion() -> Sesion {
-        Sesion::nueva(OperadorId::desde_uuid(Uuid::from_u128(900)))
+        Sesion::nueva(
+            OperadorId::desde_uuid(Uuid::from_u128(900)),
+            origen_de_pruebas(),
+        )
     }
 
     /// Una aplicación en memoria con el reloj fijo el 9 de octubre de 2026,
@@ -39,7 +44,13 @@ mod tests {
             "2026-10-09T14:00:00Z".parse().unwrap(),
             NaiveDate::from_ymd_opt(2026, 10, 9).unwrap(),
         );
-        let app = Aplicacion::nueva(&almacen, &reloj, &almacen.ids(), &ClavesFalsas);
+        let app = Aplicacion::nueva(
+            &almacen,
+            &reloj,
+            &almacen.ids(),
+            &ClavesFalsas,
+            &origen_de_pruebas(),
+        );
         for tipo in [
             TipoGafete::Contratista,
             TipoGafete::Proveedor,

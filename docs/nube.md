@@ -79,10 +79,30 @@ equipo sin cambiar el flujo de datos.
 ## 6. Orden de construcción
 
 1. ✅ Conectar y aplicar el esquema (`crates/infra-nube`, herramienta `limen-nube`).
-2. **Unidades operativas y equipos** en el dominio y en el esquema: tabla de unidades,
-   la unidad en gafetes, ingresos, presencia, préstamos y hechos, y el equipo que
-   registró cada hecho.
+2. ✅ **Unidades operativas y equipos** en el dominio y en el esquema (sección 7).
 3. Subida de lo pendiente (bandeja de salida).
 4. Bajada: carga inicial de un equipo nuevo, en vivo y recuperación por cursor.
 5. Indicador de incidente al unir lo de varios equipos.
 6. Usuarios desde la nube (L4, L5) y la hora de la nube para los equipos sin NTP.
+
+## 7. Unidad operativa y equipo, como quedaron
+
+- **Dominio** (`dominio/origen.rs`): `UnidadOperativaId` (un código corto y estable,
+  `BRISAS`), `EquipoId` (UUID v7) y `Origen`, que junta los dos. Cada **hecho** lleva su
+  origen.
+- **Sesión:** dice quién, en qué unidad y desde qué equipo. El inicio de sesión le pone
+  el origen del equipo, y los casos de uso se lo pasan a cada hecho.
+- **Identidad del equipo:** el archivo `equipo.txt` en la carpeta de datos de la app
+  (`unidad=BRISAS`, `equipo=<uuid>`). La primera vez que arranca, el equipo lo crea con
+  la unidad por omisión (`BRISAS`, `composicion::UNIDAD_POR_OMISION`) y un ID nuevo.
+  Con el bloque M llegará al vincular el equipo.
+- **Base del equipo:** el almacén conoce su unidad. Las claves de los gafetes y de sus
+  préstamos la llevan (`gafete:⟨BRISAS-CONTRATISTA-25⟩`), y la Unit of Work le pone el
+  campo `unidad` a cada fila de las tablas de la unidad (`TABLAS_DE_LA_UNIDAD`) al
+  confirmar. La presencia sigue siendo una por persona en todas las unidades (A7); su
+  campo `unidad` dice en cuál está.
+- **Pantallas:** sin cambios. La base local sólo tiene lo de su unidad.
+- **Nube:** el esquema nuevo ya está aplicado y existe `unidad_operativa:BRISAS`.
+
+Las bases de desarrollo creadas antes de este cambio tienen hechos sin origen y gafetes
+con la clave vieja (`CONTRATISTA-25`): conviene borrarlas y dejar que se vuelvan a crear.

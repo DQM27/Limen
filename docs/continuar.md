@@ -102,8 +102,10 @@ Modelo acordado con el dueño y estado en [`nube.md`](nube.md): la nube es la fu
 verdad, el equipo es desechable pero guarda su copia local y trabaja sin conexión, los
 catálogos son **globales** y lo demás es **de cada unidad operativa** (el "sitio" de
 Lattis). La instancia `limen` (SurrealDB Cloud, gratis, `aws-use1`) ya existe con el
-esquema aplicado; `crates/infra-nube` conecta y aplica el esquema. Lo siguiente es el
-paso 2 de `nube.md`: unidades operativas y equipos.
+esquema aplicado; `crates/infra-nube` conecta y aplica el esquema. Por ahora hay una
+sola unidad, **Brisas**. Cada hecho ya lleva su unidad y su equipo, y lo de la unidad lleva
+su campo `unidad` (la identidad del equipo está en `equipo.txt`, en la carpeta de datos).
+Lo siguiente es el paso 3 de `nube.md`: subir lo pendiente.
 
 ## Decidido y en espera
 

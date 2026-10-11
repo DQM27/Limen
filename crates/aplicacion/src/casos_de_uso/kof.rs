@@ -213,6 +213,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> EntregarGafeteKof<F, 
         uow.prestamos_kof().anotar_entrega(&prestamo);
         uow.hechos().anotar(Hecho::entrega_kof(
             HechoId::desde_uuid(self.ids.nuevo()),
+            sesion.origen(),
             &prestamo,
             hora.into(),
         ));
@@ -367,6 +368,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> DevolverGafeteKof<F, 
         uow.prestamos_kof().anotar_devolucion(&prestamo);
         if let Some(hecho) = Hecho::devolucion_kof(
             HechoId::desde_uuid(self.ids.nuevo()),
+            sesion.origen(),
             &prestamo,
             hora.into(),
         ) {

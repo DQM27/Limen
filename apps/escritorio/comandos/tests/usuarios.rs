@@ -11,7 +11,9 @@ mod tests {
     use limen_dominio::operador::OperadorId;
     use limen_dominio::usuario::{Usuario, UsuarioGuardado};
     use limen_escritorio_comandos::{Comandos, ErrorJson, campos};
-    use limen_infra_memoria::{AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo};
+    use limen_infra_memoria::{
+        AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo, origen_de_pruebas,
+    };
     use serde_json::json;
     use uuid::Uuid;
 
@@ -50,6 +52,7 @@ mod tests {
             &reloj,
             &almacen.ids(),
             &ClavesFalsas,
+            &origen_de_pruebas(),
         ))
     }
 

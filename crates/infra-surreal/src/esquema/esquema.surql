@@ -13,6 +13,13 @@ DEFINE ANALYZER OVERWRITE buscador_prefijos
     TOKENIZERS blank, punct
     FILTERS lowercase, edgengram(1, 20);
 
+-- Unidades operativas (M4): el "sitio" de Lattis (Brisas, Cartago…). La
+-- clave es su código: unidad_operativa:⟨BRISAS⟩. Los catálogos son globales;
+-- lo que es de una unidad lleva el campo `unidad` con ese código (lo pone el
+-- adaptador al confirmar) y, en los gafetes, también va en la clave.
+DEFINE TABLE OVERWRITE unidad_operativa SCHEMAFULL;
+DEFINE FIELD OVERWRITE nombre ON unidad_operativa TYPE string ASSERT string::len($value) > 0;
+
 -- Empresas (regla C1: nombre sin repetir).
 DEFINE TABLE OVERWRITE empresa SCHEMAFULL;
 DEFINE FIELD OVERWRITE nombre ON empresa TYPE string ASSERT string::len($value) > 0;
@@ -35,9 +42,12 @@ DEFINE INDEX OVERWRITE contratista_busqueda ON contratista FIELDS nombre_busqued
     FULLTEXT ANALYZER buscador_prefijos BM25;
 
 -- Catálogo de gafetes (bloque F). Un gafete perdido guarda su último
--- portador (F5) en el campo de su clase: contratista, cédula o personal KOF. Clave natural: gafete:⟨TIPO-NÚMERO⟩, así
--- el mismo número no puede existir dos veces en un tipo.
+-- portador (F5) en el campo de su clase: contratista, cédula o personal KOF.
+-- Clave natural: gafete:⟨UNIDAD-TIPO-NÚMERO⟩, así el mismo número no puede
+-- existir dos veces en un tipo de una unidad (y el 25 de Brisas no choca con
+-- el 25 de otra unidad).
 DEFINE TABLE OVERWRITE gafete SCHEMAFULL;
+DEFINE FIELD OVERWRITE unidad ON gafete TYPE string;
 DEFINE FIELD OVERWRITE tipo ON gafete TYPE 'CONTRATISTA' | 'VISITA' | 'PROVEEDOR' | 'PROVISIONAL_KOF';
 DEFINE FIELD OVERWRITE numero ON gafete TYPE int ASSERT $value > 0;
 DEFINE FIELD OVERWRITE estado ON gafete TYPE 'DISPONIBLE' | 'PERDIDO' | 'DE_BAJA';
@@ -45,20 +55,25 @@ DEFINE FIELD OVERWRITE portador_contratista ON gafete TYPE option<record<contrat
 DEFINE FIELD OVERWRITE portador_cedula ON gafete TYPE option<string>;
 DEFINE FIELD OVERWRITE portador_personal_kof ON gafete TYPE option<record<personal_kof>>;
 
--- Gafetes prestados ahora. Clave: prestamo_gafete:⟨TIPO-NÚMERO⟩; se crea
--- al prestar y se borra al devolver, así un gafete no se presta dos veces.
+-- Gafetes prestados ahora. Clave: prestamo_gafete:⟨UNIDAD-TIPO-NÚMERO⟩; se
+-- crea al prestar y se borra al devolver, así un gafete no se presta dos veces.
 DEFINE TABLE OVERWRITE prestamo_gafete SCHEMAFULL;
+DEFINE FIELD OVERWRITE unidad ON prestamo_gafete TYPE string;
 DEFINE FIELD OVERWRITE desde ON prestamo_gafete TYPE datetime;
 
 -- Quién está adentro (reglas E1 y A7). Clave: presencia:⟨cédula⟩ o, para el
 -- personal KOF, presencia:⟨KOF-código de empleado⟩; se crea al entrar y se
--- borra al salir, así una persona no está adentro dos veces.
+-- borra al salir, así una persona no está adentro dos veces. La clave no
+-- lleva la unidad: una persona adentro una sola vez en todas (A7); el campo
+-- `unidad` dice en cuál.
 DEFINE TABLE OVERWRITE presencia SCHEMAFULL;
+DEFINE FIELD OVERWRITE unidad ON presencia TYPE string;
 DEFINE FIELD OVERWRITE via ON presencia TYPE 'CONTRATISTA' | 'PROVEEDOR' | 'CORREO' | 'KOF';
 DEFINE FIELD OVERWRITE desde ON presencia TYPE datetime;
 
 -- Ingresos de contratistas (bloque E).
 DEFINE TABLE OVERWRITE ingreso_contratista SCHEMAFULL;
+DEFINE FIELD OVERWRITE unidad ON ingreso_contratista TYPE string;
 DEFINE FIELD OVERWRITE contratista ON ingreso_contratista TYPE record<contratista>;
 DEFINE FIELD OVERWRITE cedula ON ingreso_contratista TYPE string;
 DEFINE FIELD OVERWRITE placa ON ingreso_contratista TYPE option<string>;
@@ -83,6 +98,7 @@ DEFINE INDEX OVERWRITE empresa_proveedora_busqueda ON empresa_proveedora FIELDS 
 -- Ingresos de proveedores (bloque H). Cédula y nombre llegan con cada
 -- ingreso: no hay catálogo de personas.
 DEFINE TABLE OVERWRITE ingreso_proveedor SCHEMAFULL;
+DEFINE FIELD OVERWRITE unidad ON ingreso_proveedor TYPE string;
 DEFINE FIELD OVERWRITE cedula ON ingreso_proveedor TYPE string;
 DEFINE FIELD OVERWRITE nombre ON ingreso_proveedor TYPE string;
 DEFINE FIELD OVERWRITE empresa ON ingreso_proveedor TYPE record<empresa_proveedora>;
@@ -97,6 +113,7 @@ DEFINE INDEX OVERWRITE ingreso_proveedor_por_gafete ON ingreso_proveedor FIELDS 
 -- Ingresos por correo (bloque I): visita autorizada por correo. Como el
 -- proveedor, pero con motivo en lugar de empresa y gafete de visita.
 DEFINE TABLE OVERWRITE ingreso_correo SCHEMAFULL;
+DEFINE FIELD OVERWRITE unidad ON ingreso_correo TYPE string;
 DEFINE FIELD OVERWRITE cedula ON ingreso_correo TYPE string;
 DEFINE FIELD OVERWRITE nombre ON ingreso_correo TYPE string;
 DEFINE FIELD OVERWRITE motivo ON ingreso_correo TYPE string;
@@ -120,6 +137,7 @@ DEFINE INDEX OVERWRITE personal_kof_busqueda ON personal_kof FIELDS nombre_busqu
 
 -- Préstamos del gafete provisional KOF.
 DEFINE TABLE OVERWRITE prestamo_kof SCHEMAFULL;
+DEFINE FIELD OVERWRITE unidad ON prestamo_kof TYPE string;
 DEFINE FIELD OVERWRITE personal ON prestamo_kof TYPE record<personal_kof>;
 DEFINE FIELD OVERWRITE codigo_empleado ON prestamo_kof TYPE string;
 DEFINE FIELD OVERWRITE nombre ON prestamo_kof TYPE string;
@@ -134,6 +152,7 @@ DEFINE INDEX OVERWRITE prestamo_kof_por_gafete ON prestamo_kof FIELDS gafete, de
 -- personal_kof_con_prestamo:⟨uuid de la persona⟩; se crea al entregar y se
 -- borra al devolver, así nadie tiene dos provisionales a la vez.
 DEFINE TABLE OVERWRITE personal_kof_con_prestamo SCHEMAFULL;
+DEFINE FIELD OVERWRITE unidad ON personal_kof_con_prestamo TYPE string;
 DEFINE FIELD OVERWRITE desde ON personal_kof_con_prestamo TYPE datetime;
 
 -- Hora del último movimiento del equipo (regla E5): un solo registro,
@@ -195,6 +214,9 @@ DEFINE FIELD OVERWRITE via ON hecho TYPE 'CONTRATISTA' | 'PROVEEDOR' | 'CORREO' 
 DEFINE FIELD OVERWRITE registro ON hecho TYPE uuid READONLY;
 DEFINE FIELD OVERWRITE en ON hecho TYPE datetime READONLY;
 DEFINE FIELD OVERWRITE operador ON hecho TYPE uuid READONLY;
+-- Origen (M4): en qué unidad operativa y desde qué equipo se registró.
+DEFINE FIELD OVERWRITE unidad ON hecho TYPE string READONLY;
+DEFINE FIELD OVERWRITE equipo ON hecho TYPE uuid READONLY;
 -- E5: si la hora con que se selló era confiable, y la hora cruda del reloj
 -- del equipo en ese momento (un salto entre las dos delata un reloj
 -- cambiado a mano).
@@ -205,6 +227,7 @@ DEFINE FIELD OVERWRITE ingreso_proveedor ON hecho TYPE option<object> FLEXIBLE R
 DEFINE FIELD OVERWRITE ingreso_correo ON hecho TYPE option<object> FLEXIBLE READONLY;
 DEFINE FIELD OVERWRITE prestamo_kof ON hecho TYPE option<object> FLEXIBLE READONLY;
 DEFINE INDEX OVERWRITE hecho_por_registro ON hecho FIELDS registro;
+DEFINE INDEX OVERWRITE hecho_por_unidad ON hecho FIELDS unidad;
 DEFINE EVENT OVERWRITE hecho_inmutable ON hecho WHEN $event != "CREATE" THEN {
     THROW "los hechos no se editan ni se borran";
 };
