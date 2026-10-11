@@ -20,13 +20,6 @@ falta el detalle, [`arquitectura.md`](arquitectura.md), [`reglas.md`](reglas.md)
   salida, por las cuatro vías, queda en la tabla `hecho` en la misma transacción que el
   estado. La base no deja editar ni borrar `hecho` ni `auditoria` (`READONLY` y un
   `DEFINE EVENT`). Es la base de la sincronización.
-- **App de escritorio** (Tauri 2 + Angular 22 + Angular Material + AG Grid Community):
-  - `apps/escritorio/comandos`: la lógica de los comandos (JSON, un solo error para la
-    interfaz, la sesión del equipo). Se prueba con la base en memoria.
-  - `apps/escritorio/src-tauri`: cascarón de Tauri, sin lógica ni pruebas propias (un
-    ejecutable de pruebas que enlaza Tauri no arranca en Windows).
-  - Frontend: barra lateral, `compartido/tabla` (la grilla base de toda la app, con el
-    diseño unificado) y la pantalla de Contratistas.
 - **Usuarios e inicio de sesión** (bloque L, reglas L1–L3 y L6–L8): cédula y
   clave, Argon2id (`infra-plataforma`), bloqueo tras 5 fallos y clave temporal.
   **Los usuarios son globales y vienen de la nube**: el equipo sólo inicia sesión,
@@ -36,7 +29,7 @@ falta el detalle, [`arquitectura.md`](arquitectura.md), [`reglas.md`](reglas.md)
   depuración): si la base no tiene usuarios, al abrirla se siembran `100000001`
   (OPERADOR UNO) y `100000002` (OPERADOR DOS), los dos con la clave `desarrollo`. La
   versión para producción no trae la semilla; ahí los usuarios llegarán de la nube.
-- **Reloj confiable** (regla E5 nueva): la hora sale de NTP (`time.windows.com`, luego
+- **Reloj confiable** (regla E5): la hora sale de NTP (`time.windows.com`, luego
   `pool.ntp.org`) anclada al reloj monotónico del proceso; se vuelve a medir cada hora en
   segundo plano y el último desfase se guarda en `reloj-desfase.txt` (carpeta de datos de
   la app). El reloj ya no bloquea: un movimiento con hora dudosa se registra y su hecho
@@ -48,11 +41,48 @@ falta el detalle, [`arquitectura.md`](arquitectura.md), [`reglas.md`](reglas.md)
   de Limen. Los datos reales viven en `datos-privados/` (ignorada por git) y **nunca se
   suben**: el repositorio es público.
 
+### App de escritorio (Tauri 2 + Angular 22 + Angular Material + AG Grid Community)
+
+- `apps/escritorio/comandos`: la lógica de los comandos (JSON, un solo error para la
+  interfaz, la sesión del equipo). Se prueba con la base en memoria.
+- `apps/escritorio/src-tauri`: cascarón de Tauri, sin lógica ni pruebas propias (un
+  ejecutable de pruebas que enlaza Tauri no arranca en Windows).
+- **Ventana y entrada:** una sola ventana. Nace oculta, pequeña (380×480), sin marco ni
+  sombra; muestra el splash (estático en `index.html`, luego `Splash`, mínimo 3 s:
+  `DURACION_MINIMA_SPLASH_MS`) y la pantalla de entrada (cédula y clave, "Recordar
+  usuario" sólo guarda la cédula; con clave temporal pide cambiarla). Al entrar pasa a
+  maximizada y con marco (`modo_ventana`). Un `sin_sesion` de cualquier comando vuelve a
+  la entrada.
+- **Tema:** Tokyo Night (Night en oscuro, Day en claro, según el sistema) sobre los
+  tokens de Material: `src/_tokyo-night.scss`. Los diálogos comparten estilos
+  (`compartido/_dialogo.scss`).
+- **Avisos** (`compartido/avisos.ts`): al estilo de las notificaciones de macOS, arriba a
+  la derecha, se apilan y se van solos. Usar `Avisos.exito/error/info(mensaje, título?)`,
+  no `MatSnackBar`.
+- **Pantallas** (barra lateral, ya todas activas excepto Historial):
+  - **Dentro:** quién está adentro por las cuatro vías (`dentro/lista-dentro.ts`, pieza
+    reutilizable con la vía como entrada), salida por fila y masiva con confirmación,
+    filtro con/sin gafete y resaltado de quien lleva más de 12 horas (regla E13).
+  - **Contratistas:** grilla, "Nuevo contratista" (el mismo formulario edita con doble
+    clic), "Registrar ingreso" y botón "Ingreso" por fila. El formulario valida **todo a
+    la vez** (`validar_contratista`, regla B5b) y la empresa sólo se elige: crearla es el
+    botón «+» con su propio modal.
+  - **Proveedores, Correo y KOF:** cada una es la lista de Dentro filtrada por su vía,
+    con su salida y su botón de ingreso (en KOF, "Entregar gafete" y "Nuevo personal").
+    Piezas compartidas: `SelectorEmpresa`, `CamposDeIngreso`, `DialogoEmpresa`.
+  - **Gafetes:** por tipo, con "asignado a" (regla F7), crear por rango y gestionar
+    (perdido con su último portador, pagado, apareció, de baja).
+- Lo que se escribe se ve como quedará al guardarse (nombre y empresa en mayúsculas,
+  placa): la forma la da el dominio (`nombre_persona_al_escribir`, etc.).
+
 ## Ramas y PR (nada va a `main` sin PR y CI en verde)
 
-Todo lo anterior está en `main` (PR #3 a #11). `feat/importador-lattis` quedó atrás:
-necesita traer `main` y generar los hechos (con la hora sellada) de los ingresos
-importados antes de su PR. Las demás ramas viejas ya están fusionadas y se pueden borrar.
+El trabajo está en la rama **`feat/login`** (desde `main`), **sin PR todavía: el dueño
+avisa cuándo abrirlo**. Trae: entrada y splash, tema, formulario de contratista,
+Gafetes, Dentro, avisos, ingresos de contratista, proveedor, correo y KOF.
+`feat/importador-lattis` sigue aparte: necesita traer `main` y generar los hechos (con la
+hora sellada) de los ingresos importados antes de su PR. `fix/pruebas-en-windows` tiene 3
+commits en el remoto que no están en `main`: revisarlos o descartarlos.
 
 ## Decidido y en espera
 
@@ -71,20 +101,13 @@ importados antes de su PR. Las demás ramas viejas ya están fusionadas y se pue
 - **Sincronización de catálogos** (contratistas, empresas, gafetes, usuarios): no son
   hechos; la propuesta es changefeed por tabla con "el último cambio gana" y la
   auditoría como respaldo.
+- **Renombrar una empresa.** El núcleo ya renombra (con auditoría), pero no hay pantalla.
+  Opciones: un lápiz junto al «+» del selector que abre el mismo modal (recomendada), una
+  lista simple de "Administrar empresas", o corregirlo desde la nube. El dueño dijo que
+  alguien debe **auditar** los nombres de las empresas: no se deja solo al guarda.
 
 ## Lo que sigue
 
-0. **La pantalla de inicio de sesión va primero**: sin ella la app no puede operar.
-   Todo está listo en `nucleo/sesion.ts` (`SesionServicio`: `usuario`, `cargar`,
-   `iniciar`, `cambiarClave`, `cerrar`). Flujo:
-   - al abrir, cédula y clave (al desarrollar, los usuarios de la semilla);
-   - si `usuario().debe_cambiar_clave`, sólo el cambio de clave (el núcleo
-     rechaza todo lo demás con `clave_temporal`);
-   - los errores de entrada no traen campo (`credenciales_invalidas`,
-     `inicio_bloqueado`, `usuario_desactivado`): mensaje general, tal cual;
-   - cualquier comando puede responder `sin_sesion`: volver a la pantalla de entrada.
-   - el cambio de la propia clave (actual y nueva); los errores traen `campo`
-     (`clave`, `clave_actual`). No hay pantalla de usuarios: eso es de la nube.
 1. **Historial de ingresos: el núcleo ya está; falta la pantalla.**
    `nucleo/comandos.ts`: `listarHistorial(desde, hasta)` (fechas `AAAA-MM-DD` o `null`;
    trae `movimientos`, `truncado` y `maximo`) y `atajosDeFecha()` (código, etiqueta,
@@ -93,52 +116,42 @@ importados antes de su PR. Las demás ramas viejas ya están fusionadas y se pue
    de rango (botón con la etiqueta corta, panel con los atajos y fechas Desde/Hasta, el
    modelo de Lattis). Las exportaciones (CSV, Excel, PDF) quedan para el final, a pedido
    del dueño.
-2. **Formulario de "Nuevo contratista"** (diálogo de Material) y el botón en la fila de
-   herramientas de la grilla. **El núcleo ya está listo**; falta sólo la pantalla:
-   - `nucleo/comandos.ts`: `registrarContratista`, `editarContratista` (devuelve los
-     `Cambio` o `[]` si nada cambió), `buscarEmpresas` y `registrarEmpresa`; tipos
-     `ContratistaEntrada`, `Empresa` y `Cambio` en `tipos.ts`.
-   - Cada error trae `campo` (`cedula`, `nombre`, `empresa_id`, `tipo_ingreso`,
-     `fecha_vencimiento_praind`, o `nombre` en la empresa): el mensaje va junto a ese
-     campo, sin que la interfaz traduzca códigos. `campo: null` → mensaje general.
-   - Para editar, la fila de la grilla ya trae todo para precargar el formulario.
-   - **Ingreso de contratista (lo más crítico), listo sin pantalla:** `buscarParaIngreso`
-     (cédula o nombre en un solo campo) y `prepararIngreso` traen a cada contratista con
-     la decisión tomada por el núcleo (`puede_entrar`, `acceso` con su aviso, o `motivo`
-     y `adentro_por` para ofrecer su salida) y sus `gafetes_perdidos`;
-     `registrarEntradaContratista` lleva `gafete` o `sin_gafete` (S/G). Si
-     `requiere_gafete`, el núcleo exige uno de los dos (`gafete_requerido`); la pantalla
-     no decide nada. `dentro()` trae `sin_gafete` para mostrar «S/G».
-   - **Lo mismo para las demás pantallas** (comandos, errores por campo y funciones en
-     `nucleo/comandos.ts`, todo probado): empresas (`renombrarEmpresa`), empresas
-     proveedoras (buscar, registrar, renombrar), entrada de proveedor y por correo,
-     personal KOF (buscar, registrar, editar, entregar el provisional) y gafetes
-     (listar por tipo, crear por rango, cambiar estado: perdido con su portador, pagado,
-     apareció, de baja). Las salidas por las cuatro vías ya existían.
-3. ✅ **CI para Node y Tauri**: el trabajo `escritorio` (Windows) instala, revisa el
-   formato, prueba y compila Angular, y pasa clippy al cascarón; los demás trabajos
-   excluyen `limen-escritorio`. Falta activar CodeQL para el JavaScript.
-4. Otras pantallas de la barra lateral (Dentro, Proveedores, Correo, Personal KOF,
-   Gafetes), los equipos (bloque M) y la nube (con L4 y L5), en ese orden.
+2. **Atajos de teclado** y la **salida por número de gafete** (el comando
+   `registrar_salida_por_gafete` ya existe; falta la pantalla). El dueño quiere darle a
+   Dentro "algo más" con atajos.
+3. **Validar todo a la vez también en proveedor, correo y KOF** (hoy sólo se muestra el
+   primer error de cada formulario; el contratista ya valida todo junto con
+   `validar_contratista`). Migrar el formulario de contratista a `SelectorEmpresa` y
+   `CamposDeIngreso` para quitar duplicación.
+4. **Editar y desactivar al personal KOF** (el núcleo lo tiene: `editarPersonalKof`);
+   hoy sólo se da de alta.
+5. CodeQL para el JavaScript en la CI. Equipos (bloque M) y la nube (con L4 y L5).
 
 ## Cómo trabajar en esta máquina
 
 - No hay Visual Studio: compilar con el toolchain GNU. En PowerShell:
   `$env:RUSTUP_TOOLCHAIN='1.99.0-x86_64-pc-windows-gnu'` (no se toca
   `rust-toolchain.toml`, que usa la CI en Linux). El `link` de Git Bash rompe MSVC.
+- **Con la app abierta (`tauri dev`) el `target` queda bloqueado:** para `clippy` y
+  `cargo test` usar otra carpeta, `$env:CARGO_TARGET_DIR="$env:TEMP\limen-clippy"`.
 - Verificar antes de cada commit: `cargo fmt --all -- --check`,
   `cargo clippy --all-targets --all -- -D warnings`, `cargo test --all`; y en
   `apps/escritorio`: `npx prettier --check "src/**/*.{ts,html,scss}"`, `npx ng test
   --no-watch` y `npm run build`.
 - Las pruebas de Angular corren aisladas (`"isolate": true` en `angular.json`): cada
   archivo simula `@tauri-apps/api/core` a su manera, y sin aislamiento los simulacros de
-  un archivo pisaban los de otro (fallaban juntos y pasaban solos).
+  un archivo pisaban los de otro (fallaban juntos y pasaban solos). Un `invoke` simulado
+  no es una tarea de Angular: para esperar su respuesta usar `vi.waitFor` o un
+  `setTimeout(0)` antes de `whenStable`.
 - Angular 22 pide Node 22.22.3 o más nuevo (la CI usa Node 24).
 - La app en desarrollo: `npx tauri dev` dentro de `apps/escritorio`. Los paquetes npm de
   Tauri deben coincidir en versión menor con el crate de Rust (hoy 2.11).
 - Cerrar la app antes de importar datos: la base queda tomada mientras esté abierta.
 - Si un cambio de Rust deja el código a medias, `tauri dev` se detiene solo (vigila los
   crates): se relanza al terminar.
+- **Escribir archivos con tildes:** en esta PC el shell daña los acentos (y a veces
+  inserta caracteres de control) en un `echo`, un heredoc o un `node -e`. Usar la
+  herramienta de escribir archivos; con `node -e` sólo patrones sin tildes.
 
 ## Reglas del dueño que no se negocian
 
