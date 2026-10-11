@@ -3279,6 +3279,7 @@ dependencies = [
  "limen-infra-plataforma",
  "limen-infra-surreal",
  "log",
+ "rand 0.9.5",
  "rustls",
  "surrealdb",
  "thiserror 2.0.21",

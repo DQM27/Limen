@@ -4,8 +4,9 @@ Cómo se reparten los datos entre la nube y los equipos, y en qué orden se cons
 sincronización. Complementa la sección 9 de [`arquitectura.md`](arquitectura.md) y
 [`operacion-sin-conexion.md`](operacion-sin-conexion.md).
 
-**Estado:** modelo acordado con el dueño. La instancia existe y tiene el esquema; la
-sincronización todavía no.
+**Estado:** modelo acordado con el dueño. La instancia existe, tiene el esquema y la
+sincronización (subida, bajada y tiempo real) ya funciona; falta lo que marca la sección 6
+(incidentes y usuarios desde la nube) y los reintentos con espera aleatoria (sección 11).
 
 ---
 
@@ -100,6 +101,8 @@ equipo sin cambiar el flujo de datos.
    (secciones 9 y 10).
 5. Indicador de incidente al unir lo de varios equipos.
 6. Usuarios desde la nube (L4, L5) y la hora de la nube para los equipos sin NTP.
+7. Reintentos con espera aleatoria para que miles de equipos no vuelvan a la vez
+   (sección 11).
 
 ## 7. Unidad operativa y equipo, como quedaron
 
@@ -198,3 +201,50 @@ menos de dos segundos, sin esperar la red de seguridad.
 pedir "reintente la transacción". La suscripción en vivo y cada vuelta se reintentan
 enseguida unas veces; si la suscripción no se pudo crear, se vuelve a intentar en cada
 vuelta y, mientras tanto, queda la red de seguridad.
+
+## 11. Escala y reintentos: decisión
+
+Pensando en muchas unidades operativas, y quizá todo el país, se evaluó qué proteger a la
+nube de la saturación. **Decisión: por ahora no se agrega ni Kafka ni Nginx.**
+
+| Opción | Por qué no, por ahora |
+|---|---|
+| **Kafka** | Su valor aquí sería amortiguar picos de escritura, pero ya lo hacen los equipos: cada uno escribe primero en su base local y sube en lotes desde su propia cola (sección 8), con IDs fijos que hacen seguros los reintentos. El `CHANGEFEED` y el `LIVE SELECT` cubren el papel de log ordenado y suscripciones. Un clúster costaría más que toda la nube y sumaría un segundo sistema de verdad que podría desincronizarse. Tampoco resuelve los choques entre equipos: esos son regla de negocio (A7, E1) y se marcan con el indicador de incidente |
+| **Nginx** | Balancea servidores de aplicación sin estado. Aquí los equipos hablan directo con SurrealDB; el cuello de botella sería la base (un solo nodo), y un proxy delante de un solo nodo no le quita carga |
+
+**Lo que sí se hace para escalar, en este orden y medido antes de adelantarse:**
+
+1. **Espera aleatoria (*jitter*) en los reintentos.** Tras una caída de la nube, miles de
+   equipos que reintentan con el mismo intervalo vuelven al mismo instante y la nube, que
+   intenta recuperarse, recibe todo junto (*estampida*). Con espera exponencial y
+   aleatoria (*full jitter*: un valor al azar entre 0 y el techo, con tope de unos 5
+   minutos) las reconexiones se reparten en el tiempo.
+2. **Filtrar los avisos en vivo por unidad** (ya está: `WHERE unidad = …`), para que cada
+   equipo reciba sólo lo suyo.
+3. **Escala vertical** de la instancia y, si hiciera falta, **partir por región**
+   (un namespace o base por zona).
+4. **Prueba de carga** con muchos equipos simulados contra la instancia de desarrollo
+   antes de elegir el tamaño de producción.
+
+**Dónde falta el jitter hoy** (`crates/infra-nube/src/sincronizacion.rs`):
+
+| Dónde | Hoy | Cambio previsto |
+|---|---|---|
+| `sincronizar` | reconecta cada 30 s fijos (`REINTENTO`) | espera exponencial con *full jitter* y tope; la prioridad |
+| `RED_DE_SEGURIDAD` | 10 s fijos | variación de ±10 a 20 % para que equipos arrancados juntos no queden sincronizados entre sí |
+| `una_vuelta_con_reintentos` y `escuchar` | 200 ms × intento, pocas veces | bajo riesgo; se deja salvo que la prueba de carga diga otra cosa |
+
+Además, `conectar` reaplica el esquema en **cada** reconexión. Con miles de equipos
+reconectando a la vez es carga innecesaria: debe hacerse sólo en la primera conexión o con
+`limen-nube esquema`.
+
+**Dónde vive:** el jitter es un detalle de infraestructura, va en `infra-nube`, nunca en
+el dominio (que no genera números al azar). Para probarlo sin depender del azar, el
+generador se inyecta y las pruebas usan uno determinista.
+
+**Dependencia `rand`.** Ya está agregada a `infra-nube` (versión 0.9, la misma que ya
+traía el árbol de forma indirecta, para no duplicarla). Todavía no se usa: se agregó por
+adelantado porque el jitter y, más adelante, lo que necesite números aleatorios (por
+ejemplo el cifrado) la van a usar. **Ojo con el cifrado:** `rand` sirve para el jitter,
+pero claves, sales y nonces deben salir del generador del sistema operativo
+(`getrandom`/`OsRng`) o de los crates de cifrado, nunca de un generador previsible.
