@@ -56,10 +56,11 @@ describe('carcasa de la app', () => {
       expect.stringContaining('Contratistas'),
       expect.stringContaining('Proveedores'),
       expect.stringContaining('Correo'),
+      expect.stringContaining('KOF'),
       expect.stringContaining('Gafetes'),
     ]);
     expect(disponibles.every((a) => a.hasAttribute('href'))).toBe(true);
-    expect(proximamente).toHaveLength(2);
+    expect(proximamente).toHaveLength(1);
     // Lo que no existe aún se anuncia como tal y no recibe el foco del teclado
     // (un enlace sin `href` no entra en el orden de tabulación).
     expect(proximamente.every((a) => a.getAttribute('aria-label')?.endsWith('próximamente'))).toBe(

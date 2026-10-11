@@ -109,6 +109,7 @@ reconstruir cómo estaba el contratista el día que entró.
 | K1 | El gafete provisional existe en el inventario KOF y está disponible. | ✅ |
 | K2 | La persona se identifica por código de empleado (5 a 7 dígitos, único) y debe estar activa. Se desactiva, no se borra. | ✅ |
 | K3 | Un provisional por persona a la vez, y un número prestado a una sola persona. Entregar el gafete provisional es la entrada (queda en la presencia y mueve el reloj) y devolverlo es la salida. | ✅ |
+| K4 | Al entregar el gafete hay que elegir a la persona: sin elegirla el error es `persona_requerida` ("Elija a la persona del personal KOF"), no un identificador ilegible. | ✅ |
 
 ## L. Usuarios
 

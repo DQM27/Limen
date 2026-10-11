@@ -25,6 +25,11 @@ export const routes: Routes = [
     loadComponent: () => import('./correo/correo-pagina').then((m) => m.CorreoPagina),
   },
   {
+    path: 'kof',
+    title: 'KOF · Limen',
+    loadComponent: () => import('./kof/kof-pagina').then((m) => m.KofPagina),
+  },
+  {
     path: 'gafetes',
     title: 'Gafetes · Limen',
     loadComponent: () => import('./gafetes/gafetes-pagina').then((m) => m.GafetesPagina),

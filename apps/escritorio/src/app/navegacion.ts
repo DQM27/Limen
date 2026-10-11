@@ -17,7 +17,7 @@ export const SECCIONES: readonly Seccion[] = [
   { etiqueta: 'Contratistas', icono: 'engineering', ruta: '/contratistas' },
   { etiqueta: 'Proveedores', icono: 'local_shipping', ruta: '/proveedores' },
   { etiqueta: 'Correo', icono: 'mail', ruta: '/correo' },
-  { etiqueta: 'KOF', icono: 'local_drink', iconoPropio: 'kof' },
+  { etiqueta: 'KOF', icono: 'local_drink', iconoPropio: 'kof', ruta: '/kof' },
   { etiqueta: 'Gafetes', icono: 'badge', ruta: '/gafetes' },
   { etiqueta: 'Historial', icono: 'history' },
 ];

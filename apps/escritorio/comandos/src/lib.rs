@@ -507,6 +507,12 @@ where
         personal_id: &str,
         gafete: u32,
     ) -> Result<String, ErrorJson> {
+        // Sin persona elegida no es un identificador ilegible: falta elegirla.
+        if personal_id.trim().is_empty() {
+            return Err(
+                ErrorJson::from(ErrorEntrada::PersonaRequerida).en_campo(Some(campos::PERSONA))
+            );
+        }
         let persona = PersonalKofId::desde_uuid(
             leer_uuid(personal_id)
                 .map_err(|e| ErrorJson::from(e).en_campo(Some(campos::PERSONA)))?,

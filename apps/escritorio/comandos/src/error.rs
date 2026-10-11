@@ -64,6 +64,8 @@ impl ErrorJson {
 pub enum ErrorEntrada {
     #[error("El identificador no es válido")]
     IdInvalido,
+    #[error("Elija a la persona del personal KOF")]
+    PersonaRequerida,
     #[error("La fecha no es válida: use año-mes-día")]
     FechaInvalida,
     #[error("El tipo de ingreso no es válido")]
@@ -89,6 +91,7 @@ impl ErrorEntrada {
     pub const fn codigo(self) -> &'static str {
         match self {
             Self::IdInvalido => "id_invalido",
+            Self::PersonaRequerida => "persona_requerida",
             Self::FechaInvalida => "fecha_invalida",
             Self::TipoIngresoInvalido => "tipo_ingreso_invalido",
             Self::MedioInvalido => "medio_invalido",

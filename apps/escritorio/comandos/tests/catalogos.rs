@@ -301,6 +301,12 @@ mod tests {
             codigo_y_campo(&sin_gafete),
             ("gafete_no_registrado", Some("gafete"))
         );
+        let sin_persona = error_de(comandos.entregar_gafete_kof(&sesion(), " ", 1).await);
+        assert_eq!(
+            codigo_y_campo(&sin_persona),
+            ("persona_requerida", Some("personal_id")),
+            "sin elegir a la persona falta, no es ilegible"
+        );
         let persona_ilegible = error_de(comandos.entregar_gafete_kof(&sesion(), "x", 1).await);
         assert_eq!(
             codigo_y_campo(&persona_ilegible),
