@@ -96,8 +96,8 @@ equipo sin cambiar el flujo de datos.
 2. ✅ **Unidades operativas y equipos** en el dominio y en el esquema (sección 7).
 3. ✅ Subida continua (sección 8). A mano está `limen-nube subir`, que usa el mismo
    camino.
-4. ✅ Bajada: carga inicial de un equipo nuevo, casi en vivo (cada 5 segundos) y al
-   volver la conexión (sección 9).
+4. ✅ Bajada: carga inicial de un equipo nuevo, en tiempo real y al volver la conexión
+   (secciones 9 y 10).
 5. Indicador de incidente al unir lo de varios equipos.
 6. Usuarios desde la nube (L4, L5) y la hora de la nube para los equipos sin NTP.
 
@@ -141,7 +141,7 @@ importa; con dos, el historial del 25 de Brisas se mezclaría con el del 25 de l
   usuario de Windows), la app lanza la sincronización en segundo plano
   (`infra_nube::sincronizar`). Sin esa configuración trabaja igual que antes, sólo en el
   equipo.
-- **Cada 5 segundos** sube lo anotado desde la última vez, tabla por tabla y en orden:
+- **Al instante** (ver sección 10) sube lo anotado desde la última vez, tabla por tabla y en orden:
   lo guardado se crea o se reemplaza en la nube; lo borrado se borra (hechos y
   auditoría nunca se borran: se agregan los que faltan). Lo que subió queda anotado en
   `sincronizacion:⟨tabla⟩`, que es del equipo y no se comparte.
@@ -159,7 +159,7 @@ importa; con dos, el historial del 25 de Brisas se mezclaría con el del 25 de l
 
 ## 9. Bajada, como quedó
 
-- En cada vuelta (cada 5 segundos) la app **primero sube y después baja**: si el equipo
+- En cada vuelta la app **primero sube y después baja**: si el equipo
   cambió algo sin conexión, la nube recibe su versión antes de que el equipo repase lo
   que cambió allá, y el repaso termina en lo más reciente.
 - Baja con el **registro de cambios de la nube**, desde el último que bajó
@@ -176,3 +176,25 @@ importa; con dos, el historial del 25 de Brisas se mezclaría con el del 25 de l
 - **Choques:** si dos equipos cambian lo mismo, queda el último que llegó a la nube. Los
   choques de reglas entre equipos (la misma persona adentro dos veces, el mismo gafete
   prestado dos veces) todavía no se marcan como incidente: es el paso 5.
+
+## 10. Tiempo real, como quedó
+
+La sincronización no espera un reloj: **despierta por lo que pase primero**.
+
+1. **La app guarda algo** en el equipo: la base local avisa al confirmar
+   (`AlmacenSurreal::esperar_confirmacion`) y se sube en el momento.
+2. **La nube avisa en vivo** (`LIVE SELECT`, `infra_nube::Nube::escuchar`) que otro equipo
+   cambió algo: los catálogos completos y, de lo que es de una unidad, sólo lo de la del
+   equipo. Se baja en el momento y las pantallas se recargan.
+3. **Red de seguridad:** si en 10 segundos no llegó ningún aviso, se sincroniza igual. Los
+   avisos en vivo se pierden si se corta la conexión aunque sea un momento; lo que se baja
+   sale siempre del registro de cambios, así que la vuelta periódica recupera exactamente
+   lo que faltó.
+
+Probado con dos equipos y una nube en memoria: lo que registra uno aparece en el otro en
+menos de dos segundos, sin esperar la red de seguridad.
+
+**Choques al escribir a la vez:** si dos equipos escriben al mismo tiempo, la nube puede
+pedir "reintente la transacción". La suscripción en vivo y cada vuelta se reintentan
+enseguida unas veces; si la suscripción no se pudo crear, se vuelve a intentar en cada
+vuelta y, mientras tanto, queda la red de seguridad.

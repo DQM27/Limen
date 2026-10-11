@@ -12,6 +12,8 @@ limen-aplicacion.workspace = true
 chrono.workspace = true
 surrealdb.workspace = true
 uuid.workspace = true
+# Para avisar a la sincronización con la nube cada vez que se confirma algo.
+tokio = { workspace = true, features = ["sync"] }
 
 [dev-dependencies]
 limen-infra-memoria.workspace = true

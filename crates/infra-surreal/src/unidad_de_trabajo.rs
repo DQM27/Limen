@@ -199,6 +199,7 @@ impl UnidadDeTrabajo for UowSurreal {
         let mut respuesta = consulta.await.map_err(tecnica)?;
         let errores = respuesta.take_errors();
         if errores.is_empty() {
+            self.almacen.avisar_confirmacion();
             return Ok(());
         }
         // En una transacción fallida todas las sentencias informan error,

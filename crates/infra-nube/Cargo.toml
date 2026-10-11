@@ -18,7 +18,9 @@ surrealdb = { workspace = true, features = ["protocol-ws", "rustls"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 thiserror.workspace = true
 log.workspace = true
-tokio = { workspace = true, features = ["time"] }
+tokio = { workspace = true, features = ["time", "sync"] }
+# Para leer los avisos en vivo de la nube (`LIVE SELECT`).
+futures = "0.3"
 
 [dev-dependencies]
 limen-aplicacion.workspace = true

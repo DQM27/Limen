@@ -1,12 +1,14 @@
 //! Conexión a la base embebida y aplicación del esquema.
 
 use std::path::Path;
+use std::sync::Arc;
 
 use limen_aplicacion::puertos::{ErrorPersistencia, RegistroAuditado};
 use limen_dominio::origen::{EquipoId, Origen, UnidadOperativaId};
 use surrealdb::Surreal;
 use surrealdb::engine::local::{Db, Mem, SurrealKv};
 use surrealdb::types::Value;
+use tokio::sync::Notify;
 use uuid::Uuid;
 
 use crate::error::tecnica;
@@ -36,6 +38,9 @@ const SIN_UNIDAD: &str = include_str!("esquema/sin_unidad.surql");
 pub struct AlmacenSurreal {
     db: Surreal<Db>,
     origen: Origen,
+    /// Se avisa cada vez que una Unit of Work confirma algo: la
+    /// sincronización con la nube lo sube en el momento.
+    confirmaciones: Arc<Notify>,
 }
 
 impl AlmacenSurreal {
@@ -73,7 +78,11 @@ impl AlmacenSurreal {
             .await
             .and_then(surrealdb::IndexedResults::check)
             .map_err(tecnica)?;
-        let almacen = Self { db, origen };
+        let almacen = Self {
+            db,
+            origen,
+            confirmaciones: Arc::new(Notify::new()),
+        };
         almacen.convertir_lo_que_no_tiene_unidad().await?;
         Ok(almacen)
     }
@@ -86,6 +95,17 @@ impl AlmacenSurreal {
             .and_then(surrealdb::IndexedResults::check)
             .map(drop)
             .map_err(tecnica)
+    }
+
+    /// Espera hasta que la app confirme algo en esta base. Si ya confirmó
+    /// algo desde la última espera, vuelve en seguida: no se pierde ningún
+    /// aviso.
+    pub async fn esperar_confirmacion(&self) {
+        self.confirmaciones.notified().await;
+    }
+
+    pub(crate) fn avisar_confirmacion(&self) {
+        self.confirmaciones.notify_one();
     }
 
     /// La unidad operativa de este equipo.
@@ -357,6 +377,33 @@ mod tests {
 
         assert_eq!(cuantos(&almacen, "gafete").await, antes, "no duplica nada");
         assert_eq!(antes, 2, "siguen los dos gafetes");
+    }
+
+    #[tokio::test]
+    async fn avisa_cuando_se_confirma_algo_y_no_antes() {
+        let almacen = AlmacenSurreal::en_memoria().await.unwrap();
+        let espera = std::time::Duration::from_millis(200);
+        assert!(
+            tokio::time::timeout(espera, almacen.esperar_confirmacion())
+                .await
+                .is_err(),
+            "sin confirmar nada no hay aviso"
+        );
+
+        let mut uow = almacen.nueva();
+        uow.presencias().anotar_entrada(
+            &Identidad::from(&Cedula::normalizar("111111111").unwrap()),
+            Via::Contratista,
+            en(),
+        );
+        uow.confirmar().await.unwrap();
+
+        assert!(
+            tokio::time::timeout(espera, almacen.esperar_confirmacion())
+                .await
+                .is_ok(),
+            "lo confirmado avisa, aunque nadie estuviera esperando en ese momento"
+        );
     }
 
     #[tokio::test]

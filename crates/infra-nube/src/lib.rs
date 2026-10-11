@@ -11,6 +11,7 @@
 //! nunca del código: el repositorio es público.
 
 mod bajada;
+mod en_vivo;
 mod sincronizacion;
 mod subida;
 
@@ -21,7 +22,8 @@ use surrealdb::Surreal;
 use surrealdb::engine::any::{Any, connect};
 use surrealdb::opt::auth::{Database, Namespace, Root};
 
-pub use sincronizacion::{CADA, REINTENTO, sincronizar};
+pub use en_vivo::Escucha;
+pub use sincronizacion::{RED_DE_SEGURIDAD, REINTENTO, sincronizar};
 pub use subida::{Copia, TABLAS};
 
 /// Elige el proveedor de cifrado de las conexiones seguras (`ring`). Con

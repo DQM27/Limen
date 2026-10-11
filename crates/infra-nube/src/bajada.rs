@@ -124,7 +124,7 @@ impl Nube {
 }
 
 /// Si las filas de la tabla son de una unidad operativa (y no globales).
-fn es_de_la_unidad(tabla: &str) -> bool {
+pub fn es_de_la_unidad(tabla: &str) -> bool {
     tabla == "hecho" || TABLAS_DE_LA_UNIDAD.contains(&tabla)
 }
 
