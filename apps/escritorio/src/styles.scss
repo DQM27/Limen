@@ -1,6 +1,8 @@
 @use '@angular/material' as mat;
+@use 'tokyo-night';
 
-// Tema de Angular Material 3, claro u oscuro según el sistema. Sin fuentes
+// Tema de Angular Material 3 con la paleta Tokyo Night, clara (Day) u oscura
+// (Night) según el sistema. Sin fuentes
 // externas (la CSP sólo permite las del propio paquete): se usa la del sistema.
 html {
   color-scheme: light dark;
@@ -14,6 +16,7 @@ html {
       density: 0,
     )
   );
+  @include tokyo-night.paleta;
 }
 
 html,

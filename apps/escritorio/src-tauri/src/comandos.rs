@@ -21,6 +21,7 @@ use limen_escritorio_comandos::{
     EntradaCorreoEntrada, EntradaProveedorEntrada, EntradaRegistradaDto, ErrorJson,
     FilaContratistaDto, GafeteDto, HistorialDto, PersonaAdentroDto, PersonalKofDto, UsuarioActual,
 };
+use tauri::window::Color;
 use tauri::{LogicalSize, State, WebviewWindow};
 
 use crate::estado::Estado;
@@ -30,7 +31,7 @@ type Resultado<T> = Result<T, ErrorJson>;
 // --- Ventana ---
 
 /// Tamaño de la ventana de entrada (splash e inicio de sesión), sin marco.
-const ENTRADA: LogicalSize<f64> = LogicalSize::new(460.0, 640.0);
+const ENTRADA: LogicalSize<f64> = LogicalSize::new(380.0, 480.0);
 
 /// Pone la ventana en su forma de "entrada" (pequeña, sin marco, centrada: el
 /// splash y el inicio de sesión) y la muestra, o de "aplicacion" (con marco y
@@ -45,6 +46,13 @@ pub fn modo_ventana(ventana: WebviewWindow, modo: String) -> Result<(), String> 
             ventana.set_resizable(false).map_err(error)?;
             ventana.set_decorations(false).map_err(error)?;
             ventana.set_size(ENTRADA).map_err(error)?;
+            // El fondo de la ventana, del color de la tarjeta según el tema
+            // del sistema: si algún borde queda sin cubrir, no se ve blanco.
+            let fondo = match ventana.theme().map_err(error)? {
+                tauri::Theme::Dark => Color(0x1f, 0x23, 0x35, 0xff),
+                _ => Color(0xe1, 0xe2, 0xe7, 0xff),
+            };
+            ventana.set_background_color(Some(fondo)).map_err(error)?;
             ventana.center().map_err(error)?;
             // La ventana nace oculta: se muestra cuando la interfaz ya pintó
             // el splash, para que nunca se vea un rectángulo en blanco.

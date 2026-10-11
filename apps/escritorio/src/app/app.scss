@@ -24,7 +24,13 @@
 // el contenido ocupa el resto solo (nada se mide ni se fija a mano).
 .carcasa {
   display: flex;
+  gap: var(--separacion);
+  box-sizing: border-box;
   height: 100%;
+  padding: var(--separacion);
+  // El mismo espacio entre la barra, la grilla y el borde de la ventana, en
+  // los cuatro lados (como en Lattis).
+  --separacion: 6px;
 }
 
 .barra {
@@ -32,8 +38,9 @@
   flex: none;
   flex-direction: column;
   box-sizing: border-box;
-  width: 248px;
-  border-right: 1px solid var(--mat-sys-outline-variant);
+  width: 184px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
   background: var(--mat-sys-surface-container-low);
   transition: width 150ms ease;
 
@@ -42,12 +49,26 @@
   --mat-list-active-indicator-shape: 8px;
   --mat-list-active-indicator-color: var(--mat-sys-secondary-container);
   --mat-list-list-item-one-line-container-height: 44px;
-  --mat-list-list-item-label-text-size: 14px;
-  --mat-list-list-item-label-text-weight: 500;
+  --mat-list-list-item-label-text-size: 12.5px;
+  --mat-list-list-item-label-text-tracking: 0.05em;
+  --mat-list-list-item-label-text-weight: 400;
   --mat-list-list-item-leading-icon-size: 22px;
+  // El texto pegado al ícono y con poco aire a los lados: que quepan los nombres.
+  --mat-list-list-item-leading-space: 12px;
+  --mat-list-list-item-trailing-space: 8px;
+  --mat-list-list-item-leading-icon-end-space: 10px;
 
   &.reducida {
-    width: 72px;
+    width: 60px;
+
+    // Sólo íconos: centrados en el ancho que queda, sin el hueco del texto.
+    --mat-list-list-item-leading-space: 12px;
+    --mat-list-list-item-trailing-space: 12px;
+    --mat-list-list-item-leading-icon-end-space: 0;
+
+    mat-nav-list {
+      padding: 8px 6px;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -75,6 +96,12 @@
   text-transform: uppercase;
 }
 
+// Las secciones van en mayúsculas sólo al mostrarse: el texto de la página y
+// lo que anuncian los lectores de pantalla siguen en minúsculas normales.
+nav a[mat-list-item] {
+  text-transform: uppercase;
+}
+
 nav {
   flex: 1;
   overflow-y: auto;
@@ -82,7 +109,7 @@ nav {
 
 mat-nav-list {
   display: block;
-  padding: 8px 12px;
+  padding: 8px;
 }
 
 // Lo que todavía no existe se ve como texto atenuado, no como un botón apagado.
@@ -99,8 +126,8 @@ mat-nav-list {
 .barra-pie {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px 24px;
+  gap: 8px;
+  padding: 10px 6px 10px 14px;
   border-top: 1px solid var(--mat-sys-outline-variant);
   color: var(--mat-sys-on-surface-variant);
 
@@ -112,11 +139,21 @@ mat-nav-list {
   }
 }
 
+// El nombre del operador puede ocupar dos líneas antes de cortarse.
 .operador {
+  flex: 1;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font: var(--mat-sys-body-medium);
+  overflow-wrap: anywhere;
+  font: var(--mat-sys-body-small);
+  line-height: 1.25;
+}
+
+.barra-pie mat-icon {
+  flex: none;
 }
 
 // El contenido aprovecha todo lo que deja la barra, con un margen mínimo:
@@ -128,7 +165,6 @@ main {
   box-sizing: border-box;
   min-width: 0;
   height: 100%;
-  padding: 8px 12px;
 
   &:focus {
     outline: none;

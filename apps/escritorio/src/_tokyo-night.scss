@@ -1,0 +1,55 @@
+// La paleta Tokyo Night sobre los tokens de sistema de Angular Material 3.
+// Cada token trae el par `light-dark(claro, oscuro)`: el claro es Tokyo Night
+// Day y el oscuro, Tokyo Night (Night); cuál se ve lo decide `color-scheme`,
+// que sigue al sistema. Los valores salen de folke/tokyonight.nvim
+// (extras/lua/tokyonight_day.lua y tokyonight_night.lua).
+//
+// Se incluye dentro de `html`, después de `mat.theme`, para que pise sus
+// valores por defecto.
+@mixin paleta {
+  // Acento
+  --mat-sys-primary: light-dark(#2e7de9, #7aa2f7);
+  --mat-sys-on-primary: light-dark(#ffffff, #1a1b26);
+  --mat-sys-primary-container: light-dark(#b7c1e3, #3d59a1);
+  --mat-sys-on-primary-container: light-dark(#3760bf, #c0caf5);
+  --mat-sys-inverse-primary: light-dark(#7aa2f7, #2e7de9);
+  --mat-sys-surface-tint: light-dark(#2e7de9, #7aa2f7);
+
+  --mat-sys-secondary: light-dark(#9854f1, #bb9af7);
+  --mat-sys-on-secondary: light-dark(#ffffff, #1a1b26);
+  --mat-sys-secondary-container: light-dark(#c4c8da, #283457);
+  --mat-sys-on-secondary-container: light-dark(#3760bf, #c0caf5);
+
+  --mat-sys-tertiary: light-dark(#007197, #7dcfff);
+  --mat-sys-on-tertiary: light-dark(#ffffff, #1a1b26);
+  --mat-sys-tertiary-container: light-dark(#b7ced5, #394b70);
+  --mat-sys-on-tertiary-container: light-dark(#006a83, #c0caf5);
+
+  --mat-sys-error: light-dark(#c64343, #f7768e);
+  --mat-sys-on-error: light-dark(#ffffff, #1a1b26);
+  --mat-sys-error-container: light-dark(#dababe, #4a272f);
+  --mat-sys-on-error-container: light-dark(#8f2b2b, #f7768e);
+
+  // Superficies: de la más hundida (campos de texto) a la más elevada.
+  --mat-sys-background: light-dark(#e1e2e7, #1a1b26);
+  --mat-sys-on-background: light-dark(#3760bf, #c0caf5);
+  --mat-sys-surface: light-dark(#e1e2e7, #1a1b26);
+  --mat-sys-on-surface: light-dark(#3760bf, #c0caf5);
+  --mat-sys-surface-variant: light-dark(#c4c8da, #292e42);
+  --mat-sys-on-surface-variant: light-dark(#6172b0, #a9b1d6);
+  --mat-sys-surface-dim: light-dark(#d0d5e3, #16161e);
+  --mat-sys-surface-bright: light-dark(#e1e2e7, #292e42);
+  --mat-sys-surface-container-lowest: light-dark(color-mix(in srgb, #e1e2e7 55%, white), #16161e);
+  --mat-sys-surface-container-low: light-dark(#e1e2e7, #1f2335);
+  --mat-sys-surface-container: light-dark(#d0d5e3, #24283b);
+  --mat-sys-surface-container-high: light-dark(#c4c8da, #292e42);
+  --mat-sys-surface-container-highest: light-dark(#b7c1e3, #3b4261);
+
+  --mat-sys-outline: light-dark(#848cb5, #565f89);
+  --mat-sys-outline-variant: light-dark(#a8aecb, #3b4261);
+
+  --mat-sys-inverse-surface: light-dark(#343b58, #c0caf5);
+  --mat-sys-inverse-on-surface: light-dark(#e1e2e7, #1a1b26);
+  --mat-sys-scrim: #000000;
+  --mat-sys-shadow: #000000;
+}

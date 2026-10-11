@@ -1,7 +1,10 @@
 /** Una entrada de la barra lateral. Sin `ruta`, la pantalla todavía no existe. */
 export interface Seccion {
   etiqueta: string;
+  /** Ícono de Material (por su nombre). */
   icono: string;
+  /** Un ícono propio (ver iconos.ts); si está, se usa en vez de `icono`. */
+  iconoPropio?: string;
   ruta?: string;
 }
 
@@ -14,7 +17,7 @@ export const SECCIONES: readonly Seccion[] = [
   { etiqueta: 'Contratistas', icono: 'engineering', ruta: '/contratistas' },
   { etiqueta: 'Proveedores', icono: 'local_shipping' },
   { etiqueta: 'Correo', icono: 'mail' },
-  { etiqueta: 'Personal KOF', icono: 'badge' },
-  { etiqueta: 'Gafetes', icono: 'confirmation_number' },
+  { etiqueta: 'KOF', icono: 'local_drink', iconoPropio: 'kof' },
+  { etiqueta: 'Gafetes', icono: 'badge' },
   { etiqueta: 'Historial', icono: 'history' },
 ];

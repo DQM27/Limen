@@ -11,8 +11,10 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { DURACION_MINIMA_SPLASH_MS } from './entrada/duracion-splash';
 import { PantallaEntrada } from './entrada/pantalla-entrada';
 import { Splash } from './entrada/splash';
+import { registrarIconos } from './iconos';
 import { SECCIONES } from './navegacion';
 import { SesionServicio } from './nucleo/sesion';
 import { enTauri } from './nucleo/tauri';
@@ -39,6 +41,7 @@ export class App {
   protected readonly secciones = SECCIONES;
   private readonly sesion = inject(SesionServicio);
   protected readonly operador = this.sesion.usuario;
+  private readonly splashVisto = signal(false);
   protected readonly enTauri = enTauri();
 
   /**
@@ -50,7 +53,7 @@ export class App {
     if (!this.enTauri) {
       return 'aplicacion';
     }
-    if (!this.sesion.cargada()) {
+    if (!this.sesion.cargada() || !this.splashVisto()) {
       return 'cargando';
     }
     const usuario = this.sesion.usuario();
@@ -61,7 +64,16 @@ export class App {
   protected readonly expandida = signal(true);
 
   constructor() {
+    registrarIconos();
     void this.sesion.cargar();
+    // El splash se ve un mínimo, aunque el núcleo responda al instante: sin
+    // esto pasa tan fugaz que no se alcanza a ver la marca.
+    const minimo = inject(DURACION_MINIMA_SPLASH_MS);
+    if (minimo > 0) {
+      setTimeout(() => this.splashVisto.set(true), minimo);
+    } else {
+      this.splashVisto.set(true);
+    }
     // La ventana toma la forma de cada fase: pequeña y sin marco para el splash
     // y la entrada; maximizada y con marco para la app.
     effect(() => {

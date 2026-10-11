@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { App } from './app';
+import { DURACION_MINIMA_SPLASH_MS } from './entrada/duracion-splash';
 import { routes } from './app.routes';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -18,7 +19,10 @@ async function crear(dentroDeLaApp: boolean) {
         : [],
     ),
   );
-  TestBed.configureTestingModule({ imports: [App], providers: [provideRouter(routes)] });
+  TestBed.configureTestingModule({
+    imports: [App],
+    providers: [provideRouter(routes), { provide: DURACION_MINIMA_SPLASH_MS, useValue: 0 }],
+  });
   const fixture = TestBed.createComponent(App);
   await fixture.whenStable();
   const raiz = fixture.nativeElement as HTMLElement;
@@ -108,7 +112,10 @@ describe('carcasa de la app', () => {
     vi.mocked(invoke).mockImplementation((comando: string) =>
       Promise.resolve(comando === 'usuario_actual' ? null : undefined),
     );
-    TestBed.configureTestingModule({ imports: [App], providers: [provideRouter(routes)] });
+    TestBed.configureTestingModule({
+      imports: [App],
+      providers: [provideRouter(routes), { provide: DURACION_MINIMA_SPLASH_MS, useValue: 0 }],
+    });
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const raiz = fixture.nativeElement as HTMLElement;
@@ -122,7 +129,10 @@ describe('carcasa de la app', () => {
   it('mientras el núcleo no responde muestra el splash', async () => {
     vi.mocked(isTauri).mockReturnValue(true);
     vi.mocked(invoke).mockImplementation(() => new Promise(() => {}));
-    TestBed.configureTestingModule({ imports: [App], providers: [provideRouter(routes)] });
+    TestBed.configureTestingModule({
+      imports: [App],
+      providers: [provideRouter(routes), { provide: DURACION_MINIMA_SPLASH_MS, useValue: 0 }],
+    });
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
 

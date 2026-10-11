@@ -79,8 +79,18 @@ export class Tabla<T> implements OnInit {
   readonly filaDobleClic = output<T>();
 
   protected readonly textos = AG_GRID_LOCALE_ES;
-  /** Quartz de serie; el esquema (claro u oscuro) sigue al del sistema. */
-  protected readonly tema = themeQuartz.withPart(colorSchemeVariable);
+  /**
+   * Quartz de serie; el esquema (claro u oscuro) sigue al del sistema. Sólo se
+   * le dan los colores de la app (los tokens de Tokyo Night): su forma no se toca.
+   */
+  protected readonly tema = themeQuartz.withPart(colorSchemeVariable).withParams({
+    backgroundColor: 'var(--mat-sys-surface)',
+    foregroundColor: 'var(--mat-sys-on-surface)',
+    headerBackgroundColor: 'var(--mat-sys-surface-container)',
+    borderColor: 'var(--mat-sys-outline-variant)',
+    accentColor: 'var(--mat-sys-primary)',
+    chromeBackgroundColor: 'var(--mat-sys-surface-container-low)',
+  });
   protected readonly tiposDeColumna: ColTypeDefs<T> = tiposDeColumna as ColTypeDefs<T>;
   protected readonly analizarBusqueda = analizarBusqueda;
   protected readonly coincideBusqueda = coincideBusqueda;
