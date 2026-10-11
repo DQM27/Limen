@@ -25,3 +25,40 @@
   --mat-button-toggle-height: 34px;
   --mat-button-toggle-label-text-size: 13px;
 }
+
+// El campo de salida por gafete se ve como el buscador de la tabla, más angosto.
+.gafete {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  width: 12rem;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+  background: var(--mat-sys-surface-container-low);
+
+  &:focus-within {
+    border-color: var(--mat-sys-primary);
+    outline: 1px solid var(--mat-sys-primary);
+  }
+
+  mat-icon {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--mat-sys-on-surface);
+    font: var(--mat-sys-body-medium);
+  }
+}

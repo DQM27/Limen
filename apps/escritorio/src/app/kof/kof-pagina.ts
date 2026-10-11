@@ -2,6 +2,8 @@ import { ChangeDetectionStrategy, Component, inject, viewChild } from '@angular/
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { Atajo } from '../compartido/atajo';
 import { Avisos } from '../compartido/avisos';
 import { ListaDentro } from '../dentro/lista-dentro';
 import { DialogoEntregarGafete, type ResultadoEntregaKof } from './dialogo-entregar-gafete';
@@ -15,7 +17,7 @@ import { DialogoNuevoPersonal, type ResultadoNuevoPersonal } from './dialogo-nue
 @Component({
   selector: 'app-kof-pagina',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ListaDentro, MatButtonModule, MatIconModule],
+  imports: [Atajo, ListaDentro, MatButtonModule, MatIconModule, MatTooltipModule],
   template: `
     <app-lista-dentro
       via="KOF"
@@ -23,11 +25,27 @@ import { DialogoNuevoPersonal, type ResultadoNuevoPersonal } from './dialogo-nue
       idTabla="dentro-kof"
       mensajeVacio="Nadie de KOF tiene un gafete provisional"
     >
-      <button botones mat-flat-button type="button" class="entrega" (click)="entregarGafete()">
+      <button
+        botones
+        mat-flat-button
+        type="button"
+        class="entrega"
+        appAtajo="F2"
+        matTooltip="Entregar gafete (F2)"
+        (click)="entregarGafete()"
+      >
         <mat-icon aria-hidden="true">login</mat-icon>
         Entregar gafete
       </button>
-      <button botones mat-stroked-button type="button" class="nuevo" (click)="nuevoPersonal()">
+      <button
+        botones
+        mat-stroked-button
+        type="button"
+        class="nuevo"
+        appAtajo="Ctrl+N"
+        matTooltip="Nuevo personal (Ctrl+N)"
+        (click)="nuevoPersonal()"
+      >
         <mat-icon aria-hidden="true">add</mat-icon>
         Nuevo personal
       </button>

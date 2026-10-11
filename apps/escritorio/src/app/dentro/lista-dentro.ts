@@ -10,7 +10,10 @@ import {
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatDialog } from '@angular/material/dialog';
+import { MatIconModule } from '@angular/material/icon';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import type { CellClickedEvent, ColDef } from 'ag-grid-community';
+import { Atajo } from '../compartido/atajo';
 import { Avisos } from '../compartido/avisos';
 import { DialogoConfirmar, type DatosConfirmar } from '../compartido/dialogo-confirmar';
 import { soloFecha, soloHora } from '../compartido/formato';
@@ -41,7 +44,7 @@ function mensajeDe(error: unknown, general: string): string {
 @Component({
   selector: 'app-lista-dentro',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatButtonToggleModule, Tabla],
+  imports: [Atajo, MatButtonModule, MatButtonToggleModule, MatIconModule, MatTooltipModule, Tabla],
   templateUrl: './lista-dentro.html',
   styleUrl: './lista-dentro.scss',
 })
@@ -62,6 +65,9 @@ export class ListaDentro implements OnInit {
   protected readonly seleccionadas = signal<PersonaAdentro[]>([]);
   protected readonly cargando = signal(true);
   protected readonly error = signal<string | null>(null);
+
+  /** Lo que se escribe en el campo de salida por gafete: sólo dígitos. */
+  protected readonly gafete = signal('');
 
   protected readonly visibles = computed(() => filtrarPorGafete(this.filas(), this.filtro()));
 
@@ -183,6 +189,39 @@ export class ListaDentro implements OnInit {
 
   actualizar(): void {
     void this.cargar();
+  }
+
+  protected escribirGafete(evento: Event): void {
+    const campo = evento.target as HTMLInputElement;
+    campo.value = campo.value.replace(/\D/g, '');
+    this.gafete.set(campo.value);
+  }
+
+  /**
+   * La salida de quien devuelve este gafete. Cada tipo de gafete tiene su
+   * numeración, así que un número puede estar en uso en más de una vía a la
+   * vez: si pasa, no se adivina; se pide usar el botón de la fila.
+   */
+  protected async salidaPorGafete(): Promise<void> {
+    const texto = this.gafete();
+    if (texto === '') {
+      return;
+    }
+    const numero = Number(texto);
+    const tienen = this.filas().filter((p) => p.gafete === numero);
+    const [unica] = tienen;
+    if (tienen.length === 1 && unica) {
+      await this.salida(unica);
+      this.gafete.set('');
+    } else if (tienen.length === 0) {
+      this.avisos.error(`Nadie tiene adentro el gafete ${numero}`, 'Gafete no encontrado');
+    } else {
+      const vias = tienen.map((p) => etiquetaDeVia(p.via)).join(', ');
+      this.avisos.error(
+        `El gafete ${numero} está en uso en varias vías (${vias}): use el botón «Salida» de la fila`,
+        'Gafete repetido',
+      );
+    }
   }
 
   /** La salida de una persona, sin pedir confirmación: es lo de todos los días. */

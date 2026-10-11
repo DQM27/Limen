@@ -3,6 +3,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { invoke } from '@tauri-apps/api/core';
 import type { ColDef } from 'ag-grid-community';
 import type { PersonaAdentro } from '../nucleo/tipos';
+import { Avisos } from '../compartido/avisos';
 import { ListaDentro } from './lista-dentro';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -220,6 +221,86 @@ describe('lista de quién está adentro', () => {
     interno.salidaMasiva();
 
     expect(document.querySelector('app-dialogo-confirmar')).toBeNull();
+  });
+
+  describe('salida por número de gafete', () => {
+    async function escribir(raiz: HTMLElement, fixture: { detectChanges(): void }, texto: string) {
+      const campo = raiz.querySelector<HTMLInputElement>('.gafete input');
+      if (!campo) {
+        throw new Error('no hay campo de gafete');
+      }
+      campo.value = texto;
+      campo.dispatchEvent(new Event('input'));
+      campo.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+      fixture.detectChanges();
+      await new Promise((resolver) => setTimeout(resolver, 0));
+      return campo;
+    }
+
+    it('el campo sólo admite dígitos', async () => {
+      vi.mocked(invoke).mockResolvedValue([]);
+      const { fixture, raiz } = await crear();
+
+      const campo = await escribir(raiz, fixture, '1a2');
+
+      expect(campo.value).toBe('12');
+    });
+
+    it('con Enter registra la salida de quien tiene ese gafete y limpia el campo', async () => {
+      vi.mocked(invoke).mockResolvedValue([
+        persona('1', 'ANA', { gafete: 7 }),
+        persona('2', 'BETO'),
+      ]);
+      const { fixture, raiz } = await crear();
+
+      const campo = await escribir(raiz, fixture, '7');
+
+      await vi.waitFor(() => expect(llamadas('registrar_salida')).toHaveLength(1));
+      expect(llamadas('registrar_salida')[0]?.[1]).toEqual({
+        via: 'CONTRATISTA',
+        ingresoId: '1',
+      });
+      await vi.waitFor(() => expect(campo.value).toBe(''));
+    });
+
+    it('si nadie lo tiene, avisa y no registra nada', async () => {
+      vi.mocked(invoke).mockResolvedValue([persona('1', 'ANA', { gafete: 7 })]);
+      const { fixture, raiz } = await crear();
+      const error = vi.spyOn(TestBed.inject(Avisos), 'error');
+
+      await escribir(raiz, fixture, '9');
+
+      expect(error).toHaveBeenCalledWith('Nadie tiene adentro el gafete 9', 'Gafete no encontrado');
+      expect(llamadas('registrar_salida')).toHaveLength(0);
+    });
+
+    it('si el número está en dos vías, no adivina: pide usar el botón de la fila', async () => {
+      vi.mocked(invoke).mockResolvedValue([
+        persona('1', 'ANA', { gafete: 7 }),
+        persona('2', 'BETO', { via: 'PROVEEDOR', gafete: 7 }),
+      ]);
+      const { fixture, raiz } = await crear();
+      const error = vi.spyOn(TestBed.inject(Avisos), 'error');
+
+      await escribir(raiz, fixture, '7');
+
+      expect(error).toHaveBeenCalledWith(
+        expect.stringContaining('Contratista, Proveedor'),
+        'Gafete repetido',
+      );
+      expect(llamadas('registrar_salida')).toHaveLength(0);
+    });
+
+    it('un campo vacío no hace nada', async () => {
+      vi.mocked(invoke).mockResolvedValue([persona('1', 'ANA')]);
+      const { fixture, raiz } = await crear();
+      const error = vi.spyOn(TestBed.inject(Avisos), 'error');
+
+      await escribir(raiz, fixture, '');
+
+      expect(error).not.toHaveBeenCalled();
+      expect(llamadas('registrar_salida')).toHaveLength(0);
+    });
   });
 
   it('actualizar vuelve a pedir quién está adentro', async () => {

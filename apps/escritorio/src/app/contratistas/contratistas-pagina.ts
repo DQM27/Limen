@@ -2,7 +2,9 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import type { CellClickedEvent, ColDef } from 'ag-grid-community';
+import { Atajo } from '../compartido/atajo';
 import { Avisos } from '../compartido/avisos';
 import { fechaCorta } from '../compartido/formato';
 import { Tabla } from '../compartido/tabla/tabla';
@@ -23,7 +25,7 @@ const fueraDelBuscador = (): string => '';
 @Component({
   selector: 'app-contratistas-pagina',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatIconModule, Tabla],
+  imports: [Atajo, MatButtonModule, MatIconModule, MatTooltipModule, Tabla],
   templateUrl: './contratistas-pagina.html',
   styleUrl: './contratistas-pagina.scss',
 })

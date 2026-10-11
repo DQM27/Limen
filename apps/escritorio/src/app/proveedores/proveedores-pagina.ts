@@ -2,6 +2,8 @@ import { ChangeDetectionStrategy, Component, inject, viewChild } from '@angular/
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { Atajo } from '../compartido/atajo';
 import { Avisos } from '../compartido/avisos';
 import { ListaDentro } from '../dentro/lista-dentro';
 import {
@@ -16,7 +18,7 @@ import {
 @Component({
   selector: 'app-proveedores-pagina',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ListaDentro, MatButtonModule, MatIconModule],
+  imports: [Atajo, ListaDentro, MatButtonModule, MatIconModule, MatTooltipModule],
   template: `
     <app-lista-dentro
       via="PROVEEDOR"
@@ -24,7 +26,15 @@ import {
       idTabla="dentro-proveedores"
       mensajeVacio="No hay proveedores adentro"
     >
-      <button botones mat-flat-button type="button" class="ingreso" (click)="registrarIngreso()">
+      <button
+        botones
+        mat-flat-button
+        type="button"
+        class="ingreso"
+        appAtajo="F2"
+        matTooltip="Registrar ingreso (F2)"
+        (click)="registrarIngreso()"
+      >
         <mat-icon aria-hidden="true">login</mat-icon>
         Registrar ingreso
       </button>

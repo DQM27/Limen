@@ -30,6 +30,7 @@ import {
   type SelectionChangedEvent,
 } from 'ag-grid-community';
 import { AgGridAngular } from 'ag-grid-angular';
+import { Atajo } from '../atajo';
 import { claveDeColumna, textoDeTooltip, tiposDeColumna } from './columnas';
 import { guardarDiseno, leerDiseno } from './diseno-guardado';
 import { analizarBusqueda, coincideBusqueda, coincideFiltroDeColumna } from './pliegue';
@@ -55,7 +56,7 @@ ModuleRegistry.registerModules([AllCommunityModule]);
 @Component({
   selector: 'app-tabla',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AgGridAngular, MatIconModule, MatMenuModule, MatTooltipModule],
+  imports: [AgGridAngular, Atajo, MatIconModule, MatMenuModule, MatTooltipModule],
   templateUrl: './tabla.html',
   styleUrl: './tabla.scss',
 })
