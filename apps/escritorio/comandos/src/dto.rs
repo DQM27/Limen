@@ -35,6 +35,7 @@ use limen_dominio::medio::{Medio, TipoMedio};
 use limen_dominio::personal_kof::{PersonalKof, PersonalKofId};
 use limen_dominio::presencia::{Via, YaEstaAdentro};
 use limen_dominio::rango_fechas::Atajo;
+use limen_dominio::resaltado::{Campo, Segmento};
 use limen_dominio::tipo_ingreso::TipoIngreso;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -53,6 +54,10 @@ pub fn leer_via(codigo: &str) -> Result<Via, ErrorEntrada> {
     Via::desde_codigo(codigo).ok_or(ErrorEntrada::ViaInvalida)
 }
 
+pub fn leer_campo_resaltable(codigo: &str) -> Result<Campo, ErrorEntrada> {
+    Campo::desde_codigo(codigo).ok_or(ErrorEntrada::CampoInvalido)
+}
+
 fn leer_medio(codigo: &str) -> Result<TipoMedio, ErrorEntrada> {
     match codigo {
         A_PIE => Ok(TipoMedio::APie),
@@ -62,6 +67,23 @@ fn leer_medio(codigo: &str) -> Result<TipoMedio, ErrorEntrada> {
 }
 
 // --- Salida: lo que la interfaz muestra ---
+
+/// Un tramo de un texto: la pantalla pinta los que vienen `resaltado`
+/// (regla N1). Los segmentos de un texto, en orden, lo reconstruyen exacto.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SegmentoDto {
+    pub texto: String,
+    pub resaltado: bool,
+}
+
+impl From<&Segmento> for SegmentoDto {
+    fn from(segmento: &Segmento) -> Self {
+        Self {
+            texto: segmento.texto.clone(),
+            resaltado: segmento.resaltado,
+        }
+    }
+}
 
 /// Una persona que está adentro, por cualquiera de las cuatro vías.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

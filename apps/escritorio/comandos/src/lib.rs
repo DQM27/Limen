@@ -33,14 +33,14 @@ pub use dto::{
     AccesoDto, CambioDto, CambioGafeteEntrada, CandidatoIngresoDto, ContratistaDto,
     ContratistaEntrada, EmpresaDto, EmpresaProveedoraDto, EntradaContratistaEntrada,
     EntradaCorreoEntrada, EntradaProveedorEntrada, EntradaRegistradaDto, FilaContratistaDto,
-    GafeteDto, MotivoDto, PersonaAdentroDto, PersonalKofDto,
+    GafeteDto, MotivoDto, PersonaAdentroDto, PersonalKofDto, SegmentoDto,
 };
 pub use dto::{AtajoFechaDto, HistorialDto, MovimientoDto, OperadorDto};
 pub use error::{ErrorEntrada, ErrorJson, TipoErrorJson};
 pub use sesion::{SesionDelEquipo, UsuarioActual};
 
 use campos::con_campo;
-use dto::{leer_fecha_opcional, leer_tipo_gafete, leer_uuid, leer_via};
+use dto::{leer_campo_resaltable, leer_fecha_opcional, leer_tipo_gafete, leer_uuid, leer_via};
 
 /// Los comandos de la interfaz, sobre una aplicación ya armada, y la
 /// sesión abierta en el equipo.
@@ -190,6 +190,23 @@ where
     ) -> Result<Vec<ContratistaDto>, ErrorJson> {
         let encontrados = self.app.contratistas.buscar.ejecutar(texto, limite).await?;
         Ok(encontrados.iter().map(ContratistaDto::from).collect())
+    }
+
+    /// Parte cada texto en segmentos, resaltando lo que coincide con lo que
+    /// se buscó (regla N1). `campo` es `NOMBRE`, `IDENTIFICACION` o `EMPRESA`.
+    /// No toca datos: es sólo el dominio sobre los textos que ya están en
+    /// pantalla.
+    pub fn resaltar(
+        &self,
+        buscado: &str,
+        campo: &str,
+        textos: &[String],
+    ) -> Result<Vec<Vec<SegmentoDto>>, ErrorJson> {
+        let campo = leer_campo_resaltable(campo)?;
+        Ok(limen_dominio::resaltado::resaltar(buscado, campo, textos)
+            .iter()
+            .map(|segmentos| segmentos.iter().map(SegmentoDto::from).collect())
+            .collect())
     }
 
     /// Busca empresas de contratistas por nombre.

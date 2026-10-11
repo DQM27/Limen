@@ -72,6 +72,7 @@ pub fn run() {
             comandos::atajos_de_fecha,
             comandos::buscar_contratistas,
             comandos::buscar_empresas,
+            comandos::resaltar_coincidencias,
             comandos::registrar_salida,
             comandos::registrar_salida_por_gafete,
             comandos::registrar_empresa,

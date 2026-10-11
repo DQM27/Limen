@@ -399,6 +399,27 @@ mod tests {
 
     // --- Errores ---
 
+    #[tokio::test]
+    async fn el_resaltado_llega_en_segmentos_json_y_rechaza_un_campo_desconocido() {
+        let (comandos, _) = con_contratista().await;
+        let textos = vec!["José Peña".to_owned()];
+
+        let segmentos = comandos.resaltar("jos pe", "NOMBRE", &textos).unwrap();
+        assert_eq!(
+            serde_json::to_value(&segmentos).unwrap(),
+            json!([[
+                { "texto": "Jos", "resaltado": true },
+                { "texto": "é ", "resaltado": false },
+                { "texto": "Pe", "resaltado": true },
+                { "texto": "ña", "resaltado": false }
+            ]]),
+            "el texto original, con sus tildes, partido en segmentos"
+        );
+
+        let error = error_de(comandos.resaltar("jos", "COLOR", &textos));
+        assert_eq!(error.codigo, "campo_invalido", "el campo debe ser conocido");
+    }
+
     fn error_de<T: std::fmt::Debug>(resultado: Result<T, ErrorJson>) -> ErrorJson {
         resultado.unwrap_err()
     }

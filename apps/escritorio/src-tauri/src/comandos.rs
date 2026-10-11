@@ -19,7 +19,8 @@ use limen_escritorio_comandos::{
     AtajoFechaDto, CambioDto, CambioGafeteEntrada, CandidatoIngresoDto, ContratistaDto,
     ContratistaEntrada, EmpresaDto, EmpresaProveedoraDto, EntradaContratistaEntrada,
     EntradaCorreoEntrada, EntradaProveedorEntrada, EntradaRegistradaDto, ErrorJson,
-    FilaContratistaDto, GafeteDto, HistorialDto, PersonaAdentroDto, PersonalKofDto, UsuarioActual,
+    FilaContratistaDto, GafeteDto, HistorialDto, PersonaAdentroDto, PersonalKofDto, SegmentoDto,
+    UsuarioActual,
 };
 use tauri::State;
 
@@ -103,6 +104,18 @@ pub async fn buscar_contratistas(
 ) -> Resultado<Vec<ContratistaDto>> {
     estado.comandos().sesion()?;
     estado.comandos().buscar_contratistas(&texto, limite).await
+}
+
+/// Parte cada texto en segmentos con lo buscado resaltado (regla N1).
+#[tauri::command]
+pub fn resaltar_coincidencias(
+    estado: State<'_, Estado>,
+    buscado: String,
+    campo: String,
+    textos: Vec<String>,
+) -> Resultado<Vec<Vec<SegmentoDto>>> {
+    estado.comandos().sesion()?;
+    estado.comandos().resaltar(&buscado, &campo, &textos)
 }
 
 #[tauri::command]
