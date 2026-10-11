@@ -17,10 +17,10 @@ export function etiquetaDeTipoGafete(tipo: TipoGafete): string {
   return TIPOS_DE_GAFETE.find((t) => t.tipo === tipo)?.etiqueta ?? tipo;
 }
 
-/** Un gafete prestado ahora se ve «Prestado»; los demás, por su estado. */
+/** Un gafete en manos de alguien ahora se ve «Asignado»; los demás, por su estado. */
 export function etiquetaDeEstadoGafete(gafete: Pick<Gafete, 'estado' | 'prestado'>): string {
   if (gafete.prestado) {
-    return 'Prestado';
+    return 'Asignado';
   }
   switch (gafete.estado) {
     case 'DISPONIBLE':

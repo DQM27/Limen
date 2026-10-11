@@ -77,7 +77,7 @@ describe('modal de un gafete', () => {
     expect(raiz.querySelector('.datos')?.textContent).toContain('Disponible');
   });
 
-  it('uno prestado sólo informa quién lo tiene y que se libera desde Dentro', async () => {
+  it('uno asignado sólo informa quién lo tiene y que se libera desde Dentro', async () => {
     const { raiz, boton } = await crear(
       gafete({
         prestado: true,

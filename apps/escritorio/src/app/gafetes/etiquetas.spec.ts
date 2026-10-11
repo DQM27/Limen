@@ -16,8 +16,8 @@ describe('etiquetas de gafetes', () => {
     expect(etiquetaDeTipoGafete('PROVISIONAL_KOF')).toBe('KOF provisional');
   });
 
-  it('un gafete prestado se ve "Prestado" aunque su estado sea disponible', () => {
-    expect(etiquetaDeEstadoGafete({ estado: 'DISPONIBLE', prestado: true })).toBe('Prestado');
+  it('un gafete prestado se ve "Asignado" aunque su estado sea disponible', () => {
+    expect(etiquetaDeEstadoGafete({ estado: 'DISPONIBLE', prestado: true })).toBe('Asignado');
     expect(etiquetaDeEstadoGafete({ estado: 'DISPONIBLE', prestado: false })).toBe('Disponible');
     expect(etiquetaDeEstadoGafete({ estado: 'PERDIDO', prestado: false })).toBe('Perdido');
     expect(etiquetaDeEstadoGafete({ estado: 'DE_BAJA', prestado: false })).toBe('De baja');
