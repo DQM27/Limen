@@ -81,6 +81,30 @@ describe('pantalla de KOF', () => {
     TestBed.inject(MatDialog).closeAll();
   });
 
+  it('«Personal» abre el modal para corregir o desactivar, y al cerrarlo actualiza la lista', async () => {
+    TestBed.overrideProvider(MatDialog, {
+      useValue: { open: () => ({ afterClosed: () => of(undefined) }) },
+    });
+    const { raiz } = await crear();
+    const antes = llamadas('dentro').length;
+
+    raiz.querySelector<HTMLButtonElement>('button.personal')?.click();
+
+    await vi.waitFor(() => expect(llamadas('dentro').length).toBe(antes + 1));
+  });
+
+  it('«Personal» abre el modal de administración', async () => {
+    const { fixture, raiz } = await crear();
+
+    raiz.querySelector<HTMLButtonElement>('button.personal')?.click();
+    await fixture.whenStable();
+
+    const modal = document.querySelector('app-dialogo-administrar-personal');
+    expect(modal?.querySelector('h2')?.textContent).toContain('Personal KOF');
+    expect(TestBed.inject(MatDialog).openDialogs[0]?.disableClose).toBe(true);
+    TestBed.inject(MatDialog).closeAll();
+  });
+
   it('al entregar un gafete avisa y vuelve a pedir quién está adentro', async () => {
     TestBed.overrideProvider(MatDialog, {
       useValue: { open: () => ({ afterClosed: () => of({ nombre: 'ANA MORA' }) }) },

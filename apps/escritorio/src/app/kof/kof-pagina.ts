@@ -6,6 +6,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { Atajo } from '../compartido/atajo';
 import { Avisos } from '../compartido/avisos';
 import { ListaDentro } from '../dentro/lista-dentro';
+import { DialogoAdministrarPersonal } from './dialogo-administrar-personal';
 import { DialogoEntregarGafete, type ResultadoEntregaKof } from './dialogo-entregar-gafete';
 import { DialogoNuevoPersonal, type ResultadoNuevoPersonal } from './dialogo-nuevo-personal';
 
@@ -49,6 +50,10 @@ import { DialogoNuevoPersonal, type ResultadoNuevoPersonal } from './dialogo-nue
         <mat-icon aria-hidden="true">add</mat-icon>
         Nuevo personal
       </button>
+      <button botones mat-stroked-button type="button" class="personal" (click)="administrar()">
+        <mat-icon aria-hidden="true">manage_accounts</mat-icon>
+        Personal
+      </button>
     </app-lista-dentro>
   `,
   styles: `
@@ -59,7 +64,8 @@ import { DialogoNuevoPersonal, type ResultadoNuevoPersonal } from './dialogo-nue
       min-height: 0;
     }
     .entrega,
-    .nuevo {
+    .nuevo,
+    .personal {
       --mat-button-filled-container-height: 34px;
       --mat-button-outlined-container-height: 34px;
     }
@@ -85,6 +91,18 @@ export class KofPagina {
           this.lista().actualizar();
         }
       });
+  }
+
+  /** El modal que corrige o desactiva al personal; al cerrarlo, vuelve a pedir quién está adentro. */
+  protected administrar(): void {
+    this.dialogos
+      .open<DialogoAdministrarPersonal, void, void>(DialogoAdministrarPersonal, {
+        width: '460px',
+        disableClose: true,
+        autoFocus: 'first-tabbable',
+      })
+      .afterClosed()
+      .subscribe(() => this.lista().actualizar());
   }
 
   /** El modal que da de alta a una persona del personal KOF. */

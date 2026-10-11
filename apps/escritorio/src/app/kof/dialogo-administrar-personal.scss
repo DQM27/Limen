@@ -1,0 +1,66 @@
+@use '../compartido/dialogo';
+
+@include dialogo.compacto;
+
+.personas {
+  // Seis filas de alto fijo: el modal no se estira ni se encoge al buscar.
+  box-sizing: border-box;
+  height: 312px;
+  margin: 12px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.persona {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  min-height: 52px;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+
+  &.inactiva .nombre {
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+.datos {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.nombre {
+  overflow: hidden;
+  font: var(--mat-sys-label-large);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detalle {
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+
+  .estado {
+    color: var(--mat-sys-error);
+  }
+}
+
+.vacio {
+  padding: 12px 0;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.correccion {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 4px;
+
+  mat-form-field {
+    flex: 1;
+  }
+}
