@@ -11,3 +11,13 @@ datos-privados/
 *.sql
 *.dump
 *.csv
+
+# App móvil: la interfaz y la semilla de datos se generan con preparar.ps1
+# y llevan datos reales; nunca se suben.
+apps/movil/web/
+apps/movil/node_modules/
+apps/movil/src-tauri/gen/android/.gradle/
+apps/movil/src-tauri/gen/android/app/build/
+apps/movil/src-tauri/gen/android/app/src/main/jniLibs/
+apps/movil/src-tauri/gen/android/local.properties
+*.apk

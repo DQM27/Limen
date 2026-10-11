@@ -10,6 +10,7 @@ members = [
     "crates/composicion",
     "apps/escritorio/comandos",
     "apps/escritorio/src-tauri",
+    "apps/movil/src-tauri",
 ]
 
 [workspace.package]
