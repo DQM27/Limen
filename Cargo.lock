@@ -3275,6 +3275,7 @@ dependencies = [
  "limen-dominio",
  "limen-infra-plataforma",
  "limen-infra-surreal",
+ "rustls",
  "surrealdb",
  "thiserror 2.0.21",
  "tokio",

@@ -14,6 +14,9 @@ limen-infra-plataforma.workspace = true
 # el protocolo y TLS (rustls, escrito en Rust). La app de escritorio no
 # depende de él todavía, así que no los arrastra.
 surrealdb = { workspace = true, features = ["protocol-ws", "rustls"] }
+# Con `ring` y `aws-lc-rs` a la vez en el árbol, rustls no elige solo: la
+# herramienta instala `ring` al arrancar.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["time"] }
 

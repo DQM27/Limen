@@ -27,6 +27,8 @@ const USO: &str = "Uso: limen-nube probar | esquema | subir <carpeta de datos>";
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> ExitCode {
+    // Si ya hay uno instalado, el error sólo avisa de eso: se ignora.
+    drop(rustls::crypto::ring::default_provider().install_default());
     let orden = std::env::args().nth(1).unwrap_or_default();
     if orden == "subir" {
         let Some(carpeta) = std::env::args().nth(2) else {
