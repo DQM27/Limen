@@ -59,7 +59,7 @@ falta el detalle, [`arquitectura.md`](arquitectura.md), [`reglas.md`](reglas.md)
 - **Avisos** (`compartido/avisos.ts`): al estilo de las notificaciones de macOS, arriba a
   la derecha, se apilan y se van solos. Usar `Avisos.exito/error/info(mensaje, título?)`,
   no `MatSnackBar`.
-- **Pantallas** (barra lateral, ya todas activas excepto Historial):
+- **Pantallas** (barra lateral, ya todas activas):
   - **Dentro:** quién está adentro por las cuatro vías (`dentro/lista-dentro.ts`, pieza
     reutilizable con la vía como entrada), salida por fila y masiva con confirmación,
     filtro con/sin gafete y resaltado de quien lleva más de 12 horas (regla E13).
@@ -67,6 +67,10 @@ falta el detalle, [`arquitectura.md`](arquitectura.md), [`reglas.md`](reglas.md)
     clic), "Registrar ingreso" y botón "Ingreso" por fila. El formulario valida **todo a
     la vez** (`validar_contratista`, regla B5b) y la empresa sólo se elige: crearla es el
     botón «+» con su propio modal.
+  - **Historial:** entradas y salidas de un rango (`historial/historial-pagina.ts`). Botón
+    con los atajos de fecha del núcleo (abre con los últimos 6 meses), fechas Desde/Hasta
+    a mano, aviso si el rango se trunca y el error del rango junto a su fecha. Las
+    exportaciones (CSV, Excel, PDF) quedan para el final, a pedido del dueño.
   - **Proveedores, Correo y KOF:** cada una es la lista de Dentro filtrada por su vía,
     con su salida y su botón de ingreso (en KOF, "Entregar gafete" y "Nuevo personal").
     Piezas compartidas: `SelectorEmpresa`, `CamposDeIngreso`, `DialogoEmpresa`.
@@ -108,24 +112,16 @@ commits en el remoto que no están en `main`: revisarlos o descartarlos.
 
 ## Lo que sigue
 
-1. **Historial de ingresos: el núcleo ya está; falta la pantalla.**
-   `nucleo/comandos.ts`: `listarHistorial(desde, hasta)` (fechas `AAAA-MM-DD` o `null`;
-   trae `movimientos`, `truncado` y `maximo`) y `atajosDeFecha()` (código, etiqueta,
-   nombre corto, rango y cuál abre el historial: los últimos 6 meses). Un rango
-   invertido rechaza con `campo: 'hasta'`. La pantalla: la grilla base con un selector
-   de rango (botón con la etiqueta corta, panel con los atajos y fechas Desde/Hasta, el
-   modelo de Lattis). Las exportaciones (CSV, Excel, PDF) quedan para el final, a pedido
-   del dueño.
-2. **Atajos de teclado** y la **salida por número de gafete** (el comando
+1. **Atajos de teclado** y la **salida por número de gafete** (el comando
    `registrar_salida_por_gafete` ya existe; falta la pantalla). El dueño quiere darle a
    Dentro "algo más" con atajos.
-3. **Validar todo a la vez también en proveedor, correo y KOF** (hoy sólo se muestra el
+2. **Validar todo a la vez también en proveedor, correo y KOF** (hoy sólo se muestra el
    primer error de cada formulario; el contratista ya valida todo junto con
    `validar_contratista`). Migrar el formulario de contratista a `SelectorEmpresa` y
    `CamposDeIngreso` para quitar duplicación.
-4. **Editar y desactivar al personal KOF** (el núcleo lo tiene: `editarPersonalKof`);
+3. **Editar y desactivar al personal KOF** (el núcleo lo tiene: `editarPersonalKof`);
    hoy sólo se da de alta.
-5. CodeQL para el JavaScript en la CI. Equipos (bloque M) y la nube (con L4 y L5).
+4. CodeQL para el JavaScript en la CI. Equipos (bloque M) y la nube (con L4 y L5).
 
 ## Cómo trabajar en esta máquina
 
