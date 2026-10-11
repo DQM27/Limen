@@ -9,9 +9,12 @@ use surrealdb::engine::local::{Db, Mem, SurrealKv};
 use crate::error::tecnica;
 use crate::registros::AuditoriaRegistro;
 
-const ESQUEMA: &str = include_str!("esquema/esquema.surql");
-const NAMESPACE: &str = "limen";
-const BASE: &str = "principal";
+/// El esquema completo, declarativo (`OVERWRITE`): se vuelve a aplicar entero
+/// en cada arranque. Es el mismo en los equipos y en la nube.
+pub const ESQUEMA: &str = include_str!("esquema/esquema.surql");
+/// El namespace y la base de Limen, iguales en los equipos y en la nube.
+pub const NAMESPACE: &str = "limen";
+pub const BASE: &str = "principal";
 
 /// La base de datos embebida. Clonarla comparte la misma conexión: es lo
 /// que reciben la composición y la fábrica de Unit of Work.

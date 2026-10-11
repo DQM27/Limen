@@ -18,7 +18,7 @@ mod registros;
 mod repositorios;
 mod unidad_de_trabajo;
 
-pub use almacen::AlmacenSurreal;
+pub use almacen::{AlmacenSurreal, BASE, ESQUEMA, NAMESPACE};
 pub use registros::{AuditoriaRegistro, CambioRegistro};
 pub use repositorios::{
     AuditoriaSurreal, ContratistasSurreal, EmpresasProveedorasSurreal, EmpresasSurreal,

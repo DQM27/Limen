@@ -7,6 +7,7 @@ members = [
     "crates/infra-surreal",
     "crates/pruebas-contrato",
     "crates/infra-plataforma",
+    "crates/infra-nube",
     "crates/composicion",
     "apps/escritorio/comandos",
     "apps/escritorio/src-tauri",
@@ -48,6 +49,7 @@ limen-infra-memoria = { path = "crates/infra-memoria" }
 limen-infra-surreal = { path = "crates/infra-surreal" }
 limen-pruebas-contrato = { path = "crates/pruebas-contrato" }
 limen-infra-plataforma = { path = "crates/infra-plataforma" }
+limen-infra-nube = { path = "crates/infra-nube" }
 limen-composicion = { path = "crates/composicion" }
 limen-escritorio-comandos = { path = "apps/escritorio/comandos" }
 limen-escritorio = { path = "apps/escritorio/src-tauri" }

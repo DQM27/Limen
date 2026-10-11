@@ -1,0 +1,19 @@
+[package]
+name = "limen-infra-nube"
+description = "Conexión de Limen con la nube (SurrealDB Cloud): conectar y aplicar el esquema"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+limen-infra-surreal.workspace = true
+# La nube se alcanza por WebSocket seguro (`wss://`): sólo este crate activa
+# el protocolo y TLS (rustls, escrito en Rust). La app de escritorio no
+# depende de él todavía, así que no los arrastra.
+surrealdb = { workspace = true, features = ["protocol-ws", "rustls"] }
+thiserror.workspace = true
+tokio = { workspace = true, features = ["time"] }
+
+[lints]
+workspace = true
