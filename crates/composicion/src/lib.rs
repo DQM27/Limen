@@ -50,6 +50,7 @@ use limen_aplicacion::puertos::{
     Claves, Consultas, ErrorPersistencia, FabricaUnidadDeTrabajo, GeneradorIds, Reloj,
 };
 use limen_aplicacion::sesion::Origen;
+use limen_infra_nube::{ConfigNube, instalar_cifrado, sincronizar};
 use limen_infra_plataforma::{
     ClavesArgon2, IdsV7, RelojConfiable, SERVIDORES_NTP, leer_desfase, origen_del_equipo,
 };
@@ -308,16 +309,37 @@ impl AplicacionLimen {
     /// último desfase guardado, lo corrige contra NTP en segundo plano (E5:
     /// hasta la primera medición la hora sale sin comprobar y queda marcada)
     /// y abre la base.
+    ///
+    /// Si el equipo tiene configurada la nube (variables `LIMEN_NUBE_*`, ver
+    /// `docs/nube.md`), lanza además la sincronización en segundo plano: lo
+    /// que se registra sube a la nube a los pocos segundos, y sin conexión se
+    /// acumula y sube al volver. Sin esa configuración la app trabaja igual,
+    /// sólo en el equipo. Hay que llamarlo dentro del runtime de `tokio`.
     pub async fn arrancar(config: &Config) -> Result<Self, ErrorArranque> {
         let reloj = RelojConfiable::new(leer_desfase(&config.ruta_desfase_reloj));
         reloj.sincronizar_en_segundo_plano(&SERVIDORES_NTP, config.ruta_desfase_reloj.clone());
-        Self::abrir(config, &reloj).await
+        let (aplicacion, almacen) = Self::abrir_con_almacen(config, &reloj).await?;
+        match ConfigNube::desde_entorno(|nombre| std::env::var(nombre).ok()) {
+            Ok(nube) => {
+                instalar_cifrado();
+                tokio::spawn(sincronizar(almacen, nube));
+            }
+            Err(motivo) => log::info!("sin sincronización con la nube: {motivo}"),
+        }
+        Ok(aplicacion)
     }
 
     /// Abre (o crea) la base de este equipo y arma la aplicación con este
     /// reloj, sin sincronizarlo (las pruebas no salen a la red). La identidad
     /// del equipo (unidad operativa e ID) sale de `config.ruta_equipo`.
     pub async fn abrir(config: &Config, reloj: &RelojConfiable) -> Result<Self, ErrorArranque> {
+        Ok(Self::abrir_con_almacen(config, reloj).await?.0)
+    }
+
+    async fn abrir_con_almacen(
+        config: &Config,
+        reloj: &RelojConfiable,
+    ) -> Result<(Self, AlmacenSurreal), ErrorArranque> {
         let origen = origen_del_equipo(&config.ruta_equipo, UNIDAD_POR_OMISION)
             .map_err(ErrorArranque::Equipo)?;
         let almacen = AlmacenSurreal::en_disco(&config.ruta_base, origen.clone()).await?;
@@ -327,6 +349,7 @@ impl AplicacionLimen {
         semilla::sembrar_usuarios(&almacen, &claves)
             .await
             .map_err(ErrorArranque::Semilla)?;
-        Ok(Self::nueva(&almacen, reloj, &IdsV7, &claves, &origen))
+        let aplicacion = Self::nueva(&almacen, reloj, &IdsV7, &claves, &origen);
+        Ok((aplicacion, almacen))
     }
 }

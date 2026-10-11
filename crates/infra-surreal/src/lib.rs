@@ -12,6 +12,7 @@
 //! Ver `docs/arquitectura.md`, secciones 7 y 8.
 
 mod almacen;
+mod cambios;
 mod consultas;
 mod error;
 mod registros;
@@ -19,6 +20,7 @@ mod repositorios;
 mod unidad_de_trabajo;
 
 pub use almacen::{AlmacenSurreal, BASE, ESQUEMA, NAMESPACE, UNIDAD_DE_PRUEBAS};
+pub use cambios::{Cambio, Entrada};
 pub use registros::{AuditoriaRegistro, CambioRegistro};
 pub use repositorios::{
     AuditoriaSurreal, ContratistasSurreal, EmpresasProveedorasSurreal, EmpresasSurreal,

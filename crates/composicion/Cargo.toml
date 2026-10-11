@@ -10,6 +10,10 @@ publish.workspace = true
 limen-aplicacion.workspace = true
 limen-infra-surreal.workspace = true
 limen-infra-plataforma.workspace = true
+# La sincronización con la nube, que se lanza al arrancar si está configurada.
+limen-infra-nube.workspace = true
+log.workspace = true
+tokio.workspace = true
 # La semilla de desarrollo (sólo en depuración) arma usuarios del dominio.
 limen-dominio.workspace = true
 thiserror.workspace = true

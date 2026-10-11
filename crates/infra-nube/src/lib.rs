@@ -10,6 +10,7 @@
 //! La configuración sale de variables de entorno ([`ConfigNube::desde_entorno`]),
 //! nunca del código: el repositorio es público.
 
+mod sincronizacion;
 mod subida;
 
 use std::fmt;
@@ -19,7 +20,17 @@ use surrealdb::Surreal;
 use surrealdb::engine::any::{Any, connect};
 use surrealdb::opt::auth::{Database, Namespace, Root};
 
+pub use sincronizacion::{CADA, REINTENTO, sincronizar};
 pub use subida::{Copia, Subida, TABLAS};
+
+/// Elige el proveedor de cifrado de las conexiones seguras (`ring`). Con
+/// `ring` y `aws-lc-rs` a la vez en el árbol de dependencias, `rustls` no
+/// elige solo y la primera conexión `wss://` fallaría. Hay que llamarlo una
+/// vez al arrancar, antes de conectar; llamarlo de nuevo no hace nada.
+pub fn instalar_cifrado() {
+    // Si ya hay uno instalado, el error sólo avisa de eso: se ignora.
+    drop(rustls::crypto::ring::default_provider().install_default());
+}
 
 /// La dirección de la instancia, por ejemplo
 /// `wss://limen-xxxx.aws-use1.surreal.cloud`.

@@ -94,8 +94,8 @@ equipo sin cambiar el flujo de datos.
 
 1. ✅ Conectar y aplicar el esquema (`crates/infra-nube`, herramienta `limen-nube`).
 2. ✅ **Unidades operativas y equipos** en el dominio y en el esquema (sección 7).
-3. Subida de lo pendiente (bandeja de salida). ✅ Por ahora, a mano: `limen-nube subir`
-   copia la base entera; falta que la app suba sola lo que registra.
+3. ✅ Subida continua (sección 8). A mano sigue estando `limen-nube subir`, que copia la
+   base entera.
 4. Bajada: carga inicial de un equipo nuevo, en vivo y recuperación por cursor.
 5. Indicador de incidente al unir lo de varios equipos.
 6. Usuarios desde la nube (L4, L5) y la hora de la nube para los equipos sin NTP.
@@ -129,3 +129,28 @@ leen como registrados en ese equipo, que es donde se registraron.
 **Pendiente para cuando haya una segunda unidad:** el historial de cambios de un gafete
 (auditoría) lo identifica por `TIPO-NÚMERO`, sin la unidad. Con una sola unidad no
 importa; con dos, el historial del 25 de Brisas se mezclaría con el del 25 de la otra.
+
+## 8. Subida continua, como quedó
+
+- Las tablas que se comparten tienen **registro de cambios** (`CHANGEFEED 30d`): cada
+  alta, cambio y borrado queda anotado, en orden, durante 30 días. Es el mismo esquema
+  en el equipo y en la nube.
+- **Al arrancar**, si el equipo tiene la nube configurada (las variables
+  `LIMEN_NUBE_URL`, `LIMEN_NUBE_USUARIO`, `LIMEN_NUBE_CLAVE` y `LIMEN_NUBE_NIVEL` del
+  usuario de Windows), la app lanza la sincronización en segundo plano
+  (`infra_nube::sincronizar`). Sin esa configuración trabaja igual que antes, sólo en el
+  equipo.
+- **Cada 5 segundos** sube lo anotado desde la última vez, tabla por tabla y en orden:
+  lo guardado se crea o se reemplaza en la nube; lo borrado se borra (hechos y
+  auditoría nunca se borran: se agregan los que faltan). Lo que subió queda anotado en
+  `sincronizacion:⟨tabla⟩`, que es del equipo y no se comparte.
+- **La primera vez** cada tabla se copia entera, porque lo que había antes del registro
+  de cambios no está anotado; después sólo sube lo nuevo. Todo se puede repetir sin
+  duplicar nada.
+- **Sin red**, la sincronización sólo lo anota en el registro técnico y reintenta cada 30
+  segundos. Lo registrado mientras tanto sube al volver la conexión. La portería nunca
+  espera.
+- **Límite:** el registro de cambios guarda 30 días. Un equipo que pase más de 30 días
+  sin conexión debe volver a copiarse entero con `limen-nube subir`.
+- **Todavía no baja nada:** con una sola PC por unidad, la nube refleja al equipo. Bajar
+  en vivo lo de los demás equipos es el paso 4.

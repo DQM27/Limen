@@ -20,8 +20,13 @@ DEFINE ANALYZER OVERWRITE buscador_prefijos
 DEFINE TABLE OVERWRITE unidad_operativa SCHEMAFULL;
 DEFINE FIELD OVERWRITE nombre ON unidad_operativa TYPE string ASSERT string::len($value) > 0;
 
+-- Registro de cambios (CHANGEFEED 30d): las tablas que se comparten con la
+-- nube anotan cada alta, cambio y borrado durante 30 días. El equipo sube a
+-- la nube lo anotado desde la última vez (ver docs/nube.md); en la nube, el
+-- mismo registro es lo que un equipo pide al volver la conexión.
+
 -- Empresas (regla C1: nombre sin repetir).
-DEFINE TABLE OVERWRITE empresa SCHEMAFULL;
+DEFINE TABLE OVERWRITE empresa SCHEMAFULL CHANGEFEED 30d;
 DEFINE FIELD OVERWRITE nombre ON empresa TYPE string ASSERT string::len($value) > 0;
 DEFINE FIELD OVERWRITE nombre_busqueda ON empresa TYPE string;
 DEFINE INDEX OVERWRITE empresa_nombre_unico ON empresa FIELDS nombre UNIQUE;
@@ -29,7 +34,7 @@ DEFINE INDEX OVERWRITE empresa_busqueda ON empresa FIELDS nombre_busqueda
     FULLTEXT ANALYZER buscador_prefijos BM25;
 
 -- Contratistas (reglas B1-B5: cédula sin repetir, empresa existente).
-DEFINE TABLE OVERWRITE contratista SCHEMAFULL;
+DEFINE TABLE OVERWRITE contratista SCHEMAFULL CHANGEFEED 30d;
 DEFINE FIELD OVERWRITE cedula ON contratista TYPE string ASSERT string::len($value) > 0;
 DEFINE FIELD OVERWRITE nombre ON contratista TYPE string ASSERT string::len($value) > 0;
 DEFINE FIELD OVERWRITE empresa ON contratista TYPE record<empresa>;
@@ -46,7 +51,7 @@ DEFINE INDEX OVERWRITE contratista_busqueda ON contratista FIELDS nombre_busqued
 -- Clave natural: gafete:⟨UNIDAD-TIPO-NÚMERO⟩, así el mismo número no puede
 -- existir dos veces en un tipo de una unidad (y el 25 de Brisas no choca con
 -- el 25 de otra unidad).
-DEFINE TABLE OVERWRITE gafete SCHEMAFULL;
+DEFINE TABLE OVERWRITE gafete SCHEMAFULL CHANGEFEED 30d;
 DEFINE FIELD OVERWRITE unidad ON gafete TYPE string;
 DEFINE FIELD OVERWRITE tipo ON gafete TYPE 'CONTRATISTA' | 'VISITA' | 'PROVEEDOR' | 'PROVISIONAL_KOF';
 DEFINE FIELD OVERWRITE numero ON gafete TYPE int ASSERT $value > 0;
@@ -57,7 +62,7 @@ DEFINE FIELD OVERWRITE portador_personal_kof ON gafete TYPE option<record<person
 
 -- Gafetes prestados ahora. Clave: prestamo_gafete:⟨UNIDAD-TIPO-NÚMERO⟩; se
 -- crea al prestar y se borra al devolver, así un gafete no se presta dos veces.
-DEFINE TABLE OVERWRITE prestamo_gafete SCHEMAFULL;
+DEFINE TABLE OVERWRITE prestamo_gafete SCHEMAFULL CHANGEFEED 30d;
 DEFINE FIELD OVERWRITE unidad ON prestamo_gafete TYPE string;
 DEFINE FIELD OVERWRITE desde ON prestamo_gafete TYPE datetime;
 
@@ -66,13 +71,13 @@ DEFINE FIELD OVERWRITE desde ON prestamo_gafete TYPE datetime;
 -- borra al salir, así una persona no está adentro dos veces. La clave no
 -- lleva la unidad: una persona adentro una sola vez en todas (A7); el campo
 -- `unidad` dice en cuál.
-DEFINE TABLE OVERWRITE presencia SCHEMAFULL;
+DEFINE TABLE OVERWRITE presencia SCHEMAFULL CHANGEFEED 30d;
 DEFINE FIELD OVERWRITE unidad ON presencia TYPE string;
 DEFINE FIELD OVERWRITE via ON presencia TYPE 'CONTRATISTA' | 'PROVEEDOR' | 'CORREO' | 'KOF';
 DEFINE FIELD OVERWRITE desde ON presencia TYPE datetime;
 
 -- Ingresos de contratistas (bloque E).
-DEFINE TABLE OVERWRITE ingreso_contratista SCHEMAFULL;
+DEFINE TABLE OVERWRITE ingreso_contratista SCHEMAFULL CHANGEFEED 30d;
 DEFINE FIELD OVERWRITE unidad ON ingreso_contratista TYPE string;
 DEFINE FIELD OVERWRITE contratista ON ingreso_contratista TYPE record<contratista>;
 DEFINE FIELD OVERWRITE cedula ON ingreso_contratista TYPE string;
@@ -88,7 +93,7 @@ DEFINE FIELD OVERWRITE salida_operador ON ingreso_contratista TYPE option<uuid>;
 DEFINE INDEX OVERWRITE ingreso_contratista_por_gafete ON ingreso_contratista FIELDS gafete, salida_en;
 
 -- Empresas proveedoras (regla H1): catálogo aparte del de contratistas.
-DEFINE TABLE OVERWRITE empresa_proveedora SCHEMAFULL;
+DEFINE TABLE OVERWRITE empresa_proveedora SCHEMAFULL CHANGEFEED 30d;
 DEFINE FIELD OVERWRITE nombre ON empresa_proveedora TYPE string ASSERT string::len($value) > 0;
 DEFINE FIELD OVERWRITE nombre_busqueda ON empresa_proveedora TYPE string;
 DEFINE INDEX OVERWRITE empresa_proveedora_nombre_unico ON empresa_proveedora FIELDS nombre UNIQUE;
@@ -97,7 +102,7 @@ DEFINE INDEX OVERWRITE empresa_proveedora_busqueda ON empresa_proveedora FIELDS 
 
 -- Ingresos de proveedores (bloque H). Cédula y nombre llegan con cada
 -- ingreso: no hay catálogo de personas.
-DEFINE TABLE OVERWRITE ingreso_proveedor SCHEMAFULL;
+DEFINE TABLE OVERWRITE ingreso_proveedor SCHEMAFULL CHANGEFEED 30d;
 DEFINE FIELD OVERWRITE unidad ON ingreso_proveedor TYPE string;
 DEFINE FIELD OVERWRITE cedula ON ingreso_proveedor TYPE string;
 DEFINE FIELD OVERWRITE nombre ON ingreso_proveedor TYPE string;
@@ -112,7 +117,7 @@ DEFINE INDEX OVERWRITE ingreso_proveedor_por_gafete ON ingreso_proveedor FIELDS 
 
 -- Ingresos por correo (bloque I): visita autorizada por correo. Como el
 -- proveedor, pero con motivo en lugar de empresa y gafete de visita.
-DEFINE TABLE OVERWRITE ingreso_correo SCHEMAFULL;
+DEFINE TABLE OVERWRITE ingreso_correo SCHEMAFULL CHANGEFEED 30d;
 DEFINE FIELD OVERWRITE unidad ON ingreso_correo TYPE string;
 DEFINE FIELD OVERWRITE cedula ON ingreso_correo TYPE string;
 DEFINE FIELD OVERWRITE nombre ON ingreso_correo TYPE string;
@@ -126,7 +131,7 @@ DEFINE FIELD OVERWRITE salida_operador ON ingreso_correo TYPE option<uuid>;
 DEFINE INDEX OVERWRITE ingreso_correo_por_gafete ON ingreso_correo FIELDS gafete, salida_en;
 
 -- Personal KOF (bloque K): se identifica por código de empleado.
-DEFINE TABLE OVERWRITE personal_kof SCHEMAFULL;
+DEFINE TABLE OVERWRITE personal_kof SCHEMAFULL CHANGEFEED 30d;
 DEFINE FIELD OVERWRITE codigo_empleado ON personal_kof TYPE string ASSERT string::len($value) > 0;
 DEFINE FIELD OVERWRITE nombre ON personal_kof TYPE string ASSERT string::len($value) > 0;
 DEFINE FIELD OVERWRITE activo ON personal_kof TYPE bool;
@@ -136,7 +141,7 @@ DEFINE INDEX OVERWRITE personal_kof_busqueda ON personal_kof FIELDS nombre_busqu
     FULLTEXT ANALYZER buscador_prefijos BM25;
 
 -- Préstamos del gafete provisional KOF.
-DEFINE TABLE OVERWRITE prestamo_kof SCHEMAFULL;
+DEFINE TABLE OVERWRITE prestamo_kof SCHEMAFULL CHANGEFEED 30d;
 DEFINE FIELD OVERWRITE unidad ON prestamo_kof TYPE string;
 DEFINE FIELD OVERWRITE personal ON prestamo_kof TYPE record<personal_kof>;
 DEFINE FIELD OVERWRITE codigo_empleado ON prestamo_kof TYPE string;
@@ -151,7 +156,7 @@ DEFINE INDEX OVERWRITE prestamo_kof_por_gafete ON prestamo_kof FIELDS gafete, de
 -- Personas con un provisional sin devolver. Clave:
 -- personal_kof_con_prestamo:⟨uuid de la persona⟩; se crea al entregar y se
 -- borra al devolver, así nadie tiene dos provisionales a la vez.
-DEFINE TABLE OVERWRITE personal_kof_con_prestamo SCHEMAFULL;
+DEFINE TABLE OVERWRITE personal_kof_con_prestamo SCHEMAFULL CHANGEFEED 30d;
 DEFINE FIELD OVERWRITE unidad ON personal_kof_con_prestamo TYPE string;
 DEFINE FIELD OVERWRITE desde ON personal_kof_con_prestamo TYPE datetime;
 
@@ -180,7 +185,7 @@ DEFINE FIELD OVERWRITE ultimo ON intento_inicio TYPE datetime;
 -- Auditoría (regla B11): sólo se agrega, nunca se edita ni se borra. El
 -- evento lo hace cumplir la base, también para la conexión embebida (que
 -- entra como root y no pasa por PERMISSIONS).
-DEFINE TABLE OVERWRITE auditoria SCHEMAFULL;
+DEFINE TABLE OVERWRITE auditoria SCHEMAFULL CHANGEFEED 30d;
 DEFINE FIELD OVERWRITE entidad ON auditoria TYPE 'contratista' | 'empresa' | 'empresa_proveedora' | 'gafete' | 'personal_kof' | 'usuario';
 DEFINE FIELD OVERWRITE registro ON auditoria TYPE string;
 DEFINE FIELD OVERWRITE accion ON auditoria TYPE 'alta' | 'edicion';
@@ -208,7 +213,7 @@ DEFINE EVENT OVERWRITE auditoria_inmutable ON auditoria WHEN $event != "CREATE" 
 -- Una entrada lleva el registro que abrió en el campo de su vía (el mismo
 -- formato que su tabla), para que otro equipo pueda reconstruirlo; una
 -- salida no lleva ninguno.
-DEFINE TABLE OVERWRITE hecho SCHEMAFULL;
+DEFINE TABLE OVERWRITE hecho SCHEMAFULL CHANGEFEED 30d;
 DEFINE FIELD OVERWRITE tipo ON hecho TYPE 'ENTRADA' | 'SALIDA' READONLY;
 DEFINE FIELD OVERWRITE via ON hecho TYPE 'CONTRATISTA' | 'PROVEEDOR' | 'CORREO' | 'KOF' READONLY;
 DEFINE FIELD OVERWRITE registro ON hecho TYPE uuid READONLY;
@@ -231,3 +236,8 @@ DEFINE INDEX OVERWRITE hecho_por_unidad ON hecho FIELDS unidad;
 DEFINE EVENT OVERWRITE hecho_inmutable ON hecho WHEN $event != "CREATE" THEN {
     THROW "los hechos no se editan ni se borran";
 };
+
+-- Hasta dónde subió este equipo el registro de cambios de cada tabla:
+-- sincronizacion:⟨tabla⟩. Es del equipo: no se comparte con la nube.
+DEFINE TABLE OVERWRITE sincronizacion SCHEMAFULL;
+DEFINE FIELD OVERWRITE hasta ON sincronizacion TYPE int;

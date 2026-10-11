@@ -105,7 +105,9 @@ Lattis). La instancia `limen` (SurrealDB Cloud, gratis, `aws-use1`) ya existe co
 esquema aplicado; `crates/infra-nube` conecta y aplica el esquema. Por ahora hay una
 sola unidad, **Brisas**. Cada hecho ya lleva su unidad y su equipo, y lo de la unidad lleva
 su campo `unidad` (la identidad del equipo está en `equipo.txt`, en la carpeta de datos).
-Lo siguiente es el paso 3 de `nube.md`: subir lo pendiente.
+La app ya **sube sola** a la nube lo que se registra (cada 5 segundos, con el registro
+de cambios de la base; sin red se acumula). Lo siguiente es el paso 4 de `nube.md`: bajar
+en vivo lo de los demás equipos.
 
 ## Decidido y en espera
 

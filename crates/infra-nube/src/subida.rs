@@ -9,7 +9,7 @@
 //! sesión, el reloj del equipo y los usuarios (los usuarios son globales y
 //! vienen de la nube; los de un equipo de desarrollo son de prueba).
 
-use limen_infra_surreal::AlmacenSurreal;
+use limen_infra_surreal::{AlmacenSurreal, Cambio};
 use surrealdb::types::Value;
 
 use crate::{ErrorNube, Nube};
@@ -65,18 +65,7 @@ impl Nube {
     pub async fn subir_equipo(&self, almacen: &AlmacenSurreal) -> Result<Vec<Subida>, ErrorNube> {
         let mut subidas = Vec::with_capacity(TABLAS.len());
         for (tabla, copia) in TABLAS {
-            let filas = almacen
-                .filas(tabla)
-                .await
-                .map_err(|e| ErrorNube::Subida(format!("{tabla}: {e}")))?;
-            let filas: Vec<Value> = if tabla == "hecho" {
-                filas
-                    .into_iter()
-                    .map(|fila| con_origen(fila, almacen))
-                    .collect()
-            } else {
-                filas
-            };
+            let filas = filas_para_subir(tabla, almacen).await?;
             let cuantas = filas.len();
             self.copiar(tabla, copia, filas, almacen.unidad().as_str())
                 .await
@@ -87,6 +76,102 @@ impl Nube {
             });
         }
         Ok(subidas)
+    }
+
+    /// Sube lo que cambió en el equipo desde la última vez: las altas, los
+    /// cambios y los borrados que anotó el registro de cambios de cada tabla
+    /// (ver `limen_infra_surreal::Entrada`), en orden. Devuelve cuántos
+    /// cambios subió.
+    ///
+    /// La primera vez, una tabla se copia entera (lo que había antes del
+    /// registro de cambios no está anotado) y su registro se repasa desde el
+    /// principio: todo lo que se sube se puede repetir sin duplicar nada.
+    /// Si algo falla, lo que no se anotó como subido se vuelve a intentar la
+    /// próxima vez.
+    pub async fn subir_cambios(&self, almacen: &AlmacenSurreal) -> Result<usize, ErrorNube> {
+        let mut subidos = 0;
+        for (tabla, copia) in TABLAS {
+            let error = |e: &dyn std::fmt::Display| ErrorNube::Subida(format!("{tabla}: {e}"));
+            let ya_subido = almacen.subido_hasta(tabla).await.map_err(|e| error(&e))?;
+            if ya_subido.is_none() {
+                let filas = filas_para_subir(tabla, almacen).await?;
+                self.copiar(tabla, copia, filas, almacen.unidad().as_str())
+                    .await
+                    .map_err(|e| error(&e))?;
+                almacen
+                    .anotar_subido_hasta(tabla, 0)
+                    .await
+                    .map_err(|e| error(&e))?;
+            }
+            let mut desde = ya_subido.map_or(0, |hasta| hasta + 1);
+            loop {
+                let entradas = almacen
+                    .cambios_desde(tabla, desde, POR_LOTE)
+                    .await
+                    .map_err(|e| error(&e))?;
+                let Some(ultima) = entradas.last().map(|entrada| entrada.numero) else {
+                    break;
+                };
+                for entrada in entradas {
+                    subidos += entrada.cambios.len();
+                    self.aplicar(tabla, copia, entrada.cambios, almacen)
+                        .await
+                        .map_err(|e| error(&e))?;
+                }
+                almacen
+                    .anotar_subido_hasta(tabla, ultima)
+                    .await
+                    .map_err(|e| error(&e))?;
+                desde = ultima + 1;
+            }
+        }
+        Ok(subidos)
+    }
+
+    /// Aplica en la nube los cambios de una transacción del equipo, juntos.
+    async fn aplicar(
+        &self,
+        tabla: &'static str,
+        copia: Copia,
+        cambios: Vec<Cambio>,
+        almacen: &AlmacenSurreal,
+    ) -> Result<(), surrealdb::Error> {
+        let mut sentencias = vec!["BEGIN TRANSACTION;".to_owned()];
+        let mut valores: Vec<(String, Value)> = Vec::new();
+        for (i, cambio) in cambios.into_iter().enumerate() {
+            match (cambio, copia) {
+                (Cambio::Guardada(fila), Copia::Agregar) => {
+                    let fila = if tabla == "hecho" {
+                        con_origen(fila, almacen)
+                    } else {
+                        fila
+                    };
+                    sentencias.push(format!("INSERT IGNORE INTO {tabla} $c{i};"));
+                    valores.push((format!("c{i}"), fila));
+                }
+                (Cambio::Guardada(fila), _) => {
+                    sentencias.push(format!("UPSERT $c{i}.id CONTENT $c{i};"));
+                    valores.push((format!("c{i}"), fila));
+                }
+                // Hechos y auditoría no se borran nunca: si apareciera un
+                // borrado, no se sube.
+                (Cambio::Borrada(_), Copia::Agregar) => {}
+                (Cambio::Borrada(id), _) => {
+                    sentencias.push(format!("DELETE $c{i};"));
+                    valores.push((format!("c{i}"), Value::RecordId(id)));
+                }
+            }
+        }
+        if valores.is_empty() {
+            return Ok(());
+        }
+        sentencias.push("COMMIT TRANSACTION;".to_owned());
+        let mut consulta = self.db.query(sentencias.join("\n"));
+        for (nombre, valor) in valores {
+            consulta = consulta.bind((nombre, valor));
+        }
+        consulta.await?.check()?;
+        Ok(())
     }
 
     async fn copiar(
@@ -124,6 +209,25 @@ impl Nube {
         }
         Ok(())
     }
+}
+
+/// Las filas de una tabla tal como se suben: los hechos, con su origen.
+async fn filas_para_subir(
+    tabla: &'static str,
+    almacen: &AlmacenSurreal,
+) -> Result<Vec<Value>, ErrorNube> {
+    let filas = almacen
+        .filas(tabla)
+        .await
+        .map_err(|e| ErrorNube::Subida(format!("{tabla}: {e}")))?;
+    Ok(if tabla == "hecho" {
+        filas
+            .into_iter()
+            .map(|fila| con_origen(fila, almacen))
+            .collect()
+    } else {
+        filas
+    })
 }
 
 /// Un hecho guardado antes de que los hechos llevaran su origen se registró
@@ -288,5 +392,53 @@ mod tests {
             0,
             "y el gafete ya no está prestado"
         );
+    }
+
+    #[tokio::test]
+    async fn la_subida_continua_lleva_lo_que_cambia_y_nada_mas() {
+        let equipo = equipo_con_datos().await;
+        let nube = nube().await;
+
+        let primera = nube.subir_cambios(&equipo).await.unwrap();
+        assert!(primera > 0, "la primera vez sube lo que había");
+        assert_eq!(en_la_nube(&nube, "presencia").await, 1);
+        assert_eq!(
+            nube.subir_cambios(&equipo).await.unwrap(),
+            0,
+            "sin cambios nuevos no sube nada"
+        );
+
+        // Sale y devuelve el gafete; llega otro gafete al catálogo.
+        let mut uow = equipo.nueva();
+        uow.presencias().anotar_salida(&cedula());
+        uow.gafetes()
+            .anotar_devolucion(TipoGafete::Contratista, NumeroGafete::nuevo(25).unwrap());
+        uow.gafetes().agregar(
+            &Gafete::registrar(
+                TipoGafete::Contratista,
+                NumeroGafete::nuevo(26).unwrap(),
+                false,
+            )
+            .unwrap(),
+        );
+        uow.confirmar().await.unwrap();
+
+        assert_eq!(
+            nube.subir_cambios(&equipo).await.unwrap(),
+            3,
+            "la salida, la devolución y el gafete nuevo"
+        );
+        assert_eq!(
+            en_la_nube(&nube, "presencia").await,
+            0,
+            "ya no está adentro"
+        );
+        assert_eq!(en_la_nube(&nube, "prestamo_gafete").await, 0);
+        assert_eq!(
+            en_la_nube(&nube, "gafete").await,
+            2,
+            "y el gafete nuevo llegó"
+        );
+        assert_eq!(nube.subir_cambios(&equipo).await.unwrap(), 0);
     }
 }
