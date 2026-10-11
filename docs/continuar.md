@@ -135,9 +135,8 @@ como incidente los choques entre equipos.
 1. **Decidir cómo se renombran las empresas y quién audita sus nombres** (ver arriba). El
    núcleo ya renombra (`RenombrarEmpresa` y `RenombrarEmpresaProveedora`); falta la
    pantalla y la decisión del dueño.
-2. **Mantener las listas al día cuando haya sincronización**: hoy cada pantalla recarga al
-   abrirse y tras sus propias acciones; sin botón de actualizar. Con la nube habrá que
-   refrescarlas solas.
+2. ✅ Las listas se mantienen al día solas: cuando baja algo de la nube, el núcleo manda
+   `nube-cambios` y las pantallas recargan.
 3. Las exportaciones del Historial (CSV, Excel, PDF), al final y a pedido del dueño.
 4. CodeQL para el JavaScript en la CI. Equipos (bloque M) y la nube (con L4 y L5).
 

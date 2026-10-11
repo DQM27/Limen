@@ -33,7 +33,7 @@ Estado: ✅ implementada en `crates/dominio` · ⏳ acordada, pendiente de imple
 | B9 | No se cambia la cédula de alguien que está adentro. | ✅ |
 | B10 | Sólo PRAIND recibe gafete físico; para IN HOUSE su credencial ya es el gafete. | ✅ |
 | B11 | Todo cambio queda en la auditoría, en todos los campos, con el antes y el después. La auditoría no se edita ni se borra (lo impide la base). | ✅ |
-| B12 | Contratistas y empresas son globales: un cambio se ve en todos los sitios. | ⏳ |
+| B12 | Contratistas y empresas son globales: un cambio se ve en todos los sitios. | ✅ con la sincronización en tiempo real (`nube.md`, secciones 9 y 10). |
 
 ## C. Empresas
 
@@ -136,7 +136,7 @@ reconstruir cómo estaba el contratista el día que entró.
 | M2 | Un equipo retirado pierde el acceso al instante y se cierra su sesión. | ⏳ |
 | M3 | Tipos: PC, celular y visor; el visor sólo lee. | ⏳ |
 | M4 | Cada equipo pertenece a una **unidad operativa** (el "sitio" de Lattis). Los catálogos (contratistas, empresas, empresas proveedoras, personal KOF, usuarios) son **globales**: iguales en todas las unidades. Gafetes, ingresos, presencia, préstamos e historial son **de la unidad**: un equipo baja sólo los de la suya. Ver `nube.md`. | ✅ en el equipo: cada hecho lleva su unidad y su equipo, y lo de la unidad lleva su campo `unidad` (los gafetes, también en la clave). El reparto llega con la sincronización. |
-| M5 | El equipo es desechable: la nube es la fuente de verdad. Guarda una copia local y trabaja sin conexión; lo pendiente se sube al volver la red. | ⏳ |
+| M5 | El equipo es desechable: la nube es la fuente de verdad. Guarda una copia local y trabaja sin conexión; lo pendiente se sube al volver la red. | ✅ subida y bajada en tiempo real, carga inicial de un equipo nuevo (`nube.md`). |
 
 ## Fuera de alcance por ahora
 
