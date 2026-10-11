@@ -31,6 +31,7 @@ pub mod presencia;
 pub mod prestamo_kof;
 pub mod rango_fechas;
 pub mod reloj;
+pub mod resaltado;
 pub mod tipo_ingreso;
 pub mod usuario;
 pub mod visitante;

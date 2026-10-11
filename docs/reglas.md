@@ -126,6 +126,12 @@ reconstruir cómo estaba el contratista el día que entró.
 | M2 | Un equipo retirado pierde el acceso al instante y se cierra su sesión. | ⏳ |
 | M3 | Tipos: PC, celular y visor; el visor sólo lee. | ⏳ |
 
+## N. Buscador
+
+| Código | Regla | Estado |
+|---|---|---|
+| N1 | Al buscar, lo que coincide se **resalta** en los resultados con la misma regla del buscador: sin importar mayúsculas ni tildes (la Ñ cuenta como N), una palabra completa se resalta entera; el comienzo de una palabra o un fragmento dentro de ella, sólo lo escrito; con errores de tecleo, la palabra parecida entera. Si falta una de las palabras escritas no se resalta nada (todas son obligatorias, igual que al buscar). La cédula se resalta ignorando guiones, puntos y espacios. El dominio entrega el texto partido en segmentos (`dominio/resaltado.rs`); la pantalla sólo los pinta. | ✅ en el dominio · ⏳ en la pantalla |
+
 ## Fuera de alcance por ahora
 
 Visitas con cita agendada y salidas de rutas: no están aprobadas del todo y no se
