@@ -67,13 +67,21 @@
 
 .gafete {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
 
   mat-form-field {
     flex: 1;
     min-width: 0;
   }
+}
+
+// El botón S/G, del alto del campo de al lado.
+.sin-gafete {
+  --mat-button-toggle-height: 40px;
+  --mat-button-toggle-label-text-size: 14px;
+  --mat-button-toggle-label-text-weight: 600;
+  flex: none;
 }
 
 // Cada coincidencia de la lista flotante: nombre y datos a la izquierda, lo

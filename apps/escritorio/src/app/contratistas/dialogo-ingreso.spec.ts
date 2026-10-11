@@ -294,24 +294,49 @@ describe('modal de ingreso de contratista', () => {
     fixture.destroy();
   });
 
-  it('escribir un número desmarca "Sin gafete"', async () => {
+  it('el botón S/G se enciende y se apaga: encendido deshabilita y borra el número', async () => {
     responder({ buscar_para_ingreso: [candidato()] });
-    const { raiz, escribirBusqueda, elegirPrimero, componente } = await crear();
+    const { raiz, escribirBusqueda, elegirPrimero, componente, refrescar } = await crear();
     await escribirBusqueda('ana');
     await elegirPrimero();
-    componente['alMarcarSinGafete'](true);
+    const numero = () =>
+      [...raiz.querySelectorAll<HTMLInputElement>('input')].find(
+        (i) => i.getAttribute('inputmode') === 'numeric',
+      );
+    componente.gafete.setValue('25');
+    const boton = raiz.querySelector<HTMLButtonElement>('mat-button-toggle.sin-gafete button');
+    expect(boton?.textContent?.trim()).toBe('S/G');
+    expect(boton?.getAttribute('aria-pressed')).toBe('false');
+    expect(numero()?.disabled).toBe(false);
 
-    const campo = [...raiz.querySelectorAll<HTMLInputElement>('input')].find(
-      (i) => i.getAttribute('inputmode') === 'numeric',
-    );
-    if (!campo) {
-      throw new Error('no hay campo de gafete');
-    }
-    campo.value = '7';
-    campo.dispatchEvent(new Event('input'));
+    boton?.click();
+    await refrescar();
+
+    expect(boton?.getAttribute('aria-pressed')).toBe('true');
+    expect(componente.sinGafete.value).toBe(true);
+    expect(componente.gafete.value, 'encendido borra el número').toBe('');
+    expect(numero()?.disabled, 'y ya no se puede escribir').toBe(true);
+
+    boton?.click();
+    await refrescar();
 
     expect(componente.sinGafete.value).toBe(false);
-    expect(componente.gafete.value).toBe('7');
+    expect(numero()?.disabled, 'apagado lo vuelve a habilitar').toBe(false);
+  });
+
+  it('con S/G encendido, el ingreso se manda sin gafete', async () => {
+    responder({ buscar_para_ingreso: [candidato()] });
+    const { raiz, escribirBusqueda, elegirPrimero, refrescar, enviar } = await crear();
+    await escribirBusqueda('ana');
+    await elegirPrimero();
+
+    raiz.querySelector<HTMLButtonElement>('mat-button-toggle.sin-gafete button')?.click();
+    await refrescar();
+    await enviar();
+
+    expect(invoke).toHaveBeenCalledWith('registrar_entrada_contratista', {
+      entrada: expect.objectContaining({ gafete: null, sin_gafete: true }),
+    });
   });
 
   it('en vehículo pide la placa, que se ve en mayúsculas al escribirla, y la manda', async () => {

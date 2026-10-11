@@ -15,7 +15,7 @@
             {{ persona.cedula }} · {{ persona.empresa_nombre ?? 'Sin empresa' }}
           </span>
           <span class="detalle">
-            {{ etiquetaDeTipo(persona.tipo_ingreso) }} · PRAIND vence
+            {{ etiquetaDeTipo(persona.tipo_ingreso) }} · vence
             {{ fechaCorta(persona.fecha_vencimiento_praind) }}
           </span>
         </div>
@@ -82,12 +82,16 @@
                   <mat-error>{{ mensaje }}</mat-error>
                 }
               </mat-form-field>
-              <mat-checkbox
+              <!-- S/G: un botón que se enciende y se apaga; encendido, el número no se pide. -->
+              <mat-button-toggle
+                class="sin-gafete"
+                aria-label="Sin gafete"
+                title="Sin gafete"
                 [checked]="sinGafete.value"
-                (change)="alMarcarSinGafete($event.checked)"
+                (change)="alMarcarSinGafete($event.source.checked)"
               >
-                Sin gafete (S/G)
-              </mat-checkbox>
+                S/G
+              </mat-button-toggle>
             </div>
           } @else {
             <p class="ayuda">IN HOUSE: su credencial ya es el gafete, no se le asigna uno.</p>
