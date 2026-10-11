@@ -158,14 +158,4 @@ describe('pantalla de Historial', () => {
     expect(raiz.querySelector('input[name="hasta"]')?.getAttribute('aria-invalid')).toBe('true');
     expect(raiz.querySelector('input[name="desde"]')?.getAttribute('aria-invalid')).toBe('false');
   });
-
-  it('«Actualizar» vuelve a consultar el mismo rango', async () => {
-    const { fixture, raiz } = await crear();
-
-    raiz.querySelector<HTMLButtonElement>('button.actualizar')?.click();
-    fixture.detectChanges();
-    await vi.waitFor(() => expect(llamadas('listar_historial')).toHaveLength(2));
-
-    expect(llamadas('listar_historial')[1]?.[1]).toEqual(llamadas('listar_historial')[0]?.[1]);
-  });
 });

@@ -10,8 +10,6 @@ import {
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatDialog } from '@angular/material/dialog';
-import { MatIconModule } from '@angular/material/icon';
-import { MatTooltipModule } from '@angular/material/tooltip';
 import type { CellClickedEvent, ColDef } from 'ag-grid-community';
 import { Avisos } from '../compartido/avisos';
 import { DialogoConfirmar, type DatosConfirmar } from '../compartido/dialogo-confirmar';
@@ -43,7 +41,7 @@ function mensajeDe(error: unknown, general: string): string {
 @Component({
   selector: 'app-lista-dentro',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatButtonToggleModule, MatIconModule, MatTooltipModule, Tabla],
+  imports: [MatButtonModule, MatButtonToggleModule, Tabla],
   templateUrl: './lista-dentro.html',
   styleUrl: './lista-dentro.scss',
 })

@@ -2,7 +2,6 @@ import { ChangeDetectionStrategy, Component, computed, type OnInit, signal } fro
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
-import { MatTooltipModule } from '@angular/material/tooltip';
 import type { ColDef } from 'ag-grid-community';
 import { soloFecha, soloHora } from '../compartido/formato';
 import { Tabla } from '../compartido/tabla/tabla';
@@ -24,7 +23,7 @@ type CampoFecha = 'desde' | 'hasta';
 @Component({
   selector: 'app-historial-pagina',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, Tabla],
+  imports: [MatButtonModule, MatIconModule, MatMenuModule, Tabla],
   templateUrl: './historial-pagina.html',
   styleUrl: './historial-pagina.scss',
 })
@@ -116,10 +115,6 @@ export class HistorialPagina implements OnInit {
 
   ngOnInit(): void {
     void this.iniciar();
-  }
-
-  protected actualizar(): void {
-    void this.cargar();
   }
 
   protected elegirAtajo(atajo: AtajoFecha): void {
