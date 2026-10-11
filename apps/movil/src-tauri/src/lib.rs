@@ -8,7 +8,6 @@
 
 #[path = "../../../escritorio/src-tauri/src/comandos.rs"]
 mod comandos;
-#[path = "../../../escritorio/src-tauri/src/estado.rs"]
 mod estado;
 
 use std::io::Cursor;
@@ -16,7 +15,7 @@ use std::path::Path;
 
 use limen_composicion::{AplicacionLimen, Config};
 use limen_infra_plataforma::{RelojConfiable, SERVIDORES_NTP, leer_desfase};
-use tauri::Manager;
+use tauri::{AppHandle, Manager};
 
 use estado::Estado;
 
@@ -25,7 +24,7 @@ const ARCHIVO_DESFASE_RELOJ: &str = "reloj-desfase.txt";
 const SEMILLA: &str = "semilla.zip";
 
 /// Si la base todavía no existe y la app trae semilla, la descomprime.
-fn sembrar_base(app: &tauri::App, ruta_base: &Path) -> Result<(), Box<dyn std::error::Error>> {
+fn sembrar_base(app: &AppHandle, ruta_base: &Path) -> Result<(), Box<dyn std::error::Error>> {
     if ruta_base.join("manifest").exists() {
         return Ok(());
     }
@@ -37,17 +36,22 @@ fn sembrar_base(app: &tauri::App, ruta_base: &Path) -> Result<(), Box<dyn std::e
     Ok(())
 }
 
-fn preparar_estado(app: &tauri::App) -> Result<Estado, Box<dyn std::error::Error>> {
+/// Siembra y abre la base; avisa al estado cuando está lista.
+async fn abrir_base(app: AppHandle) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let datos = app.path().app_data_dir()?;
     std::fs::create_dir_all(&datos)?;
     let ruta_base = datos.join(CARPETA_BASE);
-    sembrar_base(app, &ruta_base)?;
+    let ruta = ruta_base.clone();
+    let manejador = app.clone();
+    tauri::async_runtime::spawn_blocking(move || sembrar_base(&manejador, &ruta).map_err(|e| e.to_string()))
+        .await?
+        .map_err(Box::<dyn std::error::Error + Send + Sync>::from)?;
     let ruta_desfase = datos.join(ARCHIVO_DESFASE_RELOJ);
     let reloj = RelojConfiable::new(leer_desfase(&ruta_desfase));
     reloj.sincronizar_en_segundo_plano(&SERVIDORES_NTP, ruta_desfase);
-    let aplicacion =
-        tauri::async_runtime::block_on(AplicacionLimen::abrir(&Config { ruta_base }, &reloj))?;
-    Ok(Estado::new(aplicacion))
+    let aplicacion = AplicacionLimen::abrir(&Config { ruta_base }, &reloj).await?;
+    app.state::<Estado>().listo(aplicacion);
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -59,8 +63,14 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
-            let estado = preparar_estado(app)?;
-            app.manage(estado);
+            app.manage(Estado::default());
+            let manejador = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(error) = abrir_base(manejador.clone()).await {
+                    tauri_plugin_log::log::error!("no se pudo abrir la base: {error}");
+                    manejador.exit(1);
+                }
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
