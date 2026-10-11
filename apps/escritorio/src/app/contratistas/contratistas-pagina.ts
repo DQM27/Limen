@@ -2,8 +2,8 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import type { ColDef } from 'ag-grid-community';
+import { Avisos } from '../compartido/avisos';
 import { fechaCorta } from '../compartido/formato';
 import { Tabla } from '../compartido/tabla/tabla';
 import { listarContratistas } from '../nucleo/comandos';
@@ -28,7 +28,7 @@ const fueraDelBuscador = (): string => '';
 })
 export class ContratistasPagina {
   private readonly dialogo = inject(MatDialog);
-  private readonly aviso = inject(MatSnackBar);
+  private readonly avisos = inject(Avisos);
 
   protected readonly filas = signal<FilaContratista[]>([]);
   protected readonly cargando = signal(true);
@@ -85,15 +85,13 @@ export class ContratistasPagina {
           return;
         }
         void this.cargar();
-        this.aviso.open(
-          resultado.tipo === 'registrado'
-            ? 'Contratista registrado'
-            : resultado.cambios.length > 0
-              ? 'Contratista actualizado'
-              : 'Sin cambios',
-          'Cerrar',
-          { duration: 4000 },
-        );
+        if (resultado.tipo === 'editado' && resultado.cambios.length === 0) {
+          this.avisos.info('Sin cambios');
+        } else {
+          this.avisos.exito(
+            resultado.tipo === 'registrado' ? 'Contratista registrado' : 'Contratista actualizado',
+          );
+        }
       });
   }
 

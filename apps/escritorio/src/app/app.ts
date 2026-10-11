@@ -13,6 +13,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { DURACION_MINIMA_SPLASH_MS } from './entrada/duracion-splash';
 import { PantallaEntrada } from './entrada/pantalla-entrada';
+import { AvisosPanel } from './compartido/avisos';
 import { Splash } from './entrada/splash';
 import { registrarIconos } from './iconos';
 import { SECCIONES } from './navegacion';
@@ -24,6 +25,7 @@ import { modoVentana } from './nucleo/ventana';
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    AvisosPanel,
     MatButtonModule,
     MatIconModule,
     MatListModule,

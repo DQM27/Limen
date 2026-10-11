@@ -3,8 +3,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import type { ColDef } from 'ag-grid-community';
+import { Avisos } from '../compartido/avisos';
 import { Tabla } from '../compartido/tabla/tabla';
 import { listarGafetes } from '../nucleo/comandos';
 import { esErrorApp } from '../nucleo/tauri';
@@ -46,7 +46,7 @@ function avisoDeCambio(numero: number, cambio: ResultadoGestionGafete['cambio'])
 })
 export class GafetesPagina {
   private readonly dialogos = inject(MatDialog);
-  private readonly aviso = inject(MatSnackBar);
+  private readonly avisos = inject(Avisos);
 
   protected readonly tipos = TIPOS_DE_GAFETE;
   protected readonly tipo = signal<TipoGafete>('CONTRATISTA');
@@ -97,11 +97,7 @@ export class GafetesPagina {
       .subscribe((creados) => {
         if (creados !== undefined) {
           void this.cargar();
-          this.aviso.open(
-            creados === 1 ? 'Se creó 1 gafete' : `Se crearon ${creados} gafetes`,
-            'Cerrar',
-            { duration: 4000 },
-          );
+          this.avisos.exito(creados === 1 ? 'Se creó 1 gafete' : `Se crearon ${creados} gafetes`);
         }
       });
   }
@@ -118,9 +114,7 @@ export class GafetesPagina {
       .subscribe((resultado) => {
         if (resultado) {
           void this.cargar();
-          this.aviso.open(avisoDeCambio(gafete.numero, resultado.cambio), 'Cerrar', {
-            duration: 4000,
-          });
+          this.avisos.exito(avisoDeCambio(gafete.numero, resultado.cambio));
         }
       });
   }

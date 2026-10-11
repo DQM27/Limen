@@ -3,9 +3,9 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import type { CellClickedEvent, ColDef } from 'ag-grid-community';
+import { Avisos } from '../compartido/avisos';
 import { DialogoConfirmar, type DatosConfirmar } from '../compartido/dialogo-confirmar';
 import { soloFecha, soloHora } from '../compartido/formato';
 import { Tabla } from '../compartido/tabla/tabla';
@@ -41,7 +41,7 @@ function mensajeDe(error: unknown, general: string): string {
 })
 export class DentroPagina {
   private readonly dialogos = inject(MatDialog);
-  private readonly aviso = inject(MatSnackBar);
+  private readonly avisos = inject(Avisos);
 
   protected readonly filas = signal<PersonaAdentro[]>([]);
   protected readonly filtro = signal<FiltroGafete>('todos');
@@ -135,9 +135,12 @@ export class DentroPagina {
   protected async salida(persona: PersonaAdentro): Promise<void> {
     try {
       await registrarSalida(persona.via, persona.ingreso_id);
-      this.avisar(`Salida de ${persona.nombre} registrada`);
+      this.avisos.exito(persona.nombre, 'Salida registrada');
     } catch (error) {
-      this.avisar(mensajeDe(error, `No se pudo registrar la salida de ${persona.nombre}`));
+      this.avisos.error(
+        `${persona.nombre}: ${mensajeDe(error, 'inténtalo de nuevo')}`,
+        'No se pudo registrar la salida',
+      );
     }
     await this.cargar();
   }
@@ -179,17 +182,16 @@ export class DentroPagina {
       }
     }
     const hechas = personas.length - fallidas.length;
-    this.avisar(
-      fallidas.length === 0
-        ? `Se registraron ${hechas} salidas`
-        : `Se registraron ${hechas} de ${personas.length} salidas. Fallaron: ${fallidas.join('; ')}`,
-    );
+    if (fallidas.length === 0) {
+      this.avisos.exito(hechas === 1 ? '1 persona' : `${hechas} personas`, 'Salidas registradas');
+    } else {
+      this.avisos.error(
+        `Salieron ${hechas} de ${personas.length}. Fallaron: ${fallidas.join('; ')}`,
+        'Salidas con problemas',
+      );
+    }
     this.seleccionadas.set([]);
     await this.cargar();
-  }
-
-  private avisar(mensaje: string): void {
-    this.aviso.open(mensaje, 'Cerrar', { duration: 5000 });
   }
 
   private async cargar(): Promise<void> {

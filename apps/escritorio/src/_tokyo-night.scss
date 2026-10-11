@@ -52,4 +52,8 @@
   --mat-sys-inverse-on-surface: light-dark(#e1e2e7, #1a1b26);
   --mat-sys-scrim: #000000;
   --mat-sys-shadow: #000000;
+
+  // Lo que Material no trae: el verde del éxito (los avisos, ver
+  // compartido/avisos.ts).
+  --aviso-exito: light-dark(#587539, #9ece6a);
 }
