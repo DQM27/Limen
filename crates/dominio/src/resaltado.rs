@@ -10,9 +10,12 @@
 //! 4. con errores de tecleo ("sanchez" por "SANCHES"): se resalta la palabra
 //!    entera, porque lo escrito no está literalmente en el texto.
 //!
-//! Si alguna palabra escrita no coincide, el texto **no** se resalta: igual
-//! que el buscador, todas las palabras son obligatorias. Así el resaltado y
-//! la lista de resultados nunca se contradicen.
+//! Cada palabra escrita se marca donde aparece en el texto; la que no aparece
+//! en este texto simplemente no marca nada. Quién decide si una fila coincide
+//! es el buscador o el filtro de la tabla, no el resaltado: una búsqueda
+//! "carlos acme" encuentra a Carlos de la empresa Acme aunque "acme" no esté
+//! en su nombre, y entonces "carlos" se resalta en la columna del nombre y
+//! "acme" en la de la empresa.
 //!
 //! El resultado son [`Segmento`]s del texto **original** (con sus tildes y
 //! mayúsculas), no posiciones: la interfaz sólo recorre los segmentos y
@@ -73,8 +76,8 @@ pub fn resaltar(buscado: &str, campo: Campo, textos: &[String]) -> Vec<Vec<Segme
 }
 
 impl Criterio {
-    /// El `nombre` partido en segmentos, con lo que coincide con lo buscado
-    /// resaltado. Sin coincidencia (o con un criterio de cédula) no se
+    /// El `nombre` partido en segmentos, con cada palabra buscada resaltada
+    /// donde aparece. Si no aparece ninguna (o el criterio es de cédula) no se
     /// resalta nada.
     pub fn resaltar_nombre(&self, nombre: &str) -> Vec<Segmento> {
         let Self::Nombre(palabras) = self else {
@@ -84,11 +87,9 @@ impl Criterio {
         let mut marcas = vec![false; nombre.chars().count()];
         for palabra in palabras {
             let escrita: Vec<char> = palabra.chars().collect();
-            let Some(rango) = donde_coincide(&escrita, &plegado.letras) else {
-                // Falta una palabra: no coincide, no se resalta nada.
-                return segmentar(nombre, &vec![false; marcas.len()]);
-            };
-            marcar(&mut marcas, &plegado.origen, rango);
+            if let Some(rango) = donde_coincide(&escrita, &plegado.letras) {
+                marcar(&mut marcas, &plegado.origen, rango);
+            }
         }
         segmentar(nombre, &marcas)
     }
@@ -305,11 +306,16 @@ mod tests {
     }
 
     #[test]
-    fn si_falta_una_palabra_no_se_resalta_nada() {
+    fn solo_se_resaltan_las_palabras_que_aparecen_en_el_texto() {
         assert_eq!(
             pares(&nombre("carlos zzz", "Carlos Mauricio")),
+            [("Carlos", true), (" Mauricio", false)],
+            "la palabra que no está no marca nada; las demás sí"
+        );
+        assert_eq!(
+            pares(&nombre("zzz", "Carlos Mauricio")),
             [("Carlos Mauricio", false)],
-            "todas las palabras son obligatorias, como en el buscador"
+            "si ninguna aparece, no se resalta nada"
         );
     }
 
@@ -364,7 +370,7 @@ mod tests {
     }
 
     #[test]
-    fn resalta_exactamente_cuando_el_buscador_dice_que_coincide() {
+    fn si_el_buscador_dice_que_coincide_siempre_hay_algo_resaltado() {
         let nombres = [
             "José Peña",
             "Carlos Mauricio Sanches",
@@ -385,12 +391,12 @@ mod tests {
         for texto in nombres {
             for buscado in buscados {
                 let criterio = Criterio::desde_texto(buscado);
-                let coincide = criterio.nivel("", texto).is_some();
-                let resalta = criterio.resaltar_nombre(texto).iter().any(|s| s.resaltado);
-                assert_eq!(
-                    resalta, coincide,
-                    "'{buscado}' sobre '{texto}': el resaltado y el buscador deben coincidir"
-                );
+                if criterio.nivel("", texto).is_some() {
+                    assert!(
+                        criterio.resaltar_nombre(texto).iter().any(|s| s.resaltado),
+                        "'{buscado}' encuentra a '{texto}': debe haber algo resaltado"
+                    );
+                }
             }
         }
     }
