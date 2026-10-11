@@ -43,7 +43,7 @@ describe('carcasa de la app', () => {
     expect(raiz.querySelector('main#contenido')).not.toBeNull();
   });
 
-  it('la navegación tiene nombre y sólo Contratistas es un enlace activo', async () => {
+  it('la navegación tiene nombre y sólo las pantallas que existen son enlaces activos', async () => {
     const { raiz } = await crear(true);
 
     expect(raiz.querySelector('nav')?.getAttribute('aria-label')).toBe('Secciones');
@@ -53,9 +53,10 @@ describe('carcasa de la app', () => {
 
     expect(disponibles.map((a) => a.textContent?.trim())).toEqual([
       expect.stringContaining('Contratistas'),
+      expect.stringContaining('Gafetes'),
     ]);
     expect(disponibles.every((a) => a.hasAttribute('href'))).toBe(true);
-    expect(proximamente).toHaveLength(6);
+    expect(proximamente).toHaveLength(5);
     // Lo que no existe aún se anuncia como tal y no recibe el foco del teclado
     // (un enlace sin `href` no entra en el orden de tabulación).
     expect(proximamente.every((a) => a.getAttribute('aria-label')?.endsWith('próximamente'))).toBe(

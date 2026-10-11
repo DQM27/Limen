@@ -1,0 +1,14 @@
+@use '../compartido/dialogo';
+
+@include dialogo.compacto;
+
+.tipo {
+  margin: 8px 0 12px;
+  font: var(--mat-sys-body-medium);
+}
+
+.campos {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}

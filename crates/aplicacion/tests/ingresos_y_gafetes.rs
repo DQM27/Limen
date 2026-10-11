@@ -4,6 +4,7 @@
 #[cfg(test)]
 mod tests {
     use chrono::{DateTime, NaiveDate, Utc};
+    use limen_aplicacion::casos_de_uso::consultas::ListarGafetes;
     use limen_aplicacion::casos_de_uso::contratistas::{ComandoContratista, RegistrarContratista};
     use limen_aplicacion::casos_de_uso::gafetes::{CambiarGafete, CambioGafete, RegistrarGafetes};
     use limen_aplicacion::casos_de_uso::ingresos::{
@@ -941,6 +942,97 @@ mod tests {
                 .ficha(ContratistaId::desde_uuid(Uuid::from_u128(77)))
                 .await,
             Err(ErrorCaso::NoEncontrado)
+        );
+    }
+
+    // --- Listado de gafetes: a quién está asignado cada uno ---
+
+    fn listar(almacen: &AlmacenMemoria) -> ListarGafetes<AlmacenMemoria> {
+        ListarGafetes::new(almacen.clone())
+    }
+
+    #[tokio::test]
+    async fn el_listado_dice_quien_tiene_prestado_cada_gafete() {
+        let almacen = preparado().await;
+        let ana = llamado(&almacen, "111111111", "ana solano", true).await;
+        entrada(&almacen)
+            .ejecutar(&sesion(), &a_pie(ana, Some(25)))
+            .await
+            .unwrap();
+
+        let listado = listar(&almacen)
+            .ejecutar(TipoGafete::Contratista)
+            .await
+            .unwrap();
+
+        let prestado = listado
+            .iter()
+            .find(|g| g.resumen.gafete.numero() == numero(25))
+            .unwrap();
+        assert!(prestado.resumen.prestado);
+        let asignado = prestado.asignado.as_ref().unwrap();
+        assert_eq!(asignado.nombre.as_ref().unwrap().as_str(), "ANA SOLANO");
+        assert_eq!(asignado.identidad, "111111111");
+        assert_eq!(
+            listado.iter().filter(|g| g.asignado.is_some()).count(),
+            1,
+            "los demás están disponibles y no tienen a quién"
+        );
+    }
+
+    #[tokio::test]
+    async fn un_gafete_perdido_muestra_a_su_ultimo_portador_con_nombre() {
+        let almacen = preparado().await;
+        let ana = llamado(&almacen, "111111111", "ana solano", true).await;
+        cambiar(&almacen)
+            .ejecutar(
+                &sesion(),
+                TipoGafete::Contratista,
+                4,
+                CambioGafete::MarcarPerdido(Portador::Contratista(ana)),
+            )
+            .await
+            .unwrap();
+
+        let listado = listar(&almacen)
+            .ejecutar(TipoGafete::Contratista)
+            .await
+            .unwrap();
+
+        let perdido = listado
+            .iter()
+            .find(|g| g.resumen.gafete.numero() == numero(4))
+            .unwrap();
+        let asignado = perdido.asignado.as_ref().unwrap();
+        assert_eq!(asignado.nombre.as_ref().unwrap().as_str(), "ANA SOLANO");
+        assert_eq!(asignado.identidad, "111111111");
+    }
+
+    #[tokio::test]
+    async fn de_una_visita_que_perdio_el_gafete_solo_se_conoce_la_cedula() {
+        let almacen = preparado().await;
+        gafetes(&almacen)
+            .ejecutar(&sesion(), TipoGafete::Visita, 1, 3)
+            .await
+            .unwrap();
+        cambiar(&almacen)
+            .ejecutar(
+                &sesion(),
+                TipoGafete::Visita,
+                1,
+                CambioGafete::MarcarPerdido(Portador::Persona(cedula("333333333"))),
+            )
+            .await
+            .unwrap();
+
+        let listado = listar(&almacen).ejecutar(TipoGafete::Visita).await.unwrap();
+
+        let asignado = listado[0].asignado.as_ref().unwrap();
+        assert_eq!(asignado.nombre, None, "no hay catálogo de visitas");
+        assert_eq!(asignado.identidad, "333333333");
+        assert!(
+            listado[1].asignado.is_none(),
+            "uno disponible no tiene a quién"
         );
     }
 }

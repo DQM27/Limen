@@ -271,8 +271,8 @@ mod tests {
         assert_eq!(gafetes.len(), 10, "los diez gafetes de contratista");
         let prestados: Vec<u32> = gafetes
             .iter()
-            .filter(|resumen| resumen.prestado)
-            .map(|resumen| resumen.gafete.numero().valor())
+            .filter(|listado| listado.resumen.prestado)
+            .map(|listado| listado.resumen.gafete.numero().valor())
             .collect();
         assert_eq!(
             prestados,

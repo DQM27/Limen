@@ -1,32 +1,6 @@
-// Un formulario compacto: campos de 40 px y letra de 14 px, sin el espacio que
-// Material reserva bajo cada campo para mensajes (sólo aparece si hay uno).
-:host {
-  display: block;
+@use '../compartido/dialogo';
 
-  --mat-form-field-container-height: 40px;
-  --mat-form-field-container-vertical-padding: 9px;
-  --mat-form-field-outlined-label-text-size: 14px;
-  --mat-form-field-container-text-size: 14px;
-  --mat-form-field-container-text-line-height: 20px;
-  --mat-select-trigger-text-size: 14px;
-  --mat-dialog-headline-padding: 0 20px 4px;
-  --mat-dialog-content-padding: 8px 20px 0;
-  --mat-dialog-actions-padding: 12px 20px 16px;
-}
-
-// El título y el botón de cerrar comparten fila.
-.cabecera {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 8px 0 0;
-}
-
-h2 {
-  margin: 0;
-  padding-top: 8px;
-  font: var(--mat-sys-title-large);
-}
+@include dialogo.compacto;
 
 .campos {
   display: flex;
@@ -37,14 +11,6 @@ h2 {
 
 mat-slide-toggle {
   align-self: flex-start;
-}
-
-// Reserva su alto para que el diálogo no salte al aparecer un mensaje.
-.error {
-  min-height: 1.4em;
-  margin: 4px 0 0;
-  color: var(--mat-sys-error);
-  font: var(--mat-sys-body-small);
 }
 
 // El selector de empresa y, al lado, el botón para crear una nueva.

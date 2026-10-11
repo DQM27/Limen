@@ -336,6 +336,8 @@ mod tests {
                 "portador_contratista_id": null,
                 "portador_cedula": null,
                 "portador_personal_id": null,
+                "asignado_nombre": null,
+                "asignado_identidad": null,
             })
         );
 
@@ -379,6 +381,15 @@ mod tests {
         let lista = comandos.listar_gafetes("VISITA").await.unwrap();
         assert_eq!(lista[0].estado, "PERDIDO");
         assert_eq!(lista[0].portador.cedula.as_deref(), Some("333333333"));
+        assert_eq!(
+            lista[0].asignado_identidad.as_deref(),
+            Some("333333333"),
+            "a quién se le perdió"
+        );
+        assert_eq!(
+            lista[0].asignado_nombre, None,
+            "una visita no tiene nombre en el catálogo"
+        );
 
         let pagado = CambioGafeteEntrada {
             cambio: "PAGADO".into(),

@@ -8,5 +8,10 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./contratistas/contratistas-pagina').then((m) => m.ContratistasPagina),
   },
+  {
+    path: 'gafetes',
+    title: 'Gafetes · Limen',
+    loadComponent: () => import('./gafetes/gafetes-pagina').then((m) => m.GafetesPagina),
+  },
   { path: '**', redirectTo: 'contratistas' },
 ];

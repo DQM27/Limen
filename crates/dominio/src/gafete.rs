@@ -22,6 +22,7 @@ use crate::auditoria::{CambioCampo, CamposAuditables, cambios_de_alta, diferenci
 use crate::cedula::Cedula;
 use crate::contratista::ContratistaId;
 use crate::personal_kof::PersonalKofId;
+use crate::presencia::Via;
 
 /// Cuántos gafetes se pueden crear de una vez con un rango.
 pub const MAXIMO_POR_RANGO: u32 = 1000;
@@ -78,6 +79,16 @@ impl TipoGafete {
 
     pub fn desde_codigo(codigo: &str) -> Option<Self> {
         Self::TODOS.into_iter().find(|tipo| tipo.codigo() == codigo)
+    }
+
+    /// La vía de ingreso que usa este tipo (F2): cada vía usa sólo el suyo.
+    pub const fn via(self) -> Via {
+        match self {
+            Self::Contratista => Via::Contratista,
+            Self::Visita => Via::Correo,
+            Self::Proveedor => Via::Proveedor,
+            Self::ProvisionalKof => Via::Kof,
+        }
     }
 }
 
@@ -401,6 +412,15 @@ mod tests {
 
     fn numero(n: u32) -> NumeroGafete {
         NumeroGafete::nuevo(n).unwrap()
+    }
+
+    #[test]
+    fn cada_tipo_de_gafete_lo_usa_una_sola_via() {
+        let vias: Vec<_> = TipoGafete::TODOS.into_iter().map(TipoGafete::via).collect();
+        assert_eq!(
+            vias,
+            [Via::Contratista, Via::Correo, Via::Proveedor, Via::Kof]
+        );
     }
 
     fn disponible() -> Gafete {

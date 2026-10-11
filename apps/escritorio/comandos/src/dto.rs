@@ -10,6 +10,7 @@
 //! - los nombres de los campos, en `snake_case`.
 
 use chrono::{NaiveDate, SecondsFormat};
+use limen_aplicacion::casos_de_uso::consultas::GafeteListado;
 use limen_aplicacion::casos_de_uso::consultas::{
     AtajoConRango, ContratistaEnLista, Historial, MAXIMO_MOVIMIENTOS,
 };
@@ -21,9 +22,7 @@ use limen_aplicacion::casos_de_uso::ingresos::{
 };
 use limen_aplicacion::casos_de_uso::proveedores::ComandoEntradaProveedor;
 use limen_aplicacion::errores::ErrorCaso;
-use limen_aplicacion::puertos::{
-    IngresoAbierto, MarcaVista, MovimientoHistorial, PersonaAdentro, ResumenGafete,
-};
+use limen_aplicacion::puertos::{IngresoAbierto, MarcaVista, MovimientoHistorial, PersonaAdentro};
 use limen_dominio::acceso::ResultadoAcceso;
 use limen_dominio::auditoria::CambioCampo;
 use limen_dominio::cedula::Cedula;
@@ -519,6 +518,11 @@ pub struct GafeteDto {
     /// tipo trae valor y los otros, `null`.
     #[serde(flatten)]
     pub portador: PortadorDto,
+    /// A quién está asignado: quien lo tiene prestado ahora o, si está
+    /// perdido, quien lo tenía. `null` si está disponible o de baja.
+    pub asignado_nombre: Option<String>,
+    /// La cédula o el código de empleado de quien está asignado.
+    pub asignado_identidad: Option<String>,
 }
 
 /// El último portador de un gafete perdido, en el campo de su clase: un
@@ -553,8 +557,9 @@ impl From<Option<&Portador>> for PortadorDto {
     }
 }
 
-impl From<&ResumenGafete> for GafeteDto {
-    fn from(resumen: &ResumenGafete) -> Self {
+impl From<&GafeteListado> for GafeteDto {
+    fn from(listado: &GafeteListado) -> Self {
+        let resumen = &listado.resumen;
         let gafete = &resumen.gafete;
         Self {
             tipo: gafete.tipo().codigo(),
@@ -562,6 +567,15 @@ impl From<&ResumenGafete> for GafeteDto {
             estado: gafete.estado().codigo(),
             prestado: resumen.prestado,
             portador: gafete.portador().into(),
+            asignado_nombre: listado
+                .asignado
+                .as_ref()
+                .and_then(|a| a.nombre.as_ref().map(ToString::to_string)),
+            asignado_identidad: listado
+                .asignado
+                .as_ref()
+                .map(|a| a.identidad.clone())
+                .filter(|identidad| !identidad.is_empty()),
         }
     }
 }

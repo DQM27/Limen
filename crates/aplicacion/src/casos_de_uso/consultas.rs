@@ -1,20 +1,24 @@
 //! Casos de uso de sólo lectura: lo que muestran las pantallas.
 
+use std::collections::HashMap;
+
 use chrono::{Days, NaiveDate};
 use limen_dominio::acceso::{ResultadoAcceso, verificar_acceso};
 use limen_dominio::busqueda::Criterio;
 use limen_dominio::contratista::Contratista;
 use limen_dominio::empresa::Empresa;
 use limen_dominio::empresa_proveedora::EmpresaProveedora;
-use limen_dominio::gafete::TipoGafete;
+use limen_dominio::gafete::{NumeroGafete, Portador, TipoGafete};
+use limen_dominio::nombre::NombrePersona;
 use limen_dominio::personal_kof::PersonalKof;
 use limen_dominio::praind::DIAS_ADVERTENCIA_PRAIND;
 use limen_dominio::rango_fechas::{Atajo, ErrorRango, RangoFechas};
 
 use crate::errores::ErrorCaso;
 use crate::puertos::{
-    Consultas, EntradaHistorial, FilaContratista, MovimientoHistorial, PersonaAdentro,
-    RegistroAuditado, Reloj, ResumenGafete,
+    Consultas, EntradaHistorial, FabricaUnidadDeTrabajo, FilaContratista, MovimientoHistorial,
+    PersonaAdentro, RegistroAuditado, Reloj, RepositorioContratistas, RepositorioPersonalKof,
+    ResumenGafete, UnidadDeTrabajo,
 };
 
 /// Cuántos resultados devuelve un buscador como máximo: una lista más larga
@@ -297,19 +301,101 @@ impl<C: Consultas> HistorialDeCambios<C> {
     }
 }
 
-/// Los gafetes de un tipo con su estado y si están prestados.
-#[derive(Debug)]
-pub struct ListarGafetes<C> {
-    consultas: C,
+/// A quién está asignado un gafete: quien lo tiene prestado ahora o, si está
+/// perdido, quien lo tenía.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AsignadoGafete {
+    /// `None` cuando sólo se conoce la cédula: un proveedor o una visita que
+    /// perdió el gafete no están en ningún catálogo (F5).
+    pub nombre: Option<NombrePersona>,
+    /// La cédula o, para el personal KOF, el código de empleado.
+    pub identidad: String,
 }
 
-impl<C: Consultas> ListarGafetes<C> {
-    pub const fn new(consultas: C) -> Self {
-        Self { consultas }
+/// Un gafete del catálogo, con su estado, si está prestado y a quién.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GafeteListado {
+    pub resumen: ResumenGafete,
+    pub asignado: Option<AsignadoGafete>,
+}
+
+/// Los gafetes de un tipo con su estado, si están prestados y a quién
+/// pertenecen ahora (prestado, o perdido con su último portador).
+#[derive(Debug)]
+pub struct ListarGafetes<F> {
+    fabrica: F,
+}
+
+impl<F: FabricaUnidadDeTrabajo + Consultas> ListarGafetes<F> {
+    pub const fn new(fabrica: F) -> Self {
+        Self { fabrica }
     }
 
-    pub async fn ejecutar(&self, tipo: TipoGafete) -> Result<Vec<ResumenGafete>, ErrorConsulta> {
-        Ok(self.consultas.listar_gafetes(tipo).await?)
+    pub async fn ejecutar(&self, tipo: TipoGafete) -> Result<Vec<GafeteListado>, ErrorConsulta> {
+        let resumenes = self.fabrica.listar_gafetes(tipo).await?;
+        // Quién tiene cada gafete prestado: sale de quién está adentro por la
+        // vía de ese tipo (F2).
+        let prestados: HashMap<NumeroGafete, AsignadoGafete> =
+            if resumenes.iter().any(|r| r.prestado) {
+                self.fabrica
+                    .quienes_estan_adentro()
+                    .await?
+                    .into_iter()
+                    .filter(|persona| persona.ingreso.via() == tipo.via())
+                    .filter_map(|persona| {
+                        persona.gafete.map(|numero| {
+                            (
+                                numero,
+                                AsignadoGafete {
+                                    nombre: Some(persona.nombre),
+                                    identidad: persona.identidad.to_string(),
+                                },
+                            )
+                        })
+                    })
+                    .collect()
+            } else {
+                HashMap::new()
+            };
+        let mut listado = Vec::with_capacity(resumenes.len());
+        for resumen in resumenes {
+            let asignado = if resumen.prestado {
+                prestados.get(&resumen.gafete.numero()).cloned()
+            } else {
+                match resumen.gafete.portador() {
+                    Some(portador) => Some(self.ultimo_portador(portador).await?),
+                    None => None,
+                }
+            };
+            listado.push(GafeteListado { resumen, asignado });
+        }
+        Ok(listado)
+    }
+
+    /// El último portador de un gafete perdido, con su nombre si está en un
+    /// catálogo. Si ya no se encuentra, queda sólo su identificación.
+    async fn ultimo_portador(&self, portador: &Portador) -> Result<AsignadoGafete, ErrorConsulta> {
+        let mut uow = self.fabrica.nueva();
+        Ok(match portador {
+            Portador::Persona(cedula) => AsignadoGafete {
+                nombre: None,
+                identidad: cedula.to_string(),
+            },
+            Portador::Contratista(id) => {
+                let contratista = uow.contratistas().obtener(*id).await?;
+                AsignadoGafete {
+                    nombre: contratista.as_ref().map(|c| c.nombre().clone()),
+                    identidad: contratista.map_or_else(String::new, |c| c.cedula().to_string()),
+                }
+            }
+            Portador::PersonalKof(id) => {
+                let persona = uow.personal_kof().obtener(*id).await?;
+                AsignadoGafete {
+                    nombre: persona.as_ref().map(|p| p.nombre().clone()),
+                    identidad: persona.map_or_else(String::new, |p| p.codigo().to_string()),
+                }
+            }
+        })
     }
 }
 

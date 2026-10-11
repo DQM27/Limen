@@ -112,6 +112,14 @@ export interface Gafete {
   portador_contratista_id: string | null;
   portador_cedula: string | null;
   portador_personal_id: string | null;
+  /**
+   * A quién está asignado: quien lo tiene prestado ahora o, si está perdido,
+   * quien lo tenía. `null` si está disponible o de baja. El nombre falta
+   * cuando sólo se conoce la cédula (un proveedor o una visita).
+   */
+  asignado_nombre: string | null;
+  /** La cédula o el código de empleado de quien está asignado. */
+  asignado_identidad: string | null;
 }
 
 /**
