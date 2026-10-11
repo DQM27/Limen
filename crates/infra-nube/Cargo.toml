@@ -21,7 +21,7 @@ log.workspace = true
 tokio = { workspace = true, features = ["time", "sync"] }
 # Para leer los avisos en vivo de la nube (`LIVE SELECT`).
 futures = "0.3"
-# Espera aleatoria (*jitter*) de los reintentos (docs/nube.md, sección 11). Aún sin usar.
+# Espera aleatoria (*jitter*) de los reintentos (`espera.rs`, docs/nube.md sección 11). No es para claves ni nonces.
 rand = "0.9"
 
 [dev-dependencies]

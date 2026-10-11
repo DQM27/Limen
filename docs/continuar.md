@@ -107,8 +107,10 @@ sola unidad, **Brisas**. Cada hecho ya lleva su unidad y su equipo, y lo de la u
 su campo `unidad` (la identidad del equipo está en `equipo.txt`, en la carpeta de datos).
 La app ya **sincroniza sola y en tiempo real** con la nube: sube lo que se registra en
 el momento y la nube le avisa en vivo lo de los demás equipos (catálogos y lo de su
-unidad), con una vuelta cada 10 segundos como red de seguridad; sin red se acumula, y las
-pantallas se recargan cuando llega algo. Lo siguiente es el paso 5 de `nube.md`: marcar
+unidad), con una vuelta cada 10 segundos (±15 %) como red de seguridad; sin red se
+acumula y, al reconectar, espera un tiempo al azar que crece con los fallos (para no
+saturar a la nube tras una caída; `nube.md`, sección 11). Las pantallas se recargan cuando
+llega algo. Falta la prueba de carga con muchos equipos. Lo siguiente es el paso 5 de `nube.md`: marcar
 como incidente los choques entre equipos.
 
 ## Decidido y en espera

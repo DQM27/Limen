@@ -5,7 +5,8 @@
 //! Despierta por tres cosas, lo que pase primero:
 //! - la app confirmó algo en la base del equipo: lo sube en el momento;
 //! - la nube avisó en vivo (`LIVE SELECT`) que otro equipo cambió algo;
-//! - pasaron [`RED_DE_SEGURIDAD`] segundos sin avisos: por si se perdió uno.
+//! - pasaron unos [`RED_DE_SEGURIDAD`] segundos sin avisos (con una pequeña
+//!   variación al azar): por si se perdió uno.
 //!
 //! En cada vuelta primero sube y después baja: así, si el equipo cambió algo
 //! sin conexión, la nube recibe su versión antes de que el equipo repase lo
@@ -16,6 +17,10 @@
 //! corre aparte, y si no hay conexión sólo lo anota en el registro técnico y
 //! vuelve a intentar. Lo que se registró mientras tanto queda en el registro
 //! de cambios del equipo y sube al volver la red.
+//!
+//! Para no tumbar a la nube cuando vuelve tras una caída, cada reintento de
+//! conexión espera un tiempo al azar que crece con los fallos seguidos
+//! (`crate::espera`, `docs/nube.md` sección 11).
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,13 +28,16 @@ use std::time::Duration;
 use limen_infra_surreal::AlmacenSurreal;
 use tokio::sync::Notify;
 
+use crate::espera::{self, AzarDelSistema};
 use crate::{ConfigNube, Escucha, Nube};
 
-/// Cada cuánto se sincroniza aunque no llegue ningún aviso.
+/// Cada cuánto se sincroniza, más o menos, aunque no llegue ningún aviso.
 pub const RED_DE_SEGURIDAD: Duration = Duration::from_secs(10);
 /// Cuántas veces se reintenta enseguida una vuelta que falló.
 const REINTENTOS_DE_VUELTA: u32 = 3;
-/// Cuánto se espera para reconectar si no hay conexión.
+/// Techo de la espera antes del primer reintento de conexión; cada fallo
+/// seguido lo duplica hasta `espera::TOPE` y la espera real es al azar por
+/// debajo de ese techo.
 pub const REINTENTO: Duration = Duration::from_secs(30);
 
 /// Sube y baja lo que cambia mientras la app esté abierta. No termina
@@ -40,21 +48,35 @@ pub async fn sincronizar<F>(almacen: AlmacenSurreal, config: ConfigNube, al_lleg
 where
     F: Fn() + Send + Sync + 'static,
 {
+    let mut azar = AzarDelSistema;
+    // Fallos de conexión seguidos: hacen crecer la espera. Se reinicia al
+    // conectar.
+    let mut fallos: u32 = 0;
+    // El esquema se aplica sólo en la primera conexión buena: reaplicarlo en
+    // cada reconexión sería carga inútil para la nube.
+    let mut esquema_listo = false;
     loop {
-        match conectar(&config).await {
+        match conectar(&config, !esquema_listo).await {
             Ok(nube) => {
+                esquema_listo = true;
+                fallos = 0;
                 log::info!("conectado a la nube: se sincroniza al instante");
                 sincronizar_mientras_haya_conexion(&nube, &almacen, &al_llegar).await;
             }
             Err(error) => log::warn!("sin conexión con la nube: {error}"),
         }
-        tokio::time::sleep(REINTENTO).await;
+        fallos = fallos.saturating_add(1);
+        let pausa = espera::con_jitter(REINTENTO, fallos, &mut azar);
+        log::debug!("se reintenta la conexión con la nube en {pausa:?} (fallo {fallos})");
+        tokio::time::sleep(pausa).await;
     }
 }
 
-async fn conectar(config: &ConfigNube) -> Result<Nube, crate::ErrorNube> {
+async fn conectar(config: &ConfigNube, aplicar_esquema: bool) -> Result<Nube, crate::ErrorNube> {
     let nube = Nube::conectar(config).await?;
-    nube.aplicar_esquema().await?;
+    if aplicar_esquema {
+        nube.aplicar_esquema().await?;
+    }
     Ok(nube)
 }
 
@@ -64,6 +86,7 @@ async fn sincronizar_mientras_haya_conexion<F: Fn() + Sync>(
     al_llegar: &F,
 ) {
     let avisos = Arc::new(Notify::new());
+    let mut azar = AzarDelSistema;
     let mut escucha: Option<Escucha> = None;
     loop {
         // Sin avisos en vivo se sigue igual, con la vuelta periódica, y se
@@ -83,10 +106,11 @@ async fn sincronizar_mientras_haya_conexion<F: Fn() + Sync>(
         if !una_vuelta_con_reintentos(nube, almacen, al_llegar).await {
             return;
         }
+        let red_de_seguridad = espera::variar(RED_DE_SEGURIDAD, &mut azar);
         tokio::select! {
             () = almacen.esperar_confirmacion() => {}
             () = avisos.notified() => {}
-            () = tokio::time::sleep(RED_DE_SEGURIDAD) => {}
+            () = tokio::time::sleep(red_de_seguridad) => {}
         }
     }
 }

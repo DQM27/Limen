@@ -5,8 +5,9 @@ sincronización. Complementa la sección 9 de [`arquitectura.md`](arquitectura.m
 [`operacion-sin-conexion.md`](operacion-sin-conexion.md).
 
 **Estado:** modelo acordado con el dueño. La instancia existe, tiene el esquema y la
-sincronización (subida, bajada y tiempo real) ya funciona; falta lo que marca la sección 6
-(incidentes y usuarios desde la nube) y los reintentos con espera aleatoria (sección 11).
+sincronización (subida, bajada y tiempo real) ya funciona, con reintentos de espera
+aleatoria (sección 11); falta lo que marca la sección 6 (incidentes y usuarios desde la
+nube).
 
 ---
 
@@ -101,7 +102,7 @@ equipo sin cambiar el flujo de datos.
    (secciones 9 y 10).
 5. Indicador de incidente al unir lo de varios equipos.
 6. Usuarios desde la nube (L4, L5) y la hora de la nube para los equipos sin NTP.
-7. Reintentos con espera aleatoria para que miles de equipos no vuelvan a la vez
+7. ✅ Reintentos con espera aleatoria para que miles de equipos no vuelvan a la vez
    (sección 11).
 
 ## 7. Unidad operativa y equipo, como quedaron
@@ -226,25 +227,28 @@ nube de la saturación. **Decisión: por ahora no se agrega ni Kafka ni Nginx.**
 4. **Prueba de carga** con muchos equipos simulados contra la instancia de desarrollo
    antes de elegir el tamaño de producción.
 
-**Dónde falta el jitter hoy** (`crates/infra-nube/src/sincronizacion.rs`):
+**Cómo quedó** (`crates/infra-nube/src/espera.rs` y `sincronizacion.rs`):
 
-| Dónde | Hoy | Cambio previsto |
+| Dónde | Antes | Ahora |
 |---|---|---|
-| `sincronizar` | reconecta cada 30 s fijos (`REINTENTO`) | espera exponencial con *full jitter* y tope; la prioridad |
-| `RED_DE_SEGURIDAD` | 10 s fijos | variación de ±10 a 20 % para que equipos arrancados juntos no queden sincronizados entre sí |
-| `una_vuelta_con_reintentos` y `escuchar` | 200 ms × intento, pocas veces | bajo riesgo; se deja salvo que la prueba de carga diga otra cosa |
+| Reconexión (`sincronizar`) | 30 s fijos | Retroceso exponencial con *full jitter*: el techo empieza en `REINTENTO` (30 s), se duplica con cada fallo seguido y se detiene en 5 minutos; la espera es un valor al azar entre 1 s y ese techo. Al lograr conectar, el contador vuelve a cero |
+| `RED_DE_SEGURIDAD` | 10 s fijos | 10 s ±15 %, calculado en cada vuelta, para que equipos arrancados juntos no queden sincronizados entre sí |
+| Esquema al reconectar | Se reaplicaba en cada reconexión | Sólo en la primera conexión buena de la sesión (si falla, cuenta como fallo y se reintenta) |
+| `una_vuelta_con_reintentos` y `escuchar` | 200 ms × intento, pocas veces | Igual: es para choques de transacción entre pocos equipos y no justifica el cambio |
 
-Además, `conectar` reaplica el esquema en **cada** reconexión. Con miles de equipos
-reconectando a la vez es carga innecesaria: debe hacerse sólo en la primera conexión o con
-`limen-nube esquema`.
+- **Piso de 1 s:** con *full jitter* el azar puede dar casi cero; el piso evita reintentar
+  en un ciclo apretado si eso se repite.
+- **Azar inyectable:** el trait `Azar` separa el generador de la lógica. `AzarDelSistema`
+  usa `rand`; las pruebas usan uno fijo y comprueban los extremos, el tope y que no haya
+  desbordes. Una prueba con azar real verifica que 200 equipos se reparten en muchos
+  instantes distintos.
+- **Dónde vive:** es infraestructura, va en `infra-nube`, nunca en el dominio (que no
+  genera números al azar).
+- **Qué falta:** la prueba de carga con muchos equipos simulados (punto 4 de la lista de
+  arriba) para elegir el tamaño de producción.
 
-**Dónde vive:** el jitter es un detalle de infraestructura, va en `infra-nube`, nunca en
-el dominio (que no genera números al azar). Para probarlo sin depender del azar, el
-generador se inyecta y las pruebas usan uno determinista.
-
-**Dependencia `rand`.** Ya está agregada a `infra-nube` (versión 0.9, la misma que ya
-traía el árbol de forma indirecta, para no duplicarla). Todavía no se usa: se agregó por
-adelantado porque el jitter y, más adelante, lo que necesite números aleatorios (por
-ejemplo el cifrado) la van a usar. **Ojo con el cifrado:** `rand` sirve para el jitter,
-pero claves, sales y nonces deben salir del generador del sistema operativo
-(`getrandom`/`OsRng`) o de los crates de cifrado, nunca de un generador previsible.
+**Dependencia `rand`** (0.9, la misma que ya traía el árbol de forma indirecta, para no
+duplicarla). Hoy la usa sólo `espera.rs`. **Ojo con el cifrado:** `rand` sirve para el
+jitter, pero claves, sales y nonces deben salir del generador del sistema operativo
+(`getrandom`/`OsRng`) o de los crates de cifrado, nunca de un generador previsible; que
+`rand` esté a mano no es motivo para usarla ahí.
