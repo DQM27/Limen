@@ -10,23 +10,30 @@ import {
 import { FormControl, NonNullableFormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import {
+  MAT_DIALOG_DATA,
+  MatDialog,
+  MatDialogModule,
+  MatDialogRef,
+} from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { NormalizadorAlEscribir } from '../compartido/escribir-normalizado';
 import {
   buscarEmpresas,
   editarContratista,
   nombreEmpresaAlEscribir,
   nombrePersonaAlEscribir,
   registrarContratista,
-  registrarEmpresa,
   validarContratista,
 } from '../nucleo/comandos';
 import { esErrorApp, type ErrorApp } from '../nucleo/tauri';
 import type { Cambio, ContratistaEntrada, Empresa, FilaContratista } from '../nucleo/tipos';
+import { DialogoEmpresa } from './dialogo-empresa';
 import { etiquetaDeTipo } from './etiquetas';
 
 /** Con `contratista` el formulario edita a esa persona; sin él, registra una nueva. */
@@ -41,9 +48,6 @@ export type ResultadoFormularioContratista =
 /** Cuántas empresas se ofrecen al escribir. */
 const EMPRESAS_OFRECIDAS = 8;
 
-/** La opción de la lista para dar de alta la empresa que se escribió. */
-const CREAR_EMPRESA = Symbol('crear-empresa');
-
 /** El campo del núcleo (`ErrorApp.campo`) → el control del formulario que lo muestra. */
 const CONTROL_DEL_CAMPO: Record<string, 'cedula' | 'nombre' | 'empresa' | 'tipo' | 'fecha'> = {
   cedula: 'cedula',
@@ -57,6 +61,9 @@ const CONTROL_DEL_CAMPO: Record<string, 'cedula' | 'nombre' | 'empresa' | 'tipo'
  * El formulario del contratista, en un diálogo: sirve para registrar y para
  * editar (cambia el título y lo que se precarga). No decide nada: el núcleo
  * normaliza y valida, y cada error trae el campo donde mostrarlo.
+ *
+ * La empresa sólo se elige entre las que existen; crear una nueva es un paso
+ * aparte (el botón "+", que abre su propio modal) para no crearlas por error.
  */
 @Component({
   selector: 'app-formulario-contratista',
@@ -70,6 +77,7 @@ const CONTROL_DEL_CAMPO: Record<string, 'cedula' | 'nombre' | 'empresa' | 'tipo'
     MatInputModule,
     MatSelectModule,
     MatSlideToggleModule,
+    MatTooltipModule,
     ReactiveFormsModule,
   ],
   templateUrl: './formulario-contratista.html',
@@ -78,19 +86,19 @@ const CONTROL_DEL_CAMPO: Record<string, 'cedula' | 'nombre' | 'empresa' | 'tipo'
 export class FormularioContratista {
   private readonly dialogo =
     inject<MatDialogRef<FormularioContratista, ResultadoFormularioContratista>>(MatDialogRef);
+  private readonly dialogos = inject(MatDialog);
   private readonly datos = inject<DatosFormularioContratista | null>(MAT_DIALOG_DATA, {
     optional: true,
   });
   private readonly anfitrion = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
-  /** Sólo vale la última respuesta al escribir: las que llegan tarde se descartan. */
-  private secuenciaAlEscribir = 0;
+  private readonly normalizaNombre = new NormalizadorAlEscribir();
+  private readonly normalizaEmpresa = new NormalizadorAlEscribir();
 
   protected readonly editando = this.datos?.contratista !== undefined;
   protected readonly etiquetaDeTipo = etiquetaDeTipo;
-  protected readonly CREAR_EMPRESA = CREAR_EMPRESA;
 
-  /** `empresa` es el texto que se escribe, o la empresa ya elegida de la lista. */
+  /** `empresa` es el texto que se escribe para buscar, o la empresa ya elegida de la lista. */
   readonly form = inject(NonNullableFormBuilder).group({
     cedula: '',
     nombre: '',
@@ -101,7 +109,8 @@ export class FormularioContratista {
   });
 
   protected readonly opciones = signal<Empresa[]>([]);
-  protected readonly puedeCrearEmpresa = signal(false);
+  /** Se escribió algo y ninguna empresa coincide: se avisa dónde crear una. */
+  protected readonly sinCoincidencias = signal(false);
   protected readonly enviando = signal(false);
   protected readonly errorGeneral = signal<string | null>(null);
 
@@ -138,63 +147,47 @@ export class FormularioContratista {
     const texto = valor.trim();
     if (texto === '') {
       this.opciones.set([]);
-      this.puedeCrearEmpresa.set(false);
+      this.sinCoincidencias.set(false);
       return;
     }
     const encontradas = await buscarEmpresas(texto, EMPRESAS_OFRECIDAS).catch(() => []);
     this.opciones.set(encontradas);
-    // Si lo escrito ya es el nombre de una de la lista, no se ofrece crearla.
-    this.puedeCrearEmpresa.set(
-      !encontradas.some((e) => e.nombre.toLowerCase() === texto.toLowerCase()),
-    );
-  }
-
-  /**
-   * Mientras se escribe, el texto se ve como quedará al guardarse (mayúsculas,
-   * sin tildes): la forma la da el dominio, no la interfaz. El cursor se queda
-   * donde estaba.
-   */
-  protected async alEscribirTexto(
-    evento: Event,
-    control: FormControl<string>,
-    comoQueda: (texto: string) => Promise<string>,
-  ): Promise<void> {
-    const campo = evento.target as HTMLInputElement;
-    const texto = campo.value;
-    const cursor = campo.selectionStart;
-    const turno = ++this.secuenciaAlEscribir;
-    const queda = await comoQueda(texto).catch(() => texto);
-    if (turno !== this.secuenciaAlEscribir || queda === texto || campo.value !== texto) {
-      return;
-    }
-    control.setValue(queda);
-    campo.setSelectionRange(cursor, cursor);
+    this.sinCoincidencias.set(encontradas.length === 0);
   }
 
   protected escribirNombre(evento: Event): void {
-    void this.alEscribirTexto(evento, this.form.controls.nombre, nombrePersonaAlEscribir);
+    void this.normalizaNombre.alEscribir(
+      evento,
+      this.form.controls.nombre,
+      nombrePersonaAlEscribir,
+    );
   }
 
-  /** La empresa se escribe como texto hasta que se elige una de la lista. */
+  /** La empresa se escribe como texto (para buscar) hasta que se elige una de la lista. */
   protected escribirEmpresa(evento: Event): void {
     const control = this.form.controls.empresa as unknown as FormControl<string>;
-    void this.alEscribirTexto(evento, control, nombreEmpresaAlEscribir);
+    void this.normalizaEmpresa.alEscribir(evento, control, nombreEmpresaAlEscribir);
   }
 
-  /** Elegir "Crear empresa «…»" la da de alta y la deja elegida. */
-  protected async alElegirEmpresa(elegida: Empresa | typeof CREAR_EMPRESA): Promise<void> {
-    const control = this.form.controls.empresa;
-    if (elegida !== CREAR_EMPRESA) {
-      control.setValue(elegida, { emitEvent: false });
-      return;
-    }
-    const nombre = this.nombreDeEmpresa(control.value).trim();
-    try {
-      const id = await registrarEmpresa(nombre);
-      control.setValue({ id, nombre }, { emitEvent: false });
-    } catch (error) {
-      this.mostrar(error, 'nombre');
-    }
+  protected alElegirEmpresa(elegida: Empresa): void {
+    this.form.controls.empresa.setValue(elegida, { emitEvent: false });
+  }
+
+  /** El botón "+": abre el modal de empresa nueva y, si se creó, la deja elegida. */
+  protected crearEmpresa(): void {
+    this.dialogos
+      .open<DialogoEmpresa, void, Empresa>(DialogoEmpresa, {
+        width: '340px',
+        disableClose: true,
+        autoFocus: 'first-tabbable',
+      })
+      .afterClosed()
+      .subscribe((creada) => {
+        if (creada) {
+          this.form.controls.empresa.setValue(creada, { emitEvent: false });
+          this.sinCoincidencias.set(false);
+        }
+      });
   }
 
   protected async guardar(): Promise<void> {
@@ -277,12 +270,12 @@ export class FormularioContratista {
   }
 
   /** El mensaje del núcleo junto a su campo; sin campo, arriba de los botones. */
-  private mostrar(error: unknown, campoPorDefecto?: 'nombre'): void {
+  private mostrar(error: unknown): void {
     if (!esErrorApp(error)) {
       this.errorGeneral.set('No se pudo guardar.');
       return;
     }
-    const nombre = campoPorDefecto === 'nombre' ? 'empresa' : CONTROL_DEL_CAMPO[error.campo ?? ''];
+    const nombre = CONTROL_DEL_CAMPO[error.campo ?? ''];
     if (nombre) {
       const control = this.form.controls[nombre];
       control.setErrors({ nucleo: error.mensaje });

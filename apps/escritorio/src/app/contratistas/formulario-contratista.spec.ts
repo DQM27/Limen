@@ -23,6 +23,8 @@ const ana: FilaContratista = {
   acceso: { resultado: 'PERMITIDO', dias_para_vencer: null, motivo: null },
 };
 
+const esperar = (): Promise<void> => new Promise((resolver) => setTimeout(resolver, 20));
+
 function errorDelNucleo(codigo: string, mensaje: string, campo: string | null) {
   return { tipo: 'negocio', codigo, mensaje, campo };
 }
@@ -296,36 +298,54 @@ describe('formulario de contratista', () => {
     });
   });
 
-  it('al escribir una empresa ofrece las que trae el núcleo y deja crear la que falta', async () => {
+  it('al escribir una empresa ofrece las que trae el núcleo y, si ninguna coincide, avisa dónde crear', async () => {
     responder({ buscar_empresas: [{ id: 'e1', nombre: 'ACME S.A.' }] });
     const { fixture, form } = await crear();
+    const interno = fixture.componentInstance as unknown as {
+      opciones(): unknown[];
+      sinCoincidencias(): boolean;
+    };
 
     form.controls.empresa.setValue('acm');
     await fixture.whenStable();
 
     expect(invoke).toHaveBeenCalledWith('buscar_empresas', { texto: 'acm', limite: 8 });
-    const interno = fixture.componentInstance as unknown as {
-      opciones(): unknown[];
-      puedeCrearEmpresa(): boolean;
-    };
     expect(interno.opciones()).toEqual([{ id: 'e1', nombre: 'ACME S.A.' }]);
-    expect(interno.puedeCrearEmpresa()).toBe(true);
-  });
+    expect(interno.sinCoincidencias()).toBe(false);
 
-  it('crear la empresa escrita la da de alta y la deja elegida', async () => {
-    responder({ registrar_empresa: 'e9' });
-    const { fixture, form } = await crear();
-    form.controls.empresa.setValue(' NUEVA S.A. ');
+    responder({ buscar_empresas: [] });
+    form.controls.empresa.setValue('zzz');
     await fixture.whenStable();
 
-    const interno = fixture.componentInstance as unknown as {
-      alElegirEmpresa(opcion: symbol): Promise<void>;
-      CREAR_EMPRESA: symbol;
-    };
-    await interno.alElegirEmpresa(interno.CREAR_EMPRESA);
+    expect(interno.sinCoincidencias()).toBe(true);
+  });
+
+  it('el selector sólo elige: crear una empresa es el botón "+", que abre su modal y deja la nueva elegida', async () => {
+    responder({
+      registrar_empresa: 'e9',
+      buscar_empresas: [{ id: 'e9', nombre: 'NUEVA S.A.' }],
+    });
+    const { fixture, raiz, form } = await crear();
+
+    raiz.querySelector<HTMLButtonElement>('button.nueva-empresa')?.click();
+    await esperar();
+    const modal = document.querySelector('app-dialogo-empresa');
+    const campo = modal?.querySelector<HTMLInputElement>('input');
+    if (!modal || !campo) {
+      throw new Error('el modal de empresa no se abrió');
+    }
+    campo.value = 'nueva s.a.';
+    campo.dispatchEvent(new Event('input'));
+    await esperar();
+    modal.querySelector('form')?.dispatchEvent(new Event('submit', { cancelable: true }));
+    await esperar();
+    await fixture.whenStable();
 
     expect(invoke).toHaveBeenCalledWith('registrar_empresa', { nombre: 'NUEVA S.A.' });
-    expect(form.controls.empresa.value).toEqual({ id: 'e9', nombre: 'NUEVA S.A.' });
+    // El diálogo se cierra con su animación: se espera a que la empresa quede elegida.
+    await vi.waitFor(() =>
+      expect(form.controls.empresa.value).toEqual({ id: 'e9', nombre: 'NUEVA S.A.' }),
+    );
   });
 
   it('"Cancelar" cierra sin guardar', async () => {

@@ -29,33 +29,45 @@
         }
       </mat-form-field>
 
-      <mat-form-field appearance="outline" subscriptSizing="dynamic">
-        <mat-label>Empresa</mat-label>
-        <input
-          matInput
-          formControlName="empresa"
-          autocomplete="off"
-          (input)="escribirEmpresa($event)"
-          [matAutocomplete]="listaEmpresas"
-        />
-        <mat-autocomplete
-          #listaEmpresas="matAutocomplete"
-          [displayWith]="nombreDeEmpresa"
-          (optionSelected)="alElegirEmpresa($event.option.value)"
+      <div class="con-accion">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Empresa</mat-label>
+          <input
+            matInput
+            formControlName="empresa"
+            autocomplete="off"
+            (input)="escribirEmpresa($event)"
+            [matAutocomplete]="listaEmpresas"
+          />
+          <mat-autocomplete
+            #listaEmpresas="matAutocomplete"
+            [displayWith]="nombreDeEmpresa"
+            (optionSelected)="alElegirEmpresa($event.option.value)"
+          >
+            @for (empresa of opciones(); track empresa.id) {
+              <mat-option [value]="empresa">{{ empresa.nombre }}</mat-option>
+            }
+            @if (sinCoincidencias()) {
+              <mat-option disabled class="sin-coincidencias">
+                Ninguna coincide. Para crear una nueva, usa el botón +
+              </mat-option>
+            }
+          </mat-autocomplete>
+          @if (form.controls.empresa.errors?.['nucleo']; as mensaje) {
+            <mat-error>{{ mensaje }}</mat-error>
+          }
+        </mat-form-field>
+        <button
+          mat-icon-button
+          type="button"
+          class="nueva-empresa"
+          aria-label="Crear una empresa nueva"
+          matTooltip="Crear una empresa nueva"
+          (click)="crearEmpresa()"
         >
-          @for (empresa of opciones(); track empresa.id) {
-            <mat-option [value]="empresa">{{ empresa.nombre }}</mat-option>
-          }
-          @if (puedeCrearEmpresa()) {
-            <mat-option [value]="CREAR_EMPRESA">
-              Crear empresa «{{ nombreDeEmpresa(form.controls.empresa.value).trim() }}»
-            </mat-option>
-          }
-        </mat-autocomplete>
-        @if (form.controls.empresa.errors?.['nucleo']; as mensaje) {
-          <mat-error>{{ mensaje }}</mat-error>
-        }
-      </mat-form-field>
+          <mat-icon aria-hidden="true">add</mat-icon>
+        </button>
+      </div>
 
       <mat-form-field appearance="outline" subscriptSizing="dynamic">
         <mat-label>Tipo de ingreso</mat-label>
