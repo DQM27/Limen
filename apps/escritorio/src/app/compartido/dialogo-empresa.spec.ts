@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { Subject } from 'rxjs';
 import { DialogoEmpresa } from './dialogo-empresa';
@@ -122,5 +122,53 @@ describe('modal de empresa nueva', () => {
 
     expect(cerrar).toHaveBeenCalledTimes(3);
     expect(invoke).not.toHaveBeenCalledWith('registrar_empresa', expect.anything());
+  });
+});
+
+describe('modal de empresa nueva, del catálogo de proveedoras', () => {
+  beforeEach(() => {
+    vi.mocked(invoke).mockReset();
+  });
+
+  it('se titula "Nueva empresa proveedora" y usa los comandos de ese catálogo', async () => {
+    vi.mocked(invoke).mockImplementation((comando: string, argumentos?: unknown) => {
+      if (comando === 'nombre_empresa_al_escribir') {
+        return Promise.resolve(String((argumentos as { texto: string }).texto).toUpperCase());
+      }
+      if (comando === 'registrar_empresa_proveedora') {
+        return Promise.resolve('p9');
+      }
+      if (comando === 'buscar_empresas_proveedoras') {
+        return Promise.resolve([{ id: 'p9', nombre: 'LIMPIEZAS DEL SUR' }]);
+      }
+      return Promise.reject(new Error(`comando inesperado: ${comando}`));
+    });
+    const cerrar = vi.fn();
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: MatDialogRef, useValue: { close: cerrar, keydownEvents: () => new Subject() } },
+        { provide: MAT_DIALOG_DATA, useValue: { catalogo: 'proveedoras' } },
+      ],
+    });
+    const fixture = TestBed.createComponent(DialogoEmpresa);
+    await fixture.whenStable();
+    const raiz = fixture.nativeElement as HTMLElement;
+
+    expect(raiz.querySelector('h2')?.textContent).toContain('Nueva empresa proveedora');
+    const campo = raiz.querySelector<HTMLInputElement>('input');
+    if (!campo) {
+      throw new Error('no hay campo');
+    }
+    campo.value = 'limpiezas del sur';
+    campo.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+    raiz.querySelector('form')?.dispatchEvent(new Event('submit', { cancelable: true }));
+    await fixture.whenStable();
+
+    expect(invoke).toHaveBeenCalledWith('registrar_empresa_proveedora', {
+      nombre: 'LIMPIEZAS DEL SUR',
+    });
+    expect(invoke).not.toHaveBeenCalledWith('registrar_empresa', expect.anything());
+    expect(cerrar).toHaveBeenCalledWith({ id: 'p9', nombre: 'LIMPIEZAS DEL SUR' });
   });
 });

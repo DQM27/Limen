@@ -22,6 +22,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { DialogoEmpresa } from '../compartido/dialogo-empresa';
 import { NormalizadorAlEscribir } from '../compartido/escribir-normalizado';
 import {
   buscarEmpresas,
@@ -33,7 +34,6 @@ import {
 } from '../nucleo/comandos';
 import { esErrorApp, type ErrorApp } from '../nucleo/tauri';
 import type { Cambio, ContratistaEntrada, Empresa, FilaContratista } from '../nucleo/tipos';
-import { DialogoEmpresa } from './dialogo-empresa';
 import { etiquetaDeTipo } from './etiquetas';
 
 /** Con `contratista` el formulario edita a esa persona; sin él, registra una nueva. */

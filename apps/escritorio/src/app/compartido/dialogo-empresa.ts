@@ -1,14 +1,27 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
-import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { NormalizadorAlEscribir } from '../compartido/escribir-normalizado';
-import { buscarEmpresas, nombreEmpresaAlEscribir, registrarEmpresa } from '../nucleo/comandos';
+import {
+  buscarEmpresas,
+  buscarEmpresasProveedoras,
+  nombreEmpresaAlEscribir,
+  registrarEmpresa,
+  registrarEmpresaProveedora,
+} from '../nucleo/comandos';
 import { esErrorApp } from '../nucleo/tauri';
 import type { Empresa } from '../nucleo/tipos';
+import { NormalizadorAlEscribir } from './escribir-normalizado';
+
+/** Qué catálogo de empresas: las de los contratistas o las de los proveedores (son aparte). */
+export type CatalogoDeEmpresas = 'contratistas' | 'proveedoras';
+
+export interface DatosDialogoEmpresa {
+  catalogo?: CatalogoDeEmpresas;
+}
 
 /**
  * El modal para dar de alta una empresa: sólo pide el nombre. Es a propósito
@@ -32,7 +45,11 @@ import type { Empresa } from '../nucleo/tipos';
 })
 export class DialogoEmpresa {
   private readonly dialogo = inject<MatDialogRef<DialogoEmpresa, Empresa>>(MatDialogRef);
+  private readonly datos = inject<DatosDialogoEmpresa | null>(MAT_DIALOG_DATA, { optional: true });
   private readonly normalizador = new NormalizadorAlEscribir();
+  private readonly proveedoras = this.datos?.catalogo === 'proveedoras';
+
+  protected readonly titulo = this.proveedoras ? 'Nueva empresa proveedora' : 'Nueva empresa';
 
   readonly nombre = new FormControl('', { nonNullable: true });
   protected readonly enviando = signal(false);
@@ -60,9 +77,10 @@ export class DialogoEmpresa {
     this.enviando.set(true);
     try {
       const texto = this.nombre.value;
-      const id = await registrarEmpresa(texto);
+      const id = await (this.proveedoras ? registrarEmpresaProveedora : registrarEmpresa)(texto);
       // El nombre como quedó guardado (normalizado) lo trae el núcleo.
-      const creada = (await buscarEmpresas(texto, 8).catch(() => [])).find((e) => e.id === id);
+      const buscar = this.proveedoras ? buscarEmpresasProveedoras : buscarEmpresas;
+      const creada = (await buscar(texto, 8).catch(() => [])).find((e) => e.id === id);
       this.dialogo.close(creada ?? { id, nombre: texto.trim() });
     } catch (error) {
       this.mostrar(error);

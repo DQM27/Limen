@@ -183,7 +183,7 @@ export class ListaDentro implements OnInit {
     this.filtro.set(filtro);
   }
 
-  protected actualizar(): void {
+  actualizar(): void {
     void this.cargar();
   }
 

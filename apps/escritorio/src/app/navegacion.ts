@@ -15,7 +15,7 @@ export interface Seccion {
 export const SECCIONES: readonly Seccion[] = [
   { etiqueta: 'Dentro', icono: 'groups', ruta: '/dentro' },
   { etiqueta: 'Contratistas', icono: 'engineering', ruta: '/contratistas' },
-  { etiqueta: 'Proveedores', icono: 'local_shipping' },
+  { etiqueta: 'Proveedores', icono: 'local_shipping', ruta: '/proveedores' },
   { etiqueta: 'Correo', icono: 'mail' },
   { etiqueta: 'KOF', icono: 'local_drink', iconoPropio: 'kof' },
   { etiqueta: 'Gafetes', icono: 'badge', ruta: '/gafetes' },

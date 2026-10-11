@@ -1,6 +1,6 @@
 <form (submit)="$event.preventDefault(); guardar()" novalidate>
   <div class="cabecera">
-    <h2 mat-dialog-title>Nueva empresa</h2>
+    <h2 mat-dialog-title>{{ titulo }}</h2>
     <button mat-icon-button type="button" class="cerrar" aria-label="Cerrar" (click)="cancelar()">
       <mat-icon aria-hidden="true">close</mat-icon>
     </button>

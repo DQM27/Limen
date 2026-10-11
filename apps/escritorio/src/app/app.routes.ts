@@ -14,6 +14,12 @@ export const routes: Routes = [
       import('./contratistas/contratistas-pagina').then((m) => m.ContratistasPagina),
   },
   {
+    path: 'proveedores',
+    title: 'Proveedores · Limen',
+    loadComponent: () =>
+      import('./proveedores/proveedores-pagina').then((m) => m.ProveedoresPagina),
+  },
+  {
     path: 'gafetes',
     title: 'Gafetes · Limen',
     loadComponent: () => import('./gafetes/gafetes-pagina').then((m) => m.GafetesPagina),
