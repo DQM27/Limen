@@ -148,7 +148,7 @@ describe('modal de ingreso de contratista', () => {
 
     await escribirBusqueda('a');
 
-    expect(invoke).toHaveBeenCalledWith('buscar_para_ingreso', { texto: 'a', limite: 8 });
+    expect(invoke).toHaveBeenCalledWith('buscar_para_ingreso', { texto: 'a', limite: 5 });
     await vi.waitFor(() => expect(opciones()).toHaveLength(3));
     const filas = opciones().map((b) => ({
       nombre: b.querySelector('.nombre')?.textContent?.trim(),

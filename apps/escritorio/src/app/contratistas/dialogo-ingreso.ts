@@ -33,7 +33,7 @@ export interface ResultadoIngreso {
 }
 
 /** Cuántas personas se ofrecen al buscar. */
-const RESULTADOS_OFRECIDOS = 8;
+const RESULTADOS_OFRECIDOS = 5;
 
 /** Sólo dígitos: lo demás que se escriba se descarta (es formato, no regla). */
 function soloDigitos(texto: string): string {

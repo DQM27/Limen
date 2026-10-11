@@ -2,12 +2,6 @@
 
 @include dialogo.compacto;
 
-// El alto no depende del paso: buscar y ver la ficha ocupan lo mismo, así el
-// modal no da saltos al elegir a alguien ni al aparecer coincidencias.
-mat-dialog-content {
-  min-height: 250px;
-}
-
 .buscador {
   width: 100%;
   margin-top: 8px;
