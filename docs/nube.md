@@ -104,5 +104,13 @@ equipo sin cambiar el flujo de datos.
 - **Pantallas:** sin cambios. La base local sólo tiene lo de su unidad.
 - **Nube:** el esquema nuevo ya está aplicado y existe `unidad_operativa:BRISAS`.
 
-Las bases de desarrollo creadas antes de este cambio tienen hechos sin origen y gafetes
-con la clave vieja (`CONTRATISTA-25`): conviene borrarlas y dejar que se vuelvan a crear.
+**Bases de antes de este cambio:** no hay que borrarlas. Al abrirse, la base de un
+equipo se convierte sola (`infra-surreal/src/esquema/sin_unidad.surql`, sección 8.4 de
+`arquitectura.md`): los gafetes y sus préstamos pasan a la clave con la unidad, y lo
+demás recibe el campo `unidad`. Sólo toca lo que no tiene unidad, así que en una base
+nueva o ya convertida no hace nada. Los hechos no se editan: los que no traen origen se
+leen como registrados en ese equipo, que es donde se registraron.
+
+**Pendiente para cuando haya una segunda unidad:** el historial de cambios de un gafete
+(auditoría) lo identifica por `TIPO-NÚMERO`, sin la unidad. Con una sola unidad no
+importa; con dos, el historial del 25 de Brisas se mezclaría con el del 25 de la otra.

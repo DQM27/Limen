@@ -34,7 +34,8 @@ use crate::registros::clave_gafete;
 use crate::registros::{
     ContratistaLeido, EmpresaLeida, EmpresaProveedoraLeida, GafeteDatos, HechoLeido,
     PersonalKofLeido, TABLA_AUDITORIA, TABLA_INGRESO_CONTRATISTA, TABLA_INGRESO_CORREO,
-    TABLA_INGRESO_PROVEEDOR, TABLA_PRESTAMO_KOF, TABLA_USUARIO, medio_de, numero_de, uuid_de,
+    TABLA_INGRESO_PROVEEDOR, TABLA_PRESTAMO_KOF, TABLA_USUARIO, hecho_desde, medio_de, numero_de,
+    uuid_de,
 };
 
 /// Sólo el nombre plegado de una fila: lo que necesita la búsqueda
@@ -571,7 +572,10 @@ impl Consultas for AlmacenSurreal {
             .await
             .map_err(tecnica)?;
         let filas: Vec<HechoLeido> = respuesta.take(0).map_err(tecnica)?;
-        filas.into_iter().map(Hecho::try_from).collect()
+        filas
+            .into_iter()
+            .map(|fila| hecho_desde(fila, self.origen()))
+            .collect()
     }
 
     async fn historial_de(

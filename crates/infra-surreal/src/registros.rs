@@ -935,8 +935,9 @@ pub struct HechoLeido {
     pub registro: Uuid,
     pub en: DateTime<Utc>,
     pub operador: Uuid,
-    pub unidad: String,
-    pub equipo: Uuid,
+    /// `None` en los hechos guardados antes de que llevaran su origen.
+    pub unidad: Option<String>,
+    pub equipo: Option<Uuid>,
     /// Si la hora era confiable al sellarla (E5).
     pub hora_confiable: bool,
     /// La hora cruda del reloj del equipo al sellarla.
@@ -984,101 +985,109 @@ impl From<&Hecho> for HechoDatos {
     }
 }
 
-impl TryFrom<HechoLeido> for Hecho {
-    type Error = ErrorPersistencia;
-
-    fn try_from(leido: HechoLeido) -> Result<Self, ErrorPersistencia> {
-        let id = HechoId::desde_uuid(uuid_de(&leido.id, TABLA_HECHO)?);
-        let datos = leido;
-        let via = Via::desde_codigo(&datos.via)
-            .ok_or_else(|| dato_corrupto(TABLA_HECHO, format!("vía desconocida: {}", datos.via)))?;
-        let suceso = match (datos.tipo.as_str(), via) {
-            (SALIDA, _) => Suceso::Salida(Salida {
-                via,
-                registro: datos.registro,
-                marca: Marca {
-                    en: datos.en,
-                    operador: OperadorId::desde_uuid(datos.operador),
-                },
-            }),
-            (ENTRADA, Via::Contratista) => {
-                let ingreso = entrada_de(datos.ingreso_contratista)?;
-                Suceso::EntradaContratista(IngresoContratista::try_from(IngresoLeido {
-                    id: id_registro(TABLA_INGRESO_CONTRATISTA, datos.registro),
-                    contratista: ingreso.contratista,
-                    cedula: ingreso.cedula,
-                    placa: ingreso.placa,
-                    gafete: ingreso.gafete,
-                    entrega_gafete: Some(ingreso.entrega_gafete),
-                    entrada_en: ingreso.entrada_en,
-                    entrada_operador: ingreso.entrada_operador,
-                    salida_en: ingreso.salida_en,
-                    salida_operador: ingreso.salida_operador,
-                })?)
-            }
-            (ENTRADA, Via::Proveedor) => {
-                let ingreso = entrada_de(datos.ingreso_proveedor)?;
-                Suceso::EntradaProveedor(IngresoProveedor::try_from(IngresoProveedorLeido {
-                    id: id_registro(TABLA_INGRESO_PROVEEDOR, datos.registro),
-                    cedula: ingreso.cedula,
-                    nombre: ingreso.nombre,
-                    empresa: ingreso.empresa,
-                    placa: ingreso.placa,
-                    gafete: ingreso.gafete,
-                    entrada_en: ingreso.entrada_en,
-                    entrada_operador: ingreso.entrada_operador,
-                    salida_en: ingreso.salida_en,
-                    salida_operador: ingreso.salida_operador,
-                })?)
-            }
-            (ENTRADA, Via::Correo) => {
-                let ingreso = entrada_de(datos.ingreso_correo)?;
-                Suceso::EntradaCorreo(IngresoCorreo::try_from(IngresoCorreoLeido {
-                    id: id_registro(TABLA_INGRESO_CORREO, datos.registro),
-                    cedula: ingreso.cedula,
-                    nombre: ingreso.nombre,
-                    motivo: ingreso.motivo,
-                    placa: ingreso.placa,
-                    gafete: ingreso.gafete,
-                    entrada_en: ingreso.entrada_en,
-                    entrada_operador: ingreso.entrada_operador,
-                    salida_en: ingreso.salida_en,
-                    salida_operador: ingreso.salida_operador,
-                })?)
-            }
-            (ENTRADA, Via::Kof) => {
-                let prestamo = entrada_de(datos.prestamo_kof)?;
-                Suceso::EntregaKof(PrestamoKof::try_from(PrestamoKofLeido {
-                    id: id_registro(TABLA_PRESTAMO_KOF, datos.registro),
-                    personal: prestamo.personal,
-                    codigo_empleado: prestamo.codigo_empleado,
-                    nombre: prestamo.nombre,
-                    gafete: prestamo.gafete,
-                    entrega_en: prestamo.entrega_en,
-                    entrega_operador: prestamo.entrega_operador,
-                    devolucion_en: prestamo.devolucion_en,
-                    devolucion_operador: prestamo.devolucion_operador,
-                })?)
-            }
-            (otro, _) => {
-                return Err(dato_corrupto(
-                    TABLA_HECHO,
-                    format!("tipo desconocido: {otro}"),
-                ));
-            }
-        };
-        let hora = CalidadHora {
-            confiable: datos.hora_confiable,
-            hora_equipo: datos.hora_equipo,
-        };
-        let origen = Origen {
-            unidad: UnidadOperativaId::nueva(&datos.unidad).map_err(|_| {
-                dato_corrupto(TABLA_HECHO, format!("unidad inválida: {}", datos.unidad))
-            })?,
-            equipo: EquipoId::desde_uuid(datos.equipo),
-        };
-        Ok(Self::restaurar(id, suceso, origen, hora))
-    }
+/// Convierte un hecho leído al del dominio. Un hecho guardado antes de que
+/// los hechos llevaran su origen (M4) no lo trae: se registró en este
+/// equipo, así que se le da `de_este_equipo`. Los hechos no se editan, por
+/// eso se completa al leerlo y no en la base.
+pub fn hecho_desde(leido: HechoLeido, de_este_equipo: &Origen) -> Result<Hecho, ErrorPersistencia> {
+    let id = HechoId::desde_uuid(uuid_de(&leido.id, TABLA_HECHO)?);
+    let datos = leido;
+    let via = Via::desde_codigo(&datos.via)
+        .ok_or_else(|| dato_corrupto(TABLA_HECHO, format!("vía desconocida: {}", datos.via)))?;
+    let suceso = match (datos.tipo.as_str(), via) {
+        (SALIDA, _) => Suceso::Salida(Salida {
+            via,
+            registro: datos.registro,
+            marca: Marca {
+                en: datos.en,
+                operador: OperadorId::desde_uuid(datos.operador),
+            },
+        }),
+        (ENTRADA, Via::Contratista) => {
+            let ingreso = entrada_de(datos.ingreso_contratista)?;
+            Suceso::EntradaContratista(IngresoContratista::try_from(IngresoLeido {
+                id: id_registro(TABLA_INGRESO_CONTRATISTA, datos.registro),
+                contratista: ingreso.contratista,
+                cedula: ingreso.cedula,
+                placa: ingreso.placa,
+                gafete: ingreso.gafete,
+                entrega_gafete: Some(ingreso.entrega_gafete),
+                entrada_en: ingreso.entrada_en,
+                entrada_operador: ingreso.entrada_operador,
+                salida_en: ingreso.salida_en,
+                salida_operador: ingreso.salida_operador,
+            })?)
+        }
+        (ENTRADA, Via::Proveedor) => {
+            let ingreso = entrada_de(datos.ingreso_proveedor)?;
+            Suceso::EntradaProveedor(IngresoProveedor::try_from(IngresoProveedorLeido {
+                id: id_registro(TABLA_INGRESO_PROVEEDOR, datos.registro),
+                cedula: ingreso.cedula,
+                nombre: ingreso.nombre,
+                empresa: ingreso.empresa,
+                placa: ingreso.placa,
+                gafete: ingreso.gafete,
+                entrada_en: ingreso.entrada_en,
+                entrada_operador: ingreso.entrada_operador,
+                salida_en: ingreso.salida_en,
+                salida_operador: ingreso.salida_operador,
+            })?)
+        }
+        (ENTRADA, Via::Correo) => {
+            let ingreso = entrada_de(datos.ingreso_correo)?;
+            Suceso::EntradaCorreo(IngresoCorreo::try_from(IngresoCorreoLeido {
+                id: id_registro(TABLA_INGRESO_CORREO, datos.registro),
+                cedula: ingreso.cedula,
+                nombre: ingreso.nombre,
+                motivo: ingreso.motivo,
+                placa: ingreso.placa,
+                gafete: ingreso.gafete,
+                entrada_en: ingreso.entrada_en,
+                entrada_operador: ingreso.entrada_operador,
+                salida_en: ingreso.salida_en,
+                salida_operador: ingreso.salida_operador,
+            })?)
+        }
+        (ENTRADA, Via::Kof) => {
+            let prestamo = entrada_de(datos.prestamo_kof)?;
+            Suceso::EntregaKof(PrestamoKof::try_from(PrestamoKofLeido {
+                id: id_registro(TABLA_PRESTAMO_KOF, datos.registro),
+                personal: prestamo.personal,
+                codigo_empleado: prestamo.codigo_empleado,
+                nombre: prestamo.nombre,
+                gafete: prestamo.gafete,
+                entrega_en: prestamo.entrega_en,
+                entrega_operador: prestamo.entrega_operador,
+                devolucion_en: prestamo.devolucion_en,
+                devolucion_operador: prestamo.devolucion_operador,
+            })?)
+        }
+        (otro, _) => {
+            return Err(dato_corrupto(
+                TABLA_HECHO,
+                format!("tipo desconocido: {otro}"),
+            ));
+        }
+    };
+    let hora = CalidadHora {
+        confiable: datos.hora_confiable,
+        hora_equipo: datos.hora_equipo,
+    };
+    let origen = match (datos.unidad, datos.equipo) {
+        (Some(unidad), Some(equipo)) => Origen {
+            unidad: UnidadOperativaId::nueva(&unidad)
+                .map_err(|_| dato_corrupto(TABLA_HECHO, format!("unidad inválida: {unidad}")))?,
+            equipo: EquipoId::desde_uuid(equipo),
+        },
+        (None, None) => de_este_equipo.clone(),
+        _ => {
+            return Err(dato_corrupto(
+                TABLA_HECHO,
+                "un origen a medias: la unidad sin el equipo o al revés",
+            ));
+        }
+    };
+    Ok(Hecho::restaurar(id, suceso, origen, hora))
 }
 
 /// El registro que abrió una entrada: tiene que estar en el campo de su vía.

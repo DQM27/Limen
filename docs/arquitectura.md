@@ -476,6 +476,9 @@ DEFINE INDEX OVERWRITE contratista_cedula ON contratista FIELDS cedula UNIQUE;
 - Sólo si alguna vez hay que **transformar datos existentes** (partir un campo en dos,
   por ejemplo), se agrega un número de versión en un registro y un paso condicional. Se
   hace ese día, no antes.
+- El primero fue la llegada de las unidades operativas (`esquema/sin_unidad.surql`). No
+  hizo falta un número de versión: el paso se reconoce por los datos (sólo toca lo que no
+  tiene el campo `unidad`), así que se puede correr en cada arranque sin cambiar nada.
 
 Equivale a lo que en .NET hace Entity Framework con sus migraciones, pero sin generar
 nada automáticamente.

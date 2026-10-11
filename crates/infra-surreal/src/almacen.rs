@@ -3,9 +3,10 @@
 use std::path::Path;
 
 use limen_aplicacion::puertos::{ErrorPersistencia, RegistroAuditado};
-use limen_dominio::origen::UnidadOperativaId;
+use limen_dominio::origen::{EquipoId, Origen, UnidadOperativaId};
 use surrealdb::Surreal;
 use surrealdb::engine::local::{Db, Mem, SurrealKv};
+use uuid::Uuid;
 
 use crate::error::tecnica;
 use crate::registros::AuditoriaRegistro;
@@ -20,16 +21,20 @@ pub const BASE: &str = "principal";
 /// La unidad operativa de las bases en memoria (pruebas).
 pub const UNIDAD_DE_PRUEBAS: &str = "PRUEBAS";
 
+/// Convierte lo guardado antes de las unidades operativas (M4). Ver el
+/// archivo: sólo toca lo que todavía no tiene unidad.
+const SIN_UNIDAD: &str = include_str!("esquema/sin_unidad.surql");
+
 /// La base de datos embebida de un equipo. Clonarla comparte la misma
 /// conexión: es lo que reciben la composición y la fábrica de Unit of Work.
 ///
-/// Conoce la unidad operativa del equipo (M4): la base local sólo guarda lo
-/// de esa unidad, y la usa en las claves de los gafetes y en el campo
-/// `unidad` de cada registro de la unidad.
+/// Conoce el origen del equipo (M4): la base local sólo guarda lo de su
+/// unidad, que va en las claves de los gafetes y en el campo `unidad` de
+/// cada registro de la unidad.
 #[derive(Debug, Clone)]
 pub struct AlmacenSurreal {
     db: Surreal<Db>,
-    unidad: UnidadOperativaId,
+    origen: Origen,
 }
 
 impl AlmacenSurreal {
@@ -37,44 +42,60 @@ impl AlmacenSurreal {
     /// [`UNIDAD_DE_PRUEBAS`]. Para pruebas.
     pub async fn en_memoria() -> Result<Self, ErrorPersistencia> {
         let db = Surreal::new::<Mem>(()).await.map_err(tecnica)?;
-        let unidad = UnidadOperativaId::nueva(UNIDAD_DE_PRUEBAS)
-            .map_err(|e| ErrorPersistencia::Tecnica(e.to_string()))?;
-        Self::preparar(db, unidad).await
+        let origen = Origen {
+            unidad: UnidadOperativaId::nueva(UNIDAD_DE_PRUEBAS)
+                .map_err(|e| ErrorPersistencia::Tecnica(e.to_string()))?,
+            equipo: EquipoId::desde_uuid(Uuid::nil()),
+        };
+        Self::preparar(db, origen).await
     }
 
-    /// Base en disco (`SurrealKV`) en `ruta`, con el esquema aplicado. Si no
-    /// existe, se crea.
+    /// Base en disco (`SurrealKV`) en `ruta`, del equipo `origen`, con el
+    /// esquema aplicado. Si no existe, se crea; si es de antes de las
+    /// unidades operativas, se convierte (`sin_unidad.surql`).
     ///
     /// Una sola apertura por proceso: el archivo queda tomado mientras viva
     /// algún clon del almacén, y al soltar el último el motor lo libera en
     /// segundo plano (no hay un cierre que se pueda esperar). Abrir la misma
     /// ruta dos veces a la vez falla con un error técnico.
-    pub async fn en_disco(
-        ruta: &Path,
-        unidad: UnidadOperativaId,
-    ) -> Result<Self, ErrorPersistencia> {
+    pub async fn en_disco(ruta: &Path, origen: Origen) -> Result<Self, ErrorPersistencia> {
         let ruta = ruta.to_str().ok_or_else(|| {
             ErrorPersistencia::Tecnica(format!("ruta no válida: {}", ruta.display()))
         })?;
         let db = Surreal::new::<SurrealKv>(ruta).await.map_err(tecnica)?;
-        Self::preparar(db, unidad).await
+        Self::preparar(db, origen).await
     }
 
-    async fn preparar(
-        db: Surreal<Db>,
-        unidad: UnidadOperativaId,
-    ) -> Result<Self, ErrorPersistencia> {
+    async fn preparar(db: Surreal<Db>, origen: Origen) -> Result<Self, ErrorPersistencia> {
         db.use_ns(NAMESPACE).use_db(BASE).await.map_err(tecnica)?;
         db.query(ESQUEMA)
             .await
             .and_then(surrealdb::IndexedResults::check)
             .map_err(tecnica)?;
-        Ok(Self { db, unidad })
+        let almacen = Self { db, origen };
+        almacen.convertir_lo_que_no_tiene_unidad().await?;
+        Ok(almacen)
+    }
+
+    async fn convertir_lo_que_no_tiene_unidad(&self) -> Result<(), ErrorPersistencia> {
+        self.db
+            .query(SIN_UNIDAD)
+            .bind(("unidad", self.origen.unidad.to_string()))
+            .await
+            .and_then(surrealdb::IndexedResults::check)
+            .map(drop)
+            .map_err(tecnica)
     }
 
     /// La unidad operativa de este equipo.
     pub const fn unidad(&self) -> &UnidadOperativaId {
-        &self.unidad
+        &self.origen.unidad
+    }
+
+    /// Dónde está este equipo. Es también el origen de los hechos guardados
+    /// antes de que los hechos lo llevaran: se registraron aquí.
+    pub const fn origen(&self) -> &Origen {
+        &self.origen
     }
 
     /// Historial de auditoría de un registro, del
@@ -105,6 +126,7 @@ impl AlmacenSurreal {
 
 #[cfg(test)]
 mod tests {
+    use crate::registros::TABLAS_DE_LA_UNIDAD;
     use chrono::{DateTime, Utc};
     use limen_aplicacion::puertos::{
         AccionAuditada, Consultas, EntradaAuditoria, FabricaUnidadDeTrabajo, RegistroAuditoria,
@@ -118,7 +140,6 @@ mod tests {
     use limen_dominio::hecho::{CalidadHora, Hecho, HechoId, Salida, Suceso};
     use limen_dominio::movimiento::Marca;
     use limen_dominio::operador::OperadorId;
-    use limen_dominio::origen::{EquipoId, Origen};
     use limen_dominio::presencia::Identidad;
     use limen_dominio::presencia::Via;
     use uuid::Uuid;
@@ -226,6 +247,102 @@ mod tests {
                 .unwrap(),
             "y se encuentra por su clave con la unidad"
         );
+    }
+
+    /// Una base como las de antes de las unidades operativas: los campos
+    /// `unidad` y el origen de los hechos no existían, y los gafetes tenían
+    /// la clave `TIPO-NÚMERO`.
+    async fn base_de_antes() -> AlmacenSurreal {
+        let almacen = AlmacenSurreal::en_memoria().await.unwrap();
+        let mut quitar: Vec<String> = TABLAS_DE_LA_UNIDAD
+            .iter()
+            .map(|tabla| format!("REMOVE FIELD unidad ON {tabla};"))
+            .collect();
+        quitar.push("REMOVE FIELD unidad ON hecho; REMOVE FIELD equipo ON hecho;".to_owned());
+        let sentencias = quitar.join(" ")
+            + " CREATE gafete:`CONTRATISTA-25` CONTENT { tipo: 'CONTRATISTA', numero: 25, estado: 'DISPONIBLE' };
+                CREATE gafete:`VISITA-3` CONTENT { tipo: 'VISITA', numero: 3, estado: 'PERDIDO', portador_cedula: '111111111' };
+                CREATE prestamo_gafete:`CONTRATISTA-25` CONTENT { desde: d'2026-10-09T08:00:00Z' };
+                CREATE presencia:`111111111` CONTENT { via: 'CONTRATISTA', desde: d'2026-10-09T08:00:00Z' };
+                CREATE hecho:u'00000000-0000-0000-0000-000000000001' CONTENT {
+                    tipo: 'SALIDA', via: 'CONTRATISTA', registro: u'00000000-0000-0000-0000-000000000005',
+                    en: d'2026-10-09T17:00:00Z', operador: u'00000000-0000-0000-0000-000000000009',
+                    hora_confiable: true, hora_equipo: d'2026-10-09T17:00:00Z' };";
+        let errores = errores_de(&almacen, &sentencias).await;
+        assert_eq!(errores, Vec::<String>::new(), "la base de antes se arma");
+        almacen
+            .db()
+            .query(ESQUEMA)
+            .await
+            .and_then(surrealdb::IndexedResults::check)
+            .unwrap();
+        almacen
+    }
+
+    #[tokio::test]
+    async fn lo_de_antes_de_las_unidades_se_convierte_sin_perder_nada() {
+        let almacen = base_de_antes().await;
+
+        almacen.convertir_lo_que_no_tiene_unidad().await.unwrap();
+
+        let mut respuesta = almacen
+            .db()
+            .query(
+                "SELECT VALUE record::id(id) FROM gafete ORDER BY id; \
+                 SELECT VALUE unidad FROM gafete; \
+                 SELECT VALUE portador_cedula FROM ONLY gafete:`PRUEBAS-VISITA-3`; \
+                 SELECT VALUE record::id(id) FROM prestamo_gafete; \
+                 SELECT VALUE unidad FROM presencia;",
+            )
+            .await
+            .unwrap();
+        let claves: Vec<String> = respuesta.take(0).unwrap();
+        assert_eq!(
+            claves,
+            ["PRUEBAS-CONTRATISTA-25", "PRUEBAS-VISITA-3"],
+            "los gafetes pasan a la clave con la unidad, y no queda ninguno con la vieja"
+        );
+        let unidades: Vec<String> = respuesta.take(1).unwrap();
+        assert_eq!(unidades, ["PRUEBAS", "PRUEBAS"], "y llevan su unidad");
+        let portador: Option<String> = respuesta.take(2).unwrap();
+        assert_eq!(
+            portador.as_deref(),
+            Some("111111111"),
+            "con todos sus datos"
+        );
+        let prestamos: Vec<String> = respuesta.take(3).unwrap();
+        assert_eq!(prestamos, ["PRUEBAS-CONTRATISTA-25"], "el préstamo también");
+        let presencia: Vec<String> = respuesta.take(4).unwrap();
+        assert_eq!(presencia, ["PRUEBAS"], "lo demás recibe el campo `unidad`");
+
+        let numero = NumeroGafete::nuevo(25).unwrap();
+        assert!(
+            almacen
+                .nueva()
+                .gafetes()
+                .prestado(TipoGafete::Contratista, numero)
+                .await
+                .unwrap(),
+            "la app encuentra el préstamo convertido"
+        );
+        let hechos = almacen.hechos_de(Uuid::from_u128(5)).await.unwrap();
+        assert_eq!(
+            hechos.first().map(Hecho::origen),
+            Some(almacen.origen()),
+            "un hecho sin origen se lee como registrado en este equipo"
+        );
+    }
+
+    #[tokio::test]
+    async fn convertir_otra_vez_no_cambia_nada() {
+        let almacen = base_de_antes().await;
+        almacen.convertir_lo_que_no_tiene_unidad().await.unwrap();
+        let antes = cuantos(&almacen, "gafete").await;
+
+        almacen.convertir_lo_que_no_tiene_unidad().await.unwrap();
+
+        assert_eq!(cuantos(&almacen, "gafete").await, antes, "no duplica nada");
+        assert_eq!(antes, 2, "siguen los dos gafetes");
     }
 
     #[tokio::test]

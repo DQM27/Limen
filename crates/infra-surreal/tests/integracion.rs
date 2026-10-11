@@ -87,7 +87,7 @@ mod tests {
     /// última conexión: se reintenta mientras el candado siga tomado.
     async fn reabrir(ruta: &std::path::Path) -> AlmacenSurreal {
         for _ in 0..100 {
-            match AlmacenSurreal::en_disco(ruta, origen_de_pruebas().unidad).await {
+            match AlmacenSurreal::en_disco(ruta, origen_de_pruebas()).await {
                 Ok(almacen) => return almacen,
                 // "locked" en Linux; "os error 33" en Windows.
                 Err(error)
@@ -154,7 +154,7 @@ mod tests {
         let carpeta = CarpetaTemporal::nueva();
         let ids = IdsSecuenciales::new();
         {
-            let almacen = AlmacenSurreal::en_disco(&carpeta.0, origen_de_pruebas().unidad)
+            let almacen = AlmacenSurreal::en_disco(&carpeta.0, origen_de_pruebas())
                 .await
                 .unwrap();
             registrar_todo(&almacen, &ids).await;

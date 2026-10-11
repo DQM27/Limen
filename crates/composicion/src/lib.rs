@@ -320,7 +320,7 @@ impl AplicacionLimen {
     pub async fn abrir(config: &Config, reloj: &RelojConfiable) -> Result<Self, ErrorArranque> {
         let origen = origen_del_equipo(&config.ruta_equipo, UNIDAD_POR_OMISION)
             .map_err(ErrorArranque::Equipo)?;
-        let almacen = AlmacenSurreal::en_disco(&config.ruta_base, origen.unidad.clone()).await?;
+        let almacen = AlmacenSurreal::en_disco(&config.ruta_base, origen.clone()).await?;
         let claves = ClavesArgon2::new().map_err(ErrorArranque::Claves)?;
         // Sólo al desarrollar: la versión para producción no trae la semilla.
         #[cfg(debug_assertions)]
