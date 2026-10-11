@@ -3270,10 +3270,15 @@ dependencies = [
 name = "limen-infra-nube"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "limen-aplicacion",
+ "limen-dominio",
+ "limen-infra-plataforma",
  "limen-infra-surreal",
  "surrealdb",
  "thiserror 2.0.21",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

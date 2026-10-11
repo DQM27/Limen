@@ -25,6 +25,20 @@ que es público: se leen de variables de entorno (`LIMEN_NUBE_URL`, `LIMEN_NUBE_
 cambiarlo: `cargo run -p limen-infra-nube --bin limen-nube -- esquema` (es declarativo:
 aplicarlo otra vez no toca los datos).
 
+Para **subir la base de un equipo** (con la app cerrada, porque la base queda tomada
+mientras está abierta):
+
+```text
+cargo run -p limen-infra-nube --bin limen-nube -- subir "%APPDATA%\com.dqm27.limen.escritorio"
+```
+
+Abre la base (y la convierte si es de antes de las unidades operativas), deja el esquema
+de la nube al día y copia, con los mismos IDs, los catálogos, lo de la unidad, los
+hechos y la auditoría. Se puede repetir: no duplica nada, y lo que en el equipo ya
+terminó (una presencia, un préstamo) deja de estar en la nube. No sube los usuarios (los
+de un equipo de desarrollo son de prueba; los reales vienen de la nube), los intentos de
+inicio de sesión ni el reloj del equipo.
+
 ## 2. El modelo: la nube manda, el equipo es desechable
 
 - **La nube es la fuente de verdad** de los catálogos, los registros y el historial.
@@ -80,7 +94,8 @@ equipo sin cambiar el flujo de datos.
 
 1. ✅ Conectar y aplicar el esquema (`crates/infra-nube`, herramienta `limen-nube`).
 2. ✅ **Unidades operativas y equipos** en el dominio y en el esquema (sección 7).
-3. Subida de lo pendiente (bandeja de salida).
+3. Subida de lo pendiente (bandeja de salida). ✅ Por ahora, a mano: `limen-nube subir`
+   copia la base entera; falta que la app suba sola lo que registra.
 4. Bajada: carga inicial de un equipo nuevo, en vivo y recuperación por cursor.
 5. Indicador de incidente al unir lo de varios equipos.
 6. Usuarios desde la nube (L4, L5) y la hora de la nube para los equipos sin NTP.

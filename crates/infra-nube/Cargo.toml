@@ -8,12 +8,20 @@ publish.workspace = true
 
 [dependencies]
 limen-infra-surreal.workspace = true
+# Sólo para leer la identidad del equipo (`equipo.txt`) al subir su base.
+limen-infra-plataforma.workspace = true
 # La nube se alcanza por WebSocket seguro (`wss://`): sólo este crate activa
 # el protocolo y TLS (rustls, escrito en Rust). La app de escritorio no
 # depende de él todavía, así que no los arrastra.
 surrealdb = { workspace = true, features = ["protocol-ws", "rustls"] }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["time"] }
+
+[dev-dependencies]
+limen-aplicacion.workspace = true
+limen-dominio.workspace = true
+chrono.workspace = true
+uuid.workspace = true
 
 [lints]
 workspace = true

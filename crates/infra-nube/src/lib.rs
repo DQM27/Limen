@@ -1,7 +1,8 @@
 //! Conexión de Limen con la nube: la instancia de `SurrealDB` Cloud.
 //!
-//! Por ahora hace dos cosas: **conectar** (WebSocket seguro, `wss://`, con
-//! usuario y clave) y **aplicar el esquema**, que es el mismo de los equipos
+//! Por ahora hace tres cosas: **conectar** (WebSocket seguro, `wss://`, con
+//! usuario y clave), **subir** la base de un equipo (`subida`) y **aplicar el
+//! esquema**, que es el mismo de los equipos
 //! (`limen_infra_surreal::ESQUEMA`): así la nube y los equipos no pueden
 //! quedar distintos. La sincronización de hechos (sección 9.2 de
 //! `docs/arquitectura.md`) se construye encima de esto.
@@ -9,12 +10,16 @@
 //! La configuración sale de variables de entorno ([`ConfigNube::desde_entorno`]),
 //! nunca del código: el repositorio es público.
 
+mod subida;
+
 use std::fmt;
 
 use limen_infra_surreal::{BASE, ESQUEMA, NAMESPACE};
 use surrealdb::Surreal;
 use surrealdb::engine::any::{Any, connect};
 use surrealdb::opt::auth::{Database, Namespace, Root};
+
+pub use subida::{Copia, Subida, TABLAS};
 
 /// La dirección de la instancia, por ejemplo
 /// `wss://limen-xxxx.aws-use1.surreal.cloud`.
@@ -87,6 +92,8 @@ pub enum ErrorNube {
     Esquema(String),
     #[error("No se pudo consultar la nube: {0}")]
     Consulta(String),
+    #[error("No se pudo subir a la nube: {0}")]
+    Subida(String),
 }
 
 impl ConfigNube {

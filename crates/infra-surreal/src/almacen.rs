@@ -6,6 +6,7 @@ use limen_aplicacion::puertos::{ErrorPersistencia, RegistroAuditado};
 use limen_dominio::origen::{EquipoId, Origen, UnidadOperativaId};
 use surrealdb::Surreal;
 use surrealdb::engine::local::{Db, Mem, SurrealKv};
+use surrealdb::types::Value;
 use uuid::Uuid;
 
 use crate::error::tecnica;
@@ -96,6 +97,19 @@ impl AlmacenSurreal {
     /// antes de que los hechos lo llevaran: se registraron aquí.
     pub const fn origen(&self) -> &Origen {
         &self.origen
+    }
+
+    /// Todos los registros de una tabla, tal como están guardados (con su
+    /// `id`). Es para copiar la base del equipo a la nube, que tiene el mismo
+    /// esquema: no pasa por el dominio porque no decide nada, sólo copia.
+    pub async fn filas(&self, tabla: &str) -> Result<Vec<Value>, ErrorPersistencia> {
+        let mut respuesta = self
+            .db
+            .query("SELECT * FROM type::table($tabla) ORDER BY id")
+            .bind(("tabla", tabla.to_owned()))
+            .await
+            .map_err(tecnica)?;
+        respuesta.take(0).map_err(tecnica)
     }
 
     /// Historial de auditoría de un registro, del
