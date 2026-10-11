@@ -1,0 +1,82 @@
+<!-- El título no se ve (la barra lateral ya dice dónde está la persona) pero
+     queda para los lectores de pantalla. -->
+<h1 class="solo-lectores">Historial</h1>
+
+@if (error(); as mensaje) {
+  <p class="error" role="alert">{{ mensaje }}</p>
+}
+@if (historial()?.truncado) {
+  <p class="aviso" role="status">
+    Hay más de {{ historial()?.maximo }} movimientos en este rango: se muestran los más recientes.
+    Acota las fechas para ver el resto.
+  </p>
+}
+
+<app-tabla
+  id="historial"
+  etiqueta="Historial"
+  marcador="Cédula, nombre, empresa…"
+  mensajeVacio="No hay movimientos en este rango"
+  [columnas]="columnas"
+  [filas]="movimientos()"
+  [cargando]="cargando()"
+  [idFila]="idFila"
+>
+  <div controles class="rango">
+    <button
+      mat-stroked-button
+      type="button"
+      class="atajo"
+      aria-label="Rango rápido"
+      [matMenuTriggerFor]="menuAtajos"
+    >
+      <mat-icon aria-hidden="true">event</mat-icon>
+      {{ textoAtajo() }}
+    </button>
+    <mat-menu #menuAtajos="matMenu">
+      @for (opcion of atajos(); track opcion.codigo) {
+        <button
+          mat-menu-item
+          type="button"
+          [attr.aria-checked]="opcion.codigo === atajo()?.codigo"
+          (click)="elegirAtajo(opcion)"
+        >
+          <span>{{ opcion.etiqueta }}</span>
+        </button>
+      }
+    </mat-menu>
+
+    <label class="fecha">
+      <span>Desde</span>
+      <input
+        type="date"
+        name="desde"
+        [value]="desde()"
+        [attr.aria-invalid]="campoConError() === 'desde'"
+        (change)="cambiarFecha('desde', $event)"
+      />
+    </label>
+    <label class="fecha">
+      <span>Hasta</span>
+      <input
+        type="date"
+        name="hasta"
+        [value]="hasta()"
+        [attr.aria-invalid]="campoConError() === 'hasta'"
+        (change)="cambiarFecha('hasta', $event)"
+      />
+    </label>
+  </div>
+
+  <button
+    acciones
+    mat-icon-button
+    type="button"
+    class="actualizar"
+    aria-label="Actualizar"
+    matTooltip="Actualizar"
+    (click)="actualizar()"
+  >
+    <mat-icon aria-hidden="true">refresh</mat-icon>
+  </button>
+</app-tabla>

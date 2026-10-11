@@ -34,5 +34,10 @@ export const routes: Routes = [
     title: 'Gafetes · Limen',
     loadComponent: () => import('./gafetes/gafetes-pagina').then((m) => m.GafetesPagina),
   },
+  {
+    path: 'historial',
+    title: 'Historial · Limen',
+    loadComponent: () => import('./historial/historial-pagina').then((m) => m.HistorialPagina),
+  },
   { path: '**', redirectTo: 'contratistas' },
 ];

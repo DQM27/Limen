@@ -58,15 +58,12 @@ describe('carcasa de la app', () => {
       expect.stringContaining('Correo'),
       expect.stringContaining('KOF'),
       expect.stringContaining('Gafetes'),
+      expect.stringContaining('Historial'),
     ]);
     expect(disponibles.every((a) => a.hasAttribute('href'))).toBe(true);
-    expect(proximamente).toHaveLength(1);
-    // Lo que no existe aún se anuncia como tal y no recibe el foco del teclado
-    // (un enlace sin `href` no entra en el orden de tabulación).
-    expect(proximamente.every((a) => a.getAttribute('aria-label')?.endsWith('próximamente'))).toBe(
-      true,
-    );
-    expect(proximamente.some((a) => a.hasAttribute('href'))).toBe(false);
+    // Hoy todas las secciones existen. Lo que no existiera se anunciaría como
+    // tal y no recibiría el foco del teclado (un enlace sin `href` no se tabula).
+    expect(proximamente).toHaveLength(0);
   });
 
   it('marca la página actual para los lectores de pantalla', async () => {
