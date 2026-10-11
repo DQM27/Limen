@@ -103,7 +103,12 @@ export class DialogoIngreso {
         this.cancelar();
       }
     });
-    this.busqueda.valueChanges.subscribe((texto) => void this.buscar(texto));
+    // Al elegir una opción de la lista, el campo recibe a la persona (no un texto): no se busca.
+    this.busqueda.valueChanges.subscribe((valor: unknown) => {
+      if (typeof valor === 'string') {
+        void this.buscar(valor);
+      }
+    });
     this.medio.valueChanges.subscribe((medio) => this.enVehiculo.set(medio === 'VEHICULO'));
     const id = this.datos?.contratistaId;
     if (id !== undefined) {

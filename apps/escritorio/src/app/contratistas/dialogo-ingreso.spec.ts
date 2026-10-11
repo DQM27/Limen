@@ -506,4 +506,17 @@ describe('modal de ingreso de contratista', () => {
     expect(cerrar).toHaveBeenCalledTimes(3);
     expect(invoke).not.toHaveBeenCalledWith('registrar_entrada_contratista', expect.anything());
   });
+
+  it('al elegir a alguien de la lista no se vuelve a buscar (el campo recibe a la persona, no un texto)', async () => {
+    responder({ buscar_para_ingreso: [candidato()] });
+    const { escribirBusqueda, elegirPrimero } = await crear();
+    await escribirBusqueda('ana');
+
+    await elegirPrimero();
+
+    const busquedas = vi
+      .mocked(invoke)
+      .mock.calls.filter(([comando]) => comando === 'buscar_para_ingreso');
+    expect(busquedas).toHaveLength(1);
+  });
 });

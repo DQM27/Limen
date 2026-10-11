@@ -1,17 +1,17 @@
 <!-- El título no se ve (la barra lateral ya dice dónde está la persona) pero
      queda para los lectores de pantalla. -->
-<h1 class="solo-lectores">Dentro</h1>
+<h1 class="solo-lectores">{{ titulo() }}</h1>
 
 @if (error(); as mensaje) {
   <p class="error" role="alert">{{ mensaje }}</p>
 }
 
 <app-tabla
-  id="dentro"
-  etiqueta="Dentro"
+  [id]="idTabla()"
+  [etiqueta]="titulo()"
   marcador="Cédula, nombre, empresa…"
-  mensajeVacio="No hay nadie adentro"
-  [columnas]="columnas"
+  [mensajeVacio]="mensajeVacio()"
+  [columnas]="columnas()"
   [filas]="visibles()"
   [cargando]="cargando()"
   [idFila]="idFila"
@@ -31,6 +31,9 @@
     <mat-button-toggle value="con">Con gafete</mat-button-toggle>
     <mat-button-toggle value="sin">Sin gafete</mat-button-toggle>
   </mat-button-toggle-group>
+
+  <!-- Lo que la pantalla que usa esta lista quiera agregar (por ejemplo, el botón de ingreso). -->
+  <span acciones class="botones"><ng-content select="[botones]" /></span>
 
   @if (seleccionadas().length > 0) {
     <button acciones mat-flat-button type="button" class="salida-masiva" (click)="salidaMasiva()">

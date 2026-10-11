@@ -12,6 +12,11 @@
 }
 
 // Los controles se ven como parte de la fila de herramientas, de la misma altura.
+// Los botones que agrega la pantalla que usa la lista se ven como parte de la fila.
+.botones {
+  display: contents;
+}
+
 .salida-masiva {
   --mat-button-filled-container-height: 34px;
 }
