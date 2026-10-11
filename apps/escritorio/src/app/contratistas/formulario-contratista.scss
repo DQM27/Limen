@@ -12,19 +12,3 @@
 mat-slide-toggle {
   align-self: flex-start;
 }
-
-// El selector de empresa y, al lado, el botón para crear una nueva.
-.con-accion {
-  display: flex;
-  align-items: flex-start;
-  gap: 4px;
-
-  mat-form-field {
-    flex: 1;
-    min-width: 0;
-  }
-}
-
-.nueva-empresa {
-  flex: none;
-}

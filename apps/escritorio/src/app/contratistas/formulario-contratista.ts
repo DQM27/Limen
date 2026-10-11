@@ -1,33 +1,25 @@
 import {
-  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   ElementRef,
   inject,
   Injector,
   signal,
+  viewChild,
 } from '@angular/core';
-import { FormControl, NonNullableFormBuilder, ReactiveFormsModule } from '@angular/forms';
-import { MatAutocompleteModule } from '@angular/material/autocomplete';
+import { NonNullableFormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
-import {
-  MAT_DIALOG_DATA,
-  MatDialog,
-  MatDialogModule,
-  MatDialogRef,
-} from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
-import { MatTooltipModule } from '@angular/material/tooltip';
-import { DialogoEmpresa } from '../compartido/dialogo-empresa';
+import { enfocarPrimerError } from '../compartido/enfocar-error';
 import { NormalizadorAlEscribir } from '../compartido/escribir-normalizado';
+import { SelectorEmpresa } from '../compartido/selector-empresa';
 import {
-  buscarEmpresas,
   editarContratista,
-  nombreEmpresaAlEscribir,
   nombrePersonaAlEscribir,
   registrarContratista,
   validarContratista,
@@ -44,9 +36,6 @@ export interface DatosFormularioContratista {
 /** Lo que devuelve el diálogo al cerrarse con éxito. `cambios` vacío = nada cambió. */
 export type ResultadoFormularioContratista =
   { tipo: 'registrado' } | { tipo: 'editado'; cambios: Cambio[] };
-
-/** Cuántas empresas se ofrecen al escribir. */
-const EMPRESAS_OFRECIDAS = 8;
 
 /** El campo del núcleo (`ErrorApp.campo`) → el control del formulario que lo muestra. */
 const CONTROL_DEL_CAMPO: Record<string, 'cedula' | 'nombre' | 'empresa' | 'tipo' | 'fecha'> = {
@@ -69,7 +58,6 @@ const CONTROL_DEL_CAMPO: Record<string, 'cedula' | 'nombre' | 'empresa' | 'tipo'
   selector: 'app-formulario-contratista',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    MatAutocompleteModule,
     MatButtonModule,
     MatDialogModule,
     MatFormFieldModule,
@@ -77,8 +65,8 @@ const CONTROL_DEL_CAMPO: Record<string, 'cedula' | 'nombre' | 'empresa' | 'tipo'
     MatInputModule,
     MatSelectModule,
     MatSlideToggleModule,
-    MatTooltipModule,
     ReactiveFormsModule,
+    SelectorEmpresa,
   ],
   templateUrl: './formulario-contratista.html',
   styleUrl: './formulario-contratista.scss',
@@ -86,14 +74,13 @@ const CONTROL_DEL_CAMPO: Record<string, 'cedula' | 'nombre' | 'empresa' | 'tipo'
 export class FormularioContratista {
   private readonly dialogo =
     inject<MatDialogRef<FormularioContratista, ResultadoFormularioContratista>>(MatDialogRef);
-  private readonly dialogos = inject(MatDialog);
   private readonly datos = inject<DatosFormularioContratista | null>(MAT_DIALOG_DATA, {
     optional: true,
   });
   private readonly anfitrion = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
   private readonly normalizaNombre = new NormalizadorAlEscribir();
-  private readonly normalizaEmpresa = new NormalizadorAlEscribir();
+  private readonly selector = viewChild.required(SelectorEmpresa);
 
   protected readonly editando = this.datos?.contratista !== undefined;
   protected readonly etiquetaDeTipo = etiquetaDeTipo;
@@ -108,9 +95,6 @@ export class FormularioContratista {
     tieneAcceso: true,
   });
 
-  protected readonly opciones = signal<Empresa[]>([]);
-  /** Se escribió algo y ninguna empresa coincide: se avisa dónde crear una. */
-  protected readonly sinCoincidencias = signal(false);
   protected readonly enviando = signal(false);
   protected readonly errorGeneral = signal<string | null>(null);
 
@@ -133,26 +117,6 @@ export class FormularioContratista {
         this.cancelar();
       }
     });
-    this.form.controls.empresa.valueChanges.subscribe((valor) => void this.ofrecerEmpresas(valor));
-  }
-
-  protected nombreDeEmpresa = (valor: string | Empresa | null): string =>
-    typeof valor === 'string' ? valor : (valor?.nombre ?? '');
-
-  /** Al escribir, la lista trae las empresas que se parecen (el núcleo decide cuáles). */
-  private async ofrecerEmpresas(valor: string | Empresa): Promise<void> {
-    if (typeof valor !== 'string') {
-      return;
-    }
-    const texto = valor.trim();
-    if (texto === '') {
-      this.opciones.set([]);
-      this.sinCoincidencias.set(false);
-      return;
-    }
-    const encontradas = await buscarEmpresas(texto, EMPRESAS_OFRECIDAS).catch(() => []);
-    this.opciones.set(encontradas);
-    this.sinCoincidencias.set(encontradas.length === 0);
   }
 
   protected escribirNombre(evento: Event): void {
@@ -161,33 +125,6 @@ export class FormularioContratista {
       this.form.controls.nombre,
       nombrePersonaAlEscribir,
     );
-  }
-
-  /** La empresa se escribe como texto (para buscar) hasta que se elige una de la lista. */
-  protected escribirEmpresa(evento: Event): void {
-    const control = this.form.controls.empresa as unknown as FormControl<string>;
-    void this.normalizaEmpresa.alEscribir(evento, control, nombreEmpresaAlEscribir);
-  }
-
-  protected alElegirEmpresa(elegida: Empresa): void {
-    this.form.controls.empresa.setValue(elegida, { emitEvent: false });
-  }
-
-  /** El botón "+": abre el modal de empresa nueva y, si se creó, la deja elegida. */
-  protected crearEmpresa(): void {
-    this.dialogos
-      .open<DialogoEmpresa, void, Empresa>(DialogoEmpresa, {
-        width: '340px',
-        disableClose: true,
-        autoFocus: 'first-tabbable',
-      })
-      .afterClosed()
-      .subscribe((creada) => {
-        if (creada) {
-          this.form.controls.empresa.setValue(creada, { emitEvent: false });
-          this.sinCoincidencias.set(false);
-        }
-      });
   }
 
   protected async guardar(): Promise<void> {
@@ -225,21 +162,16 @@ export class FormularioContratista {
   }
 
   /**
-   * Lo escrito, tal cual: el núcleo normaliza y valida. Si la empresa se
-   * escribió completa pero no se eligió, se toma la de la lista que se llama
-   * igual; si no hay ninguna, va vacía y el núcleo dice que falta.
+   * Lo escrito, tal cual: el núcleo normaliza y valida. La empresa es la que
+   * el selector tiene elegida; si no hay ninguna, va vacía y el núcleo dice
+   * que falta.
    */
   private entrada(): ContratistaEntrada {
-    const { cedula, nombre, empresa, tipo, fecha, tieneAcceso } = this.form.getRawValue();
-    const escrita = typeof empresa === 'string' ? empresa.trim().toLowerCase() : null;
-    const elegida =
-      typeof empresa === 'string'
-        ? this.opciones().find((e) => escrita !== '' && e.nombre.toLowerCase() === escrita)
-        : empresa;
+    const { cedula, nombre, tipo, fecha, tieneAcceso } = this.form.getRawValue();
     return {
       cedula,
       nombre,
-      empresa_id: elegida?.id ?? '',
+      empresa_id: this.selector().idElegido(),
       tipo_ingreso: tipo,
       fecha_vencimiento_praind: fecha,
       tiene_acceso: tieneAcceso,
@@ -258,15 +190,7 @@ export class FormularioContratista {
         this.errorGeneral.set(problema.mensaje);
       }
     }
-    afterNextRender(
-      () =>
-        this.anfitrion.nativeElement
-          .querySelector<HTMLElement>(
-            '.mat-form-field-invalid input, .mat-form-field-invalid mat-select',
-          )
-          ?.focus(),
-      { injector: this.injector },
-    );
+    enfocarPrimerError(this.anfitrion, this.injector);
   }
 
   /** El mensaje del núcleo junto a su campo; sin campo, arriba de los botones. */

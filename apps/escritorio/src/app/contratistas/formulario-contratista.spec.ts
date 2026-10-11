@@ -259,7 +259,7 @@ describe('formulario de contratista', () => {
 
   it('la empresa que se escribe también se ve en mayúsculas', async () => {
     const { fixture, raiz, form } = await crear();
-    const campo = raiz.querySelector<HTMLInputElement>('input[formControlName=empresa]');
+    const campo = raiz.querySelector<HTMLInputElement>('app-selector-empresa input');
     if (!campo) {
       throw new Error('no hay campo de empresa');
     }
@@ -298,28 +298,6 @@ describe('formulario de contratista', () => {
     });
   });
 
-  it('al escribir una empresa ofrece las que trae el núcleo y, si ninguna coincide, avisa dónde crear', async () => {
-    responder({ buscar_empresas: [{ id: 'e1', nombre: 'ACME S.A.' }] });
-    const { fixture, form } = await crear();
-    const interno = fixture.componentInstance as unknown as {
-      opciones(): unknown[];
-      sinCoincidencias(): boolean;
-    };
-
-    form.controls.empresa.setValue('acm');
-    await fixture.whenStable();
-
-    expect(invoke).toHaveBeenCalledWith('buscar_empresas', { texto: 'acm', limite: 8 });
-    expect(interno.opciones()).toEqual([{ id: 'e1', nombre: 'ACME S.A.' }]);
-    expect(interno.sinCoincidencias()).toBe(false);
-
-    responder({ buscar_empresas: [] });
-    form.controls.empresa.setValue('zzz');
-    await fixture.whenStable();
-
-    expect(interno.sinCoincidencias()).toBe(true);
-  });
-
   it('el selector sólo elige: crear una empresa es el botón "+", que abre su modal y deja la nueva elegida', async () => {
     responder({
       registrar_empresa: 'e9',
@@ -327,7 +305,7 @@ describe('formulario de contratista', () => {
     });
     const { fixture, raiz, form } = await crear();
 
-    raiz.querySelector<HTMLButtonElement>('button.nueva-empresa')?.click();
+    raiz.querySelector<HTMLButtonElement>('app-selector-empresa button.nueva')?.click();
     await esperar();
     const modal = document.querySelector('app-dialogo-empresa');
     const campo = modal?.querySelector<HTMLInputElement>('input');

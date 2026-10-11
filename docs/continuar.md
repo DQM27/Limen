@@ -72,8 +72,16 @@ falta el detalle, [`arquitectura.md`](arquitectura.md), [`reglas.md`](reglas.md)
     a mano, aviso si el rango se trunca y el error del rango junto a su fecha. Las
     exportaciones (CSV, Excel, PDF) quedan para el final, a pedido del dueño.
   - **Proveedores, Correo y KOF:** cada una es la lista de Dentro filtrada por su vía,
-    con su salida y su botón de ingreso (en KOF, "Entregar gafete" y "Nuevo personal").
-    Piezas compartidas: `SelectorEmpresa`, `CamposDeIngreso`, `DialogoEmpresa`.
+    con su salida y su botón de ingreso (en KOF, "Entregar gafete", "Nuevo personal" y
+    "Personal", que corrige el nombre o desactiva y activa; el código no se edita). Piezas
+    compartidas: `SelectorEmpresa` (también en el formulario de contratista),
+    `CamposDeIngreso`, `DialogoEmpresa`. Todos los formularios de ingreso informan **todos**
+    sus problemas a la vez (reglas B5b, H4, I3 y K5: `validar_*`).
+  - **Atajos de teclado** (directiva `compartido/atajo.ts`): `F2` registra el ingreso (o
+    entrega el gafete en KOF), `Ctrl+N` crea (contratista, personal), `/` busca en la
+    tabla y `F4` lleva al campo de **salida por gafete** de las listas de Dentro (número y
+    Enter). Si el mismo número está en uso en dos vías no se adivina: pide usar el botón
+    de la fila. Con un modal abierto los atajos de atrás no valen.
   - **Gafetes:** por tipo, con "asignado a" (regla F7), crear por rango y gestionar
     (perdido con su último portador, pagado, apareció, de baja).
 - Lo que se escribe se ve como quedará al guardarse (nombre y empresa en mayúsculas,
@@ -112,15 +120,13 @@ commits en el remoto que no están en `main`: revisarlos o descartarlos.
 
 ## Lo que sigue
 
-1. **Atajos de teclado** y la **salida por número de gafete** (el comando
-   `registrar_salida_por_gafete` ya existe; falta la pantalla). El dueño quiere darle a
-   Dentro "algo más" con atajos.
-2. **Validar todo a la vez también en proveedor, correo y KOF** (hoy sólo se muestra el
-   primer error de cada formulario; el contratista ya valida todo junto con
-   `validar_contratista`). Migrar el formulario de contratista a `SelectorEmpresa` y
-   `CamposDeIngreso` para quitar duplicación.
-3. **Editar y desactivar al personal KOF** (el núcleo lo tiene: `editarPersonalKof`);
-   hoy sólo se da de alta.
+1. **Decidir cómo se renombran las empresas y quién audita sus nombres** (ver arriba). El
+   núcleo ya renombra (`RenombrarEmpresa` y `RenombrarEmpresaProveedora`); falta la
+   pantalla y la decisión del dueño.
+2. **Mantener las listas al día cuando haya sincronización**: hoy cada pantalla recarga al
+   abrirse y tras sus propias acciones; sin botón de actualizar. Con la nube habrá que
+   refrescarlas solas.
+3. Las exportaciones del Historial (CSV, Excel, PDF), al final y a pedido del dueño.
 4. CodeQL para el JavaScript en la CI. Equipos (bloque M) y la nube (con L4 y L5).
 
 ## Cómo trabajar en esta máquina
