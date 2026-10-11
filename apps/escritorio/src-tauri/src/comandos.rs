@@ -320,6 +320,17 @@ pub async fn renombrar_empresa_proveedora(
         .await
 }
 
+/// Todo lo que impide registrar el ingreso de un proveedor, de una vez. No
+/// registra nada.
+#[tauri::command]
+pub async fn validar_entrada_proveedor(
+    estado: State<'_, Estado>,
+    entrada: EntradaProveedorEntrada,
+) -> Resultado<Vec<ErrorJson>> {
+    estado.comandos().sesion()?;
+    estado.comandos().validar_entrada_proveedor(&entrada).await
+}
+
 #[tauri::command]
 pub async fn registrar_entrada_proveedor(
     estado: State<'_, Estado>,
@@ -330,6 +341,17 @@ pub async fn registrar_entrada_proveedor(
         .comandos()
         .registrar_entrada_proveedor(&sesion, &entrada)
         .await
+}
+
+/// Todo lo que impide registrar el ingreso por correo, de una vez. No
+/// registra nada.
+#[tauri::command]
+pub async fn validar_entrada_correo(
+    estado: State<'_, Estado>,
+    entrada: EntradaCorreoEntrada,
+) -> Resultado<Vec<ErrorJson>> {
+    estado.comandos().sesion()?;
+    estado.comandos().validar_entrada_correo(&entrada).await
 }
 
 #[tauri::command]
@@ -352,6 +374,20 @@ pub async fn buscar_personal_kof(
 ) -> Resultado<Vec<PersonalKofDto>> {
     estado.comandos().sesion()?;
     estado.comandos().buscar_personal_kof(&texto, limite).await
+}
+
+/// Todo lo que impide dar de alta a esta persona, de una vez. No registra nada.
+#[tauri::command]
+pub async fn validar_personal_kof(
+    estado: State<'_, Estado>,
+    codigo_empleado: String,
+    nombre: String,
+) -> Resultado<Vec<ErrorJson>> {
+    estado.comandos().sesion()?;
+    estado
+        .comandos()
+        .validar_personal_kof(&codigo_empleado, &nombre)
+        .await
 }
 
 #[tauri::command]
@@ -378,6 +414,21 @@ pub async fn editar_personal_kof(
     estado
         .comandos()
         .editar_personal_kof(&sesion, &id, &nombre, activo)
+        .await
+}
+
+/// Todo lo que impide entregar el gafete provisional, de una vez. No entrega
+/// nada.
+#[tauri::command]
+pub async fn validar_entrega_gafete_kof(
+    estado: State<'_, Estado>,
+    personal_id: String,
+    gafete: u32,
+) -> Resultado<Vec<ErrorJson>> {
+    estado.comandos().sesion()?;
+    estado
+        .comandos()
+        .validar_entrega_gafete_kof(&personal_id, gafete)
         .await
 }
 

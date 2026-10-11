@@ -94,6 +94,7 @@ reconstruir cómo estaba el contratista el día que entró.
 | H1 | La empresa proveedora existe; su nombre es obligatorio y no se repite. Es un catálogo aparte de las empresas de contratistas. | ✅ |
 | H2 | Cédula según A3, nombre obligatorio (sin catálogo de personas: se toman en cada ingreso); aplican A7 y A8. | ✅ |
 | H3 | No puede tener dos ingresos abiertos. El gafete de proveedor es obligatorio y debe poder prestarse (E3); salida y reloj como E4–E5. | ✅ |
+| H4 | Como B5b: el formulario del ingreso informa **todos** los problemas a la vez, cada uno con su campo (`ingreso_proveedor::problemas`: persona, medio, empresa —obligatoria y existente—, ya adentro, veto, gafete); registrar informa el primero. La empresa vacía es `empresa_proveedora_requerida`. El caso de uso `ValidarEntradaProveedor` lee lo que hace falta y el dominio decide. | ✅ |
 
 ## I. Ingreso por correo
 
@@ -101,6 +102,7 @@ reconstruir cómo estaba el contratista el día que entró.
 |---|---|---|
 | I1 | Cédula según A3, nombre y motivo obligatorios (motivo: texto libre, hasta 200 caracteres); aplican A7 y A8. | ✅ |
 | I2 | No puede tener dos ingresos abiertos. El gafete de visita es obligatorio y debe poder prestarse (E3); salida y reloj como E4–E5. | ✅ |
+| I3 | Como B5b: el formulario del ingreso informa **todos** los problemas a la vez, cada uno con su campo (`ingreso_correo::problemas`: persona, motivo, medio, ya adentro, veto, gafete); registrar informa el primero. El caso de uso `ValidarEntradaCorreo` lee lo que hace falta y el dominio decide. | ✅ |
 
 ## K. Personal KOF (personal interno de FEMSA)
 
@@ -110,6 +112,7 @@ reconstruir cómo estaba el contratista el día que entró.
 | K2 | La persona se identifica por código de empleado (5 a 7 dígitos, único) y debe estar activa. Se desactiva, no se borra. | ✅ |
 | K3 | Un provisional por persona a la vez, y un número prestado a una sola persona. Entregar el gafete provisional es la entrada (queda en la presencia y mueve el reloj) y devolverlo es la salida. | ✅ |
 | K4 | Al entregar el gafete hay que elegir a la persona: sin elegirla el error es `persona_requerida` ("Elija a la persona del personal KOF"), no un identificador ilegible. | ✅ |
+| K5 | Como B5b: el alta de personal (`personal_kof::problemas`: código, nombre y código repetido) y la entrega del gafete (`prestamo_kof::problemas_de_entrega`: persona elegida, activa y sin otro provisional, y gafete) informan **todos** sus problemas a la vez, cada uno con su campo; registrar y entregar informan el primero. Casos de uso `ValidarPersonalKof` y `ValidarEntregaKof`. | ✅ |
 
 ## L. Usuarios
 

@@ -4,16 +4,16 @@
 use limen_dominio::auditoria::CambioCampo;
 use limen_dominio::empresa::{ErrorEmpresa, HechosEmpresa, NombreEmpresa};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
-use limen_dominio::gafete::{ErrorPrestamoGafete, NumeroGafete, TipoGafete};
+use limen_dominio::gafete::{ErrorPrestamoGafete, NumeroGafete, SituacionGafete, TipoGafete};
 use limen_dominio::hecho::{Hecho, HechoId};
 use limen_dominio::ingreso_proveedor::{
-    DatosEntradaProveedor, ErrorIngresoProveedor, HechosEntradaProveedor, IngresoProveedor,
-    IngresoProveedorId,
+    BorradorEntradaProveedor, DatosEntradaProveedor, ErrorIngresoProveedor, HechosEntradaProveedor,
+    IngresoProveedor, IngresoProveedorId, problemas,
 };
 use limen_dominio::medio::TipoMedio;
 use limen_dominio::movimiento::{ErrorSalida, Marca};
 use limen_dominio::presencia::{Identidad, Via, YaEstaAdentro};
-use limen_dominio::visitante::Visitante;
+use limen_dominio::visitante::{Visitante, cedula_de};
 
 use super::gafetes::situacion_para_prestar;
 use super::hora::sellar;
@@ -255,6 +255,75 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarEntradaProve
             .await
             .map_err(|error| ErrorCaso::al_confirmar(error, conflicto_de_entrada))?;
         Ok(ingreso.id())
+    }
+}
+
+/// El formulario de ingreso de un proveedor tal cual está mientras se llena:
+/// puede faltar la empresa, y un gafete 0 es "todavía no lo escribió".
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComandoValidarEntradaProveedor {
+    pub cedula: String,
+    pub nombre: String,
+    pub empresa: Option<EmpresaProveedoraId>,
+    pub medio: TipoMedio,
+    pub placa: Option<String>,
+    pub gafete: u32,
+}
+
+/// Dice de una vez todo lo que impide registrar el ingreso, para marcar cada
+/// campo a la vez. Sólo lee: no registra nada. Averigua lo que hace falta
+/// (empresa, si ya está adentro, veto, gafete) y el dominio decide.
+#[derive(Debug)]
+pub struct ValidarEntradaProveedor<F> {
+    fabrica: F,
+}
+
+impl<F: FabricaUnidadDeTrabajo> ValidarEntradaProveedor<F> {
+    pub const fn new(fabrica: F) -> Self {
+        Self { fabrica }
+    }
+
+    pub async fn ejecutar(
+        &self,
+        comando: &ComandoValidarEntradaProveedor,
+    ) -> Result<Vec<ErrorIngresoProveedor>, ErrorEntradaProveedor> {
+        let mut uow = self.fabrica.nueva();
+        // Sin cédula válida no hay a quién buscar: eso ya lo marca la cédula.
+        let (adentro_por, vetada) = match cedula_de(&comando.cedula) {
+            Ok(cedula) => (
+                uow.presencias()
+                    .via_adentro(&Identidad::from(&cedula))
+                    .await?,
+                cedula_vetada(uow.contratistas(), &cedula).await?,
+            ),
+            Err(_) => (None, false),
+        };
+        let gafete = NumeroGafete::nuevo(comando.gafete).ok();
+        let situacion_gafete = match gafete {
+            Some(numero) => {
+                situacion_para_prestar(uow.gafetes(), TipoGafete::Proveedor, numero).await?
+            }
+            None => SituacionGafete::NoRegistrado,
+        };
+        let empresa_existe = match comando.empresa {
+            Some(empresa) => uow.empresas_proveedoras().existe(empresa).await?,
+            None => false,
+        };
+        let hechos = HechosEntradaProveedor {
+            empresa_existe,
+            adentro_por,
+            vetada,
+            situacion_gafete,
+        };
+        let borrador = BorradorEntradaProveedor {
+            cedula: &comando.cedula,
+            nombre: &comando.nombre,
+            empresa: comando.empresa,
+            medio: comando.medio,
+            placa: comando.placa.as_deref(),
+            gafete,
+        };
+        Ok(problemas(&borrador, hechos))
     }
 }
 

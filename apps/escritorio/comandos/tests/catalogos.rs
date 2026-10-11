@@ -321,6 +321,248 @@ mod tests {
         assert_eq!(inactiva.campo, Some("personal_id"), "{inactiva:?}");
     }
 
+    // --- Todos los problemas de un formulario a la vez ---
+
+    /// El código y el campo de cada problema, en orden.
+    fn resumen(problemas: &[ErrorJson]) -> Vec<(&'static str, &'static str)> {
+        problemas
+            .iter()
+            .map(|p| (p.codigo, p.campo.unwrap_or("")))
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn el_ingreso_de_proveedor_vacio_marca_todos_sus_campos_a_la_vez() {
+        let comandos = comandos();
+        let vacio = EntradaProveedorEntrada {
+            cedula: String::new(),
+            nombre: String::new(),
+            empresa_id: String::new(),
+            medio: "VEHICULO".into(),
+            placa: None,
+            gafete: 0,
+        };
+
+        let problemas = comandos.validar_entrada_proveedor(&vacio).await.unwrap();
+
+        assert_eq!(
+            resumen(&problemas),
+            [
+                ("cedula_vacia", campos::CEDULA),
+                ("nombre_vacio", campos::NOMBRE),
+                ("placa_requerida", campos::PLACA),
+                ("empresa_proveedora_requerida", campos::EMPRESA),
+                ("gafete_no_registrado", campos::GAFETE),
+            ]
+        );
+        assert!(problemas.iter().all(|p| !p.mensaje.is_empty()));
+    }
+
+    #[tokio::test]
+    async fn el_ingreso_de_proveedor_correcto_no_tiene_problemas_y_no_registra_nada() {
+        let comandos = comandos();
+        comandos
+            .registrar_gafetes(&sesion(), "PROVEEDOR", 1, 5)
+            .await
+            .unwrap();
+        let gas = comandos
+            .registrar_empresa_proveedora(&sesion(), "gas zeta")
+            .await
+            .unwrap();
+
+        let problemas = comandos
+            .validar_entrada_proveedor(&proveedor(&gas))
+            .await
+            .unwrap();
+
+        assert_eq!(problemas.len(), 0, "{problemas:?}");
+        assert_eq!(
+            comandos.dentro().await.unwrap().len(),
+            0,
+            "validar no registra"
+        );
+    }
+
+    #[tokio::test]
+    async fn el_ingreso_de_proveedor_marca_tambien_lo_que_depende_de_la_base() {
+        let comandos = comandos();
+        comandos
+            .registrar_gafetes(&sesion(), "PROVEEDOR", 1, 5)
+            .await
+            .unwrap();
+        let gas = comandos
+            .registrar_empresa_proveedora(&sesion(), "gas zeta")
+            .await
+            .unwrap();
+        comandos
+            .registrar_entrada_proveedor(&sesion(), &proveedor(&gas))
+            .await
+            .unwrap();
+
+        // La misma persona, con el mismo gafete (ya prestado) y una empresa inexistente.
+        let repetido = EntradaProveedorEntrada {
+            empresa_id: Uuid::from_u128(77).to_string(),
+            ..proveedor(&gas)
+        };
+        let problemas = comandos.validar_entrada_proveedor(&repetido).await.unwrap();
+
+        assert_eq!(
+            resumen(&problemas),
+            [
+                ("empresa_proveedora_no_existe", campos::EMPRESA),
+                ("ya_esta_adentro", ""),
+                ("gafete_prestado", campos::GAFETE),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn la_empresa_ilegible_del_proveedor_es_un_error_de_entrada_en_su_campo() {
+        let comandos = comandos();
+
+        let ilegible = error_de(
+            comandos
+                .validar_entrada_proveedor(&proveedor("no-es-un-id"))
+                .await,
+        );
+
+        assert_eq!(
+            codigo_y_campo(&ilegible),
+            ("id_invalido", Some(campos::EMPRESA))
+        );
+    }
+
+    #[tokio::test]
+    async fn el_ingreso_por_correo_vacio_marca_todos_sus_campos_a_la_vez() {
+        let comandos = comandos();
+        let vacio = EntradaCorreoEntrada {
+            cedula: String::new(),
+            nombre: String::new(),
+            motivo: String::new(),
+            medio: "VEHICULO".into(),
+            placa: None,
+            gafete: 0,
+        };
+
+        let problemas = comandos.validar_entrada_correo(&vacio).await.unwrap();
+
+        assert_eq!(
+            resumen(&problemas),
+            [
+                ("cedula_vacia", campos::CEDULA),
+                ("nombre_vacio", campos::NOMBRE),
+                ("motivo_vacio", campos::MOTIVO),
+                ("placa_requerida", campos::PLACA),
+                ("gafete_no_registrado", campos::GAFETE),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn el_ingreso_por_correo_correcto_no_tiene_problemas() {
+        let comandos = comandos();
+        comandos
+            .registrar_gafetes(&sesion(), "VISITA", 1, 5)
+            .await
+            .unwrap();
+
+        let problemas = comandos.validar_entrada_correo(&correo()).await.unwrap();
+
+        assert_eq!(problemas.len(), 0, "{problemas:?}");
+        assert_eq!(comandos.dentro().await.unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn el_alta_de_personal_kof_marca_el_codigo_y_el_nombre_a_la_vez() {
+        let comandos = comandos();
+
+        let problemas = comandos.validar_personal_kof("", "").await.unwrap();
+        assert_eq!(
+            resumen(&problemas),
+            [
+                ("codigo_empleado_vacio", campos::CODIGO_EMPLEADO),
+                ("nombre_vacio", campos::NOMBRE),
+            ]
+        );
+
+        comandos
+            .registrar_personal_kof(&sesion(), "5040017", "ana mora")
+            .await
+            .unwrap();
+        let repetido = comandos
+            .validar_personal_kof("5040017", "otra")
+            .await
+            .unwrap();
+        assert_eq!(
+            resumen(&repetido),
+            [("codigo_empleado_repetido", campos::CODIGO_EMPLEADO)]
+        );
+        let correcto = comandos
+            .validar_personal_kof("5040018", "luis ruiz")
+            .await
+            .unwrap();
+        assert_eq!(correcto.len(), 0, "{correcto:?}");
+    }
+
+    #[tokio::test]
+    async fn la_entrega_del_gafete_kof_marca_la_persona_y_el_gafete_a_la_vez() {
+        let comandos = comandos();
+        comandos
+            .registrar_gafetes(&sesion(), "PROVISIONAL_KOF", 1, 5)
+            .await
+            .unwrap();
+        let ana = comandos
+            .registrar_personal_kof(&sesion(), "5040017", "ana mora")
+            .await
+            .unwrap();
+
+        let sin_nada = comandos.validar_entrega_gafete_kof("", 0).await.unwrap();
+        assert_eq!(
+            resumen(&sin_nada),
+            [
+                ("persona_requerida", campos::PERSONA),
+                ("gafete_no_registrado", campos::GAFETE),
+            ]
+        );
+
+        comandos
+            .editar_personal_kof(&sesion(), &ana, "ana mora", false)
+            .await
+            .unwrap();
+        let inactiva = comandos.validar_entrega_gafete_kof(&ana, 99).await.unwrap();
+        assert_eq!(
+            resumen(&inactiva),
+            [
+                ("personal_kof_inactivo", campos::PERSONA),
+                ("gafete_no_registrado", campos::GAFETE),
+            ]
+        );
+
+        comandos
+            .editar_personal_kof(&sesion(), &ana, "ana mora", true)
+            .await
+            .unwrap();
+        let correcta = comandos.validar_entrega_gafete_kof(&ana, 3).await.unwrap();
+        assert_eq!(correcta.len(), 0, "{correcta:?}");
+        assert_eq!(
+            comandos.dentro().await.unwrap().len(),
+            0,
+            "validar no entrega nada"
+        );
+    }
+
+    #[tokio::test]
+    async fn la_persona_ilegible_de_la_entrega_kof_es_un_error_de_entrada_en_su_campo() {
+        let comandos = comandos();
+
+        let ilegible = error_de(comandos.validar_entrega_gafete_kof("x", 1).await);
+
+        assert_eq!(
+            codigo_y_campo(&ilegible),
+            ("id_invalido", Some(campos::PERSONA))
+        );
+    }
+
     // --- Gafetes ---
 
     #[tokio::test]

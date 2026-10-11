@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, inject, signal, viewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  Injector,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -6,10 +14,15 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { CamposDeIngreso } from '../compartido/campos-de-ingreso';
+import { enfocarPrimerError } from '../compartido/enfocar-error';
 import { NormalizadorAlEscribir } from '../compartido/escribir-normalizado';
 import { SelectorEmpresa } from '../compartido/selector-empresa';
-import { nombrePersonaAlEscribir, registrarEntradaProveedor } from '../nucleo/comandos';
-import { esErrorApp } from '../nucleo/tauri';
+import {
+  nombrePersonaAlEscribir,
+  registrarEntradaProveedor,
+  validarEntradaProveedor,
+} from '../nucleo/comandos';
+import { esErrorApp, type ErrorApp } from '../nucleo/tauri';
 import type { Empresa, Medio } from '../nucleo/tipos';
 
 /** Lo que devuelve el modal al registrar el ingreso. */
@@ -57,6 +70,8 @@ function aNumero(texto: string): number {
 export class DialogoIngresoProveedor {
   private readonly dialogo =
     inject<MatDialogRef<DialogoIngresoProveedor, ResultadoIngresoProveedor>>(MatDialogRef);
+  private readonly anfitrion = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
   private readonly normalizaNombre = new NormalizadorAlEscribir();
   private readonly selector = viewChild.required(SelectorEmpresa);
 
@@ -88,20 +103,32 @@ export class DialogoIngresoProveedor {
     if (this.enviando()) {
       return;
     }
-    this.errorGeneral.set(null);
+    this.limpiarErrores();
     this.enviando.set(true);
     try {
-      await registrarEntradaProveedor({
+      const entrada = {
         cedula: this.cedula.value,
         nombre: this.nombre.value,
         empresa_id: this.selector().idElegido(),
         medio: this.medio.value,
         placa: this.medio.value === 'VEHICULO' ? this.placa.value : null,
         gafete: aNumero(this.gafete.value),
-      });
+      };
+      // Primero se pregunta qué falta o qué está mal, todo de una vez: cada
+      // problema se marca en su campo (lo decide el dominio).
+      const problemas = await validarEntradaProveedor(entrada);
+      if (problemas.length > 0) {
+        this.mostrarTodos(problemas);
+        return;
+      }
+      await registrarEntradaProveedor(entrada);
       this.dialogo.close({ nombre: this.nombre.value.trim() });
     } catch (error) {
-      this.mostrar(error);
+      this.mostrarTodos([
+        esErrorApp(error)
+          ? error
+          : { tipo: 'tecnico', codigo: 'desconocido', mensaje: 'No se pudo registrar el ingreso.' },
+      ]);
     } finally {
       this.enviando.set(false);
     }
@@ -111,19 +138,29 @@ export class DialogoIngresoProveedor {
     this.dialogo.close();
   }
 
-  /** El mensaje del núcleo junto a su campo; sin campo, arriba de los botones. */
-  private mostrar(error: unknown): void {
-    if (!esErrorApp(error)) {
-      this.errorGeneral.set('No se pudo registrar el ingreso.');
-      return;
+  private limpiarErrores(): void {
+    this.errorGeneral.set(null);
+    for (const campo of Object.values(CAMPO_DEL_NUCLEO)) {
+      this[campo].setErrors(null);
     }
-    const campo = CAMPO_DEL_NUCLEO[error.campo ?? ''];
-    if (campo) {
-      const control = this[campo];
-      control.setErrors({ nucleo: error.mensaje });
-      control.markAsTouched();
-    } else {
-      this.errorGeneral.set(error.mensaje);
+  }
+
+  /**
+   * El mensaje del núcleo junto a su campo; lo que no es de un campo (por
+   * ejemplo, que ya está adentro) va junto, arriba de los botones.
+   */
+  private mostrarTodos(problemas: ErrorApp[]): void {
+    const generales: string[] = [];
+    for (const problema of problemas) {
+      const campo = CAMPO_DEL_NUCLEO[problema.campo ?? ''];
+      if (!campo) {
+        generales.push(problema.mensaje);
+      } else if (!this[campo].errors) {
+        this[campo].setErrors({ nucleo: problema.mensaje });
+        this[campo].markAsTouched();
+      }
     }
+    this.errorGeneral.set(generales.length > 0 ? generales.join(' · ') : null);
+    enfocarPrimerError(this.anfitrion, this.injector);
   }
 }

@@ -23,6 +23,7 @@ type Respuesta = unknown | ((argumentos: Record<string, unknown>) => unknown);
 function responder(respuestas: Record<string, Respuesta> = {}): void {
   const normales: Record<string, Respuesta> = {
     buscar_personal_kof: [],
+    validar_entrega_gafete_kof: [],
     entregar_gafete_kof: 'p1',
   };
   vi.mocked(invoke).mockImplementation((comando: string, argumentos?: unknown) => {
@@ -178,6 +179,27 @@ describe('modal para entregar el gafete provisional de KOF', () => {
 
     expect(invoke).toHaveBeenCalledWith('entregar_gafete_kof', { personalId: '', gafete: 3 });
     expect(raiz.querySelector('mat-error')?.textContent).toContain('Elija a la persona');
+    expect(cerrar).not.toHaveBeenCalled();
+  });
+
+  it('antes de entregar pregunta qué está mal y marca la persona y el gafete a la vez, sin entregar', async () => {
+    responder({
+      validar_entrega_gafete_kof: [
+        errorDelNucleo('persona_requerida', 'Elija a la persona del personal KOF', 'personal_id'),
+        errorDelNucleo('gafete_no_registrado', 'El gafete no existe', 'gafete'),
+      ],
+    });
+    const { enviar, raiz, cerrar } = await crear();
+
+    await enviar();
+
+    expect(invoke).toHaveBeenCalledWith('validar_entrega_gafete_kof', {
+      personalId: '',
+      gafete: 0,
+    });
+    const mensajes = [...raiz.querySelectorAll('mat-error')].map((e) => e.textContent?.trim());
+    expect(mensajes).toEqual(['Elija a la persona del personal KOF', 'El gafete no existe']);
+    expect(invoke).not.toHaveBeenCalledWith('entregar_gafete_kof', expect.anything());
     expect(cerrar).not.toHaveBeenCalled();
   });
 

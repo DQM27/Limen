@@ -1,13 +1,25 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  Injector,
+  inject,
+  signal,
+} from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
+import { enfocarPrimerError } from '../compartido/enfocar-error';
 import { NormalizadorAlEscribir } from '../compartido/escribir-normalizado';
-import { nombrePersonaAlEscribir, registrarPersonalKof } from '../nucleo/comandos';
-import { esErrorApp } from '../nucleo/tauri';
+import {
+  nombrePersonaAlEscribir,
+  registrarPersonalKof,
+  validarPersonalKof,
+} from '../nucleo/comandos';
+import { esErrorApp, type ErrorApp } from '../nucleo/tauri';
 
 /** Lo que devuelve el modal al registrar a la persona. */
 export interface ResultadoNuevoPersonal {
@@ -41,6 +53,8 @@ function soloDigitos(texto: string): string {
 export class DialogoNuevoPersonal {
   private readonly dialogo =
     inject<MatDialogRef<DialogoNuevoPersonal, ResultadoNuevoPersonal>>(MatDialogRef);
+  private readonly anfitrion = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
   private readonly normalizaNombre = new NormalizadorAlEscribir();
 
   readonly codigo = new FormControl('', { nonNullable: true });
@@ -75,13 +89,28 @@ export class DialogoNuevoPersonal {
     if (this.enviando()) {
       return;
     }
-    this.errorGeneral.set(null);
+    this.limpiarErrores();
     this.enviando.set(true);
     try {
+      // Primero se pregunta qué falta o qué está mal, todo de una vez: cada
+      // problema se marca en su campo (lo decide el dominio).
+      const problemas = await validarPersonalKof(this.codigo.value, this.nombre.value);
+      if (problemas.length > 0) {
+        this.mostrarTodos(problemas);
+        return;
+      }
       await registrarPersonalKof(this.codigo.value, this.nombre.value);
       this.dialogo.close({ nombre: this.nombre.value.trim() });
     } catch (error) {
-      this.mostrar(error);
+      this.mostrarTodos([
+        esErrorApp(error)
+          ? error
+          : {
+              tipo: 'tecnico',
+              codigo: 'desconocido',
+              mensaje: 'No se pudo registrar a la persona.',
+            },
+      ]);
     } finally {
       this.enviando.set(false);
     }
@@ -91,23 +120,30 @@ export class DialogoNuevoPersonal {
     this.dialogo.close();
   }
 
+  private limpiarErrores(): void {
+    this.errorGeneral.set(null);
+    this.codigo.setErrors(null);
+    this.nombre.setErrors(null);
+  }
+
   /** El mensaje del núcleo junto a su campo; sin campo, arriba de los botones. */
-  private mostrar(error: unknown): void {
-    if (!esErrorApp(error)) {
-      this.errorGeneral.set('No se pudo registrar a la persona.');
-      return;
+  private mostrarTodos(problemas: ErrorApp[]): void {
+    const generales: string[] = [];
+    for (const problema of problemas) {
+      const control =
+        problema.campo === 'codigo_empleado'
+          ? this.codigo
+          : problema.campo === 'nombre'
+            ? this.nombre
+            : null;
+      if (!control) {
+        generales.push(problema.mensaje);
+      } else if (!control.errors) {
+        control.setErrors({ nucleo: problema.mensaje });
+        control.markAsTouched();
+      }
     }
-    const control =
-      error.campo === 'codigo_empleado'
-        ? this.codigo
-        : error.campo === 'nombre'
-          ? this.nombre
-          : null;
-    if (control) {
-      control.setErrors({ nucleo: error.mensaje });
-      control.markAsTouched();
-    } else {
-      this.errorGeneral.set(error.mensaje);
-    }
+    this.errorGeneral.set(generales.length > 0 ? generales.join(' · ') : null);
+    enfocarPrimerError(this.anfitrion, this.injector);
   }
 }

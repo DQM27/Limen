@@ -15,6 +15,7 @@ type Respuesta = unknown | ((argumentos: Record<string, unknown>) => unknown);
 function responder(respuestas: Record<string, Respuesta> = {}): void {
   const mayusculas = (a: Record<string, unknown>) => String(a['texto']).toUpperCase();
   const normales: Record<string, Respuesta> = {
+    validar_entrada_proveedor: [],
     registrar_entrada_proveedor: 'i1',
     buscar_empresas_proveedoras: [],
     nombre_persona_al_escribir: mayusculas,
@@ -164,6 +165,36 @@ describe('modal de ingreso de proveedor', () => {
       expect(campoConError?.querySelector('mat-label')?.textContent?.trim(), campo).toBe(etiqueta);
       expect(campoConError?.querySelector('mat-error')?.textContent).toContain(`Falla en ${campo}`);
     }
+  });
+
+  it('antes de registrar pregunta qué está mal y marca todos los campos a la vez, sin registrar', async () => {
+    responder({
+      validar_entrada_proveedor: [
+        errorDelNucleo('cedula_vacia', 'La cédula es obligatoria', 'cedula'),
+        errorDelNucleo('nombre_vacio', 'El nombre es obligatorio', 'nombre'),
+        errorDelNucleo('empresa_proveedora_requerida', 'Elija la empresa', 'empresa_id'),
+        errorDelNucleo('gafete_no_registrado', 'El gafete no existe', 'gafete'),
+        errorDelNucleo('ya_esta_adentro', 'Ya está adentro', null),
+        errorDelNucleo('sin_acceso', 'Acceso denegado', null),
+      ],
+    });
+    const { enviar, raiz, cerrar } = await crear();
+
+    await enviar();
+
+    const mensajes = [...raiz.querySelectorAll('mat-form-field')].map(
+      (f) => f.querySelector('mat-error')?.textContent?.trim() ?? null,
+    );
+    expect(mensajes.filter((m) => m !== null)).toEqual([
+      'La cédula es obligatoria',
+      'El nombre es obligatorio',
+      'Elija la empresa',
+      'El gafete no existe',
+    ]);
+    expect(raiz.querySelector('.error')?.textContent).toContain('Ya está adentro');
+    expect(raiz.querySelector('.error')?.textContent).toContain('Acceso denegado');
+    expect(invoke).not.toHaveBeenCalledWith('registrar_entrada_proveedor', expect.anything());
+    expect(cerrar).not.toHaveBeenCalled();
   });
 
   it('un rechazo sin campo (por ejemplo, ya está adentro) va arriba de los botones', async () => {

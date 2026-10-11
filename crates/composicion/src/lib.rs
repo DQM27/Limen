@@ -29,7 +29,9 @@ use limen_aplicacion::casos_de_uso::consultas::{
 use limen_aplicacion::casos_de_uso::contratistas::{
     ConsultarContratista, EditarContratista, RegistrarContratista, ValidarContratista,
 };
-use limen_aplicacion::casos_de_uso::correo::{RegistrarEntradaCorreo, RegistrarSalidaCorreo};
+use limen_aplicacion::casos_de_uso::correo::{
+    RegistrarEntradaCorreo, RegistrarSalidaCorreo, ValidarEntradaCorreo,
+};
 use limen_aplicacion::casos_de_uso::empresas::{RegistrarEmpresa, RenombrarEmpresa};
 use limen_aplicacion::casos_de_uso::gafetes::{CambiarGafete, RegistrarGafetes};
 use limen_aplicacion::casos_de_uso::ingresos::{
@@ -37,10 +39,11 @@ use limen_aplicacion::casos_de_uso::ingresos::{
 };
 use limen_aplicacion::casos_de_uso::kof::{
     DevolverGafeteKof, EditarPersonalKof, EntregarGafeteKof, RegistrarPersonalKof,
+    ValidarEntregaKof, ValidarPersonalKof,
 };
 use limen_aplicacion::casos_de_uso::proveedores::{
     RegistrarEmpresaProveedora, RegistrarEntradaProveedor, RegistrarSalidaProveedor,
-    RenombrarEmpresaProveedora,
+    RenombrarEmpresaProveedora, ValidarEntradaProveedor,
 };
 use limen_aplicacion::casos_de_uso::usuarios::{CambiarClave, IniciarSesion};
 use limen_aplicacion::puertos::{
@@ -130,6 +133,7 @@ grupo! {
         registrar_empresa: RegistrarEmpresaProveedora<F, R, G>,
         renombrar_empresa: RenombrarEmpresaProveedora<F, R, G>,
         buscar_empresas: BuscarEmpresasProveedoras<F>,
+        validar_entrada: ValidarEntradaProveedor<F>,
         entrada: RegistrarEntradaProveedor<F, R, G>,
         salida: RegistrarSalidaProveedor<F, R, G>,
     }
@@ -138,6 +142,7 @@ grupo! {
 grupo! {
     /// Ingreso por correo.
     Correo {
+        validar_entrada: ValidarEntradaCorreo<F>,
         entrada: RegistrarEntradaCorreo<F, R, G>,
         salida: RegistrarSalidaCorreo<F, R, G>,
     }
@@ -146,9 +151,11 @@ grupo! {
 grupo! {
     /// Personal KOF y su gafete provisional.
     Kof {
+        validar_personal: ValidarPersonalKof<F>,
         registrar: RegistrarPersonalKof<F, R, G>,
         editar: EditarPersonalKof<F, R, G>,
         buscar: BuscarPersonalKof<F>,
+        validar_entrega: ValidarEntregaKof<F>,
         entregar_gafete: EntregarGafeteKof<F, R, G>,
         devolver_gafete: DevolverGafeteKof<F, R, G>,
     }
@@ -239,17 +246,21 @@ where
                 registrar_empresa: RegistrarEmpresaProveedora::new(a(), r(), i()),
                 renombrar_empresa: RenombrarEmpresaProveedora::new(a(), r(), i()),
                 buscar_empresas: BuscarEmpresasProveedoras::new(a()),
+                validar_entrada: ValidarEntradaProveedor::new(a()),
                 entrada: RegistrarEntradaProveedor::new(a(), r(), i()),
                 salida: RegistrarSalidaProveedor::new(a(), r(), i()),
             },
             correo: Correo {
+                validar_entrada: ValidarEntradaCorreo::new(a()),
                 entrada: RegistrarEntradaCorreo::new(a(), r(), i()),
                 salida: RegistrarSalidaCorreo::new(a(), r(), i()),
             },
             kof: Kof {
+                validar_personal: ValidarPersonalKof::new(a()),
                 registrar: RegistrarPersonalKof::new(a(), r(), i()),
                 editar: EditarPersonalKof::new(a(), r(), i()),
                 buscar: BuscarPersonalKof::new(a()),
+                validar_entrega: ValidarEntregaKof::new(a()),
                 entregar_gafete: EntregarGafeteKof::new(a(), r(), i()),
                 devolver_gafete: DevolverGafeteKof::new(a(), r(), i()),
             },

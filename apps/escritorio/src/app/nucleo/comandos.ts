@@ -109,12 +109,28 @@ export function renombrarEmpresaProveedora(id: string, nombre: string): Promise<
   return invocar<Cambio[]>('renombrar_empresa_proveedora', { id, nombre });
 }
 
+/**
+ * Todo lo que impide registrar el ingreso de un proveedor, de una vez y cada
+ * problema con su `campo` (lista vacía si se puede). No registra nada.
+ */
+export function validarEntradaProveedor(entrada: EntradaProveedor): Promise<ErrorApp[]> {
+  return invocar<ErrorApp[]>('validar_entrada_proveedor', { entrada });
+}
+
 /** Registra la entrada de un proveedor y devuelve el ingreso. */
 export function registrarEntradaProveedor(entrada: EntradaProveedor): Promise<string> {
   return invocar<string>('registrar_entrada_proveedor', { entrada });
 }
 
 // --- Ingreso por correo ---
+
+/**
+ * Todo lo que impide registrar el ingreso por correo, de una vez y cada
+ * problema con su `campo` (lista vacía si se puede). No registra nada.
+ */
+export function validarEntradaCorreo(entrada: EntradaCorreo): Promise<ErrorApp[]> {
+  return invocar<ErrorApp[]>('validar_entrada_correo', { entrada });
+}
 
 /** Registra la entrada de una visita por correo y devuelve el ingreso. */
 export function registrarEntradaCorreo(entrada: EntradaCorreo): Promise<string> {
@@ -127,6 +143,14 @@ export function buscarPersonalKof(texto: string, limite: number): Promise<Person
   return invocar<PersonalKof[]>('buscar_personal_kof', { texto, limite });
 }
 
+/**
+ * Todo lo que impide dar de alta a esta persona, de una vez y cada problema
+ * con su `campo` (lista vacía si se puede). No registra nada.
+ */
+export function validarPersonalKof(codigoEmpleado: string, nombre: string): Promise<ErrorApp[]> {
+  return invocar<ErrorApp[]>('validar_personal_kof', { codigoEmpleado, nombre });
+}
+
 export function registrarPersonalKof(codigoEmpleado: string, nombre: string): Promise<string> {
   return invocar<string>('registrar_personal_kof', { codigoEmpleado, nombre });
 }
@@ -134,6 +158,15 @@ export function registrarPersonalKof(codigoEmpleado: string, nombre: string): Pr
 /** Edita el nombre y si está activa (se desactiva, no se borra). */
 export function editarPersonalKof(id: string, nombre: string, activo: boolean): Promise<Cambio[]> {
   return invocar<Cambio[]>('editar_personal_kof', { id, nombre, activo });
+}
+
+/**
+ * Todo lo que impide entregar el gafete provisional, de una vez y cada
+ * problema con su `campo` (lista vacía si se puede). `personalId` vacío es
+ * «todavía no eligió a la persona». No entrega nada.
+ */
+export function validarEntregaGafeteKof(personalId: string, gafete: number): Promise<ErrorApp[]> {
+  return invocar<ErrorApp[]>('validar_entrega_gafete_kof', { personalId, gafete });
 }
 
 /** Entrega el gafete provisional (es su entrada) y devuelve el préstamo. */

@@ -61,6 +61,8 @@ pub struct HechosEntregaKof {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum ErrorPrestamoKof {
+    #[error("Elija a la persona del personal KOF")]
+    PersonaRequerida,
     #[error("La persona está inactiva: no se le puede prestar un gafete")]
     PersonalInactivo,
     #[error("Esta persona ya tiene un gafete provisional sin devolver")]
@@ -72,6 +74,7 @@ pub enum ErrorPrestamoKof {
 impl ErrorPrestamoKof {
     pub const fn codigo(self) -> &'static str {
         match self {
+            Self::PersonaRequerida => "persona_requerida",
             Self::PersonalInactivo => "personal_kof_inactivo",
             Self::YaTienePrestamo => "personal_kof_con_prestamo",
             Self::Gafete(error) => error.codigo(),
@@ -94,6 +97,36 @@ impl ErrorDevolucionKof {
             Self::AnteriorALaEntrega => "devolucion_anterior_a_la_entrega",
         }
     }
+}
+
+/// Todo lo que impide entregar el gafete, en el orden en que se revisa al
+/// entregarlo (vacío si se puede). Sin persona elegida sólo falta eso; sin
+/// número de gafete, el gafete no existe. Es para marcar cada campo a la vez.
+pub fn problemas_de_entrega(
+    personal: Option<&PersonalKof>,
+    gafete: Option<NumeroGafete>,
+    hechos: HechosEntregaKof,
+) -> Vec<ErrorPrestamoKof> {
+    let mut problemas = Vec::new();
+    match personal {
+        None => problemas.push(ErrorPrestamoKof::PersonaRequerida),
+        Some(persona) => {
+            if !persona.activo() {
+                problemas.push(ErrorPrestamoKof::PersonalInactivo);
+            }
+            if hechos.ya_tiene_prestamo {
+                problemas.push(ErrorPrestamoKof::YaTienePrestamo);
+            }
+        }
+    }
+    let gafete = match gafete {
+        None => Err(ErrorPrestamoGafete::NoRegistrado),
+        Some(_) => verificar_prestamo(hechos.situacion_gafete),
+    };
+    if let Err(error) = gafete {
+        problemas.push(ErrorPrestamoKof::Gafete(error));
+    }
+    problemas
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -269,6 +302,52 @@ mod tests {
     }
 
     #[test]
+    fn una_entrega_correcta_no_tiene_problemas() {
+        let persona = persona(true);
+        let gafete = NumeroGafete::nuevo(3).ok();
+
+        assert_eq!(
+            problemas_de_entrega(Some(&persona), gafete, hechos()).len(),
+            0,
+            "sin problemas"
+        );
+    }
+
+    #[test]
+    fn sin_persona_ni_gafete_marca_las_dos_cosas() {
+        assert_eq!(
+            problemas_de_entrega(None, None, hechos()),
+            [
+                ErrorPrestamoKof::PersonaRequerida,
+                ErrorPrestamoKof::Gafete(ErrorPrestamoGafete::NoRegistrado),
+            ]
+        );
+    }
+
+    #[test]
+    fn la_persona_y_el_gafete_se_marcan_a_la_vez() {
+        let inactiva = persona(false);
+        let mal = HechosEntregaKof {
+            ya_tiene_prestamo: true,
+            situacion_gafete: SituacionGafete::NoRegistrado,
+        };
+
+        assert_eq!(
+            problemas_de_entrega(Some(&inactiva), NumeroGafete::nuevo(3).ok(), mal),
+            [
+                ErrorPrestamoKof::PersonalInactivo,
+                ErrorPrestamoKof::YaTienePrestamo,
+                ErrorPrestamoKof::Gafete(ErrorPrestamoGafete::NoRegistrado),
+            ]
+        );
+        assert_eq!(
+            problemas_de_entrega(Some(&inactiva), NumeroGafete::nuevo(3).ok(), mal).first(),
+            entregar(&inactiva, mal).err().as_ref(),
+            "el primero es el que informa la entrega"
+        );
+    }
+
+    #[test]
     fn entrega_a_una_persona_activa() {
         let prestamo = entregar(&persona(true), hechos()).unwrap();
         assert_eq!(prestamo.personal(), persona(true).id());
@@ -370,6 +449,10 @@ mod tests {
 
     #[test]
     fn todo_error_tiene_codigo() {
+        assert_eq!(
+            ErrorPrestamoKof::PersonaRequerida.codigo(),
+            "persona_requerida"
+        );
         assert_eq!(
             ErrorPrestamoKof::YaTienePrestamo.codigo(),
             "personal_kof_con_prestamo"

@@ -160,7 +160,7 @@ impl CampoDelError for ErrorIngresoProveedor {
             Self::Visitante(error) => error.campo(),
             Self::Medio(error) => error.campo(),
             Self::Gafete(error) => error.campo(),
-            Self::EmpresaNoExiste => Some(EMPRESA),
+            Self::EmpresaRequerida | Self::EmpresaNoExiste => Some(EMPRESA),
             Self::YaEstaAdentro(_) | Self::AccesoDenegado(_) => None,
         }
     }
@@ -182,7 +182,7 @@ impl CampoDelError for ErrorPrestamoKof {
     fn campo(&self) -> Option<&'static str> {
         match self {
             Self::Gafete(error) => error.campo(),
-            Self::PersonalInactivo => Some(PERSONA),
+            Self::PersonaRequerida | Self::PersonalInactivo => Some(PERSONA),
             Self::YaTienePrestamo => None,
         }
     }

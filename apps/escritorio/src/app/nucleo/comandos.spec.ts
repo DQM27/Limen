@@ -30,6 +30,10 @@ import {
   usuarioActual,
   atajosDeFecha,
   listarHistorial,
+  validarEntradaCorreo,
+  validarEntradaProveedor,
+  validarEntregaGafeteKof,
+  validarPersonalKof,
 } from './comandos';
 import type { ContratistaEntrada } from './tipos';
 
@@ -132,6 +136,22 @@ describe('comandos del núcleo', () => {
         () => registrarEntradaProveedor(proveedor),
         'registrar_entrada_proveedor',
         { entrada: proveedor },
+      ],
+      [
+        () => validarEntradaProveedor(proveedor),
+        'validar_entrada_proveedor',
+        { entrada: proveedor },
+      ],
+      [() => validarEntradaCorreo(correo), 'validar_entrada_correo', { entrada: correo }],
+      [
+        () => validarPersonalKof('5040017', 'ANA'),
+        'validar_personal_kof',
+        { codigoEmpleado: '5040017', nombre: 'ANA' },
+      ],
+      [
+        () => validarEntregaGafeteKof('', 0),
+        'validar_entrega_gafete_kof',
+        { personalId: '', gafete: 0 },
       ],
       [() => registrarEntradaCorreo(correo), 'registrar_entrada_correo', { entrada: correo }],
       [() => buscarPersonalKof('504', 5), 'buscar_personal_kof', { texto: '504', limite: 5 }],

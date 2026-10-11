@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  Injector,
+  inject,
+  signal,
+} from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
@@ -6,8 +13,9 @@ import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { buscarPersonalKof, entregarGafeteKof } from '../nucleo/comandos';
-import { esErrorApp } from '../nucleo/tauri';
+import { enfocarPrimerError } from '../compartido/enfocar-error';
+import { buscarPersonalKof, entregarGafeteKof, validarEntregaGafeteKof } from '../nucleo/comandos';
+import { esErrorApp, type ErrorApp } from '../nucleo/tauri';
 import type { PersonalKof } from '../nucleo/tipos';
 
 /** Lo que devuelve el modal al entregar el gafete. */
@@ -52,6 +60,8 @@ function aNumero(texto: string): number {
 export class DialogoEntregarGafete {
   private readonly dialogo =
     inject<MatDialogRef<DialogoEntregarGafete, ResultadoEntregaKof>>(MatDialogRef);
+  private readonly anfitrion = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
   /** Sólo vale la última búsqueda: las que llegan tarde se descartan. */
   private turnoBusqueda = 0;
 
@@ -115,17 +125,27 @@ export class DialogoEntregarGafete {
     if (this.enviando()) {
       return;
     }
-    this.errorGeneral.set(null);
+    this.limpiarErrores();
     this.enviando.set(true);
     try {
       const elegida = this.persona.value;
-      await entregarGafeteKof(
-        typeof elegida === 'string' ? '' : elegida.id,
-        aNumero(this.gafete.value),
-      );
+      const personalId = typeof elegida === 'string' ? '' : elegida.id;
+      const gafete = aNumero(this.gafete.value);
+      // Primero se pregunta qué falta o qué está mal, todo de una vez: cada
+      // problema se marca en su campo (lo decide el dominio).
+      const problemas = await validarEntregaGafeteKof(personalId, gafete);
+      if (problemas.length > 0) {
+        this.mostrarTodos(problemas);
+        return;
+      }
+      await entregarGafeteKof(personalId, gafete);
       this.dialogo.close({ nombre: typeof elegida === 'string' ? elegida.trim() : elegida.nombre });
     } catch (error) {
-      this.mostrar(error);
+      this.mostrarTodos([
+        esErrorApp(error)
+          ? error
+          : { tipo: 'tecnico', codigo: 'desconocido', mensaje: 'No se pudo entregar el gafete.' },
+      ]);
     } finally {
       this.enviando.set(false);
     }
@@ -135,19 +155,30 @@ export class DialogoEntregarGafete {
     this.dialogo.close();
   }
 
+  private limpiarErrores(): void {
+    this.errorGeneral.set(null);
+    this.persona.setErrors(null);
+    this.gafete.setErrors(null);
+  }
+
   /** El mensaje del núcleo junto a su campo; sin campo, arriba de los botones. */
-  private mostrar(error: unknown): void {
-    if (!esErrorApp(error)) {
-      this.errorGeneral.set('No se pudo entregar el gafete.');
-      return;
+  private mostrarTodos(problemas: ErrorApp[]): void {
+    const generales: string[] = [];
+    for (const problema of problemas) {
+      const control =
+        problema.campo === 'personal_id'
+          ? this.persona
+          : problema.campo === 'gafete'
+            ? this.gafete
+            : null;
+      if (!control) {
+        generales.push(problema.mensaje);
+      } else if (!control.errors) {
+        control.setErrors({ nucleo: problema.mensaje });
+        control.markAsTouched();
+      }
     }
-    const control =
-      error.campo === 'personal_id' ? this.persona : error.campo === 'gafete' ? this.gafete : null;
-    if (control) {
-      control.setErrors({ nucleo: error.mensaje });
-      control.markAsTouched();
-    } else {
-      this.errorGeneral.set(error.mensaje);
-    }
+    this.errorGeneral.set(generales.length > 0 ? generales.join(' · ') : null);
+    enfocarPrimerError(this.anfitrion, this.injector);
   }
 }

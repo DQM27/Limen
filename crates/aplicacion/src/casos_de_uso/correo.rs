@@ -1,16 +1,16 @@
 //! Casos de uso del ingreso por correo: entrada y salida de una visita
 //! autorizada por correo.
 
-use limen_dominio::gafete::{ErrorPrestamoGafete, NumeroGafete, TipoGafete};
+use limen_dominio::gafete::{ErrorPrestamoGafete, NumeroGafete, SituacionGafete, TipoGafete};
 use limen_dominio::hecho::{Hecho, HechoId};
 use limen_dominio::ingreso_correo::{
-    DatosEntradaCorreo, ErrorIngresoCorreo, HechosEntradaCorreo, IngresoCorreo, IngresoCorreoId,
-    Motivo,
+    BorradorEntradaCorreo, DatosEntradaCorreo, ErrorIngresoCorreo, HechosEntradaCorreo,
+    IngresoCorreo, IngresoCorreoId, Motivo, problemas,
 };
 use limen_dominio::medio::TipoMedio;
 use limen_dominio::movimiento::{ErrorSalida, Marca};
 use limen_dominio::presencia::{Identidad, Via, YaEstaAdentro};
-use limen_dominio::visitante::Visitante;
+use limen_dominio::visitante::{Visitante, cedula_de};
 
 use super::gafetes::situacion_para_prestar;
 use super::hora::sellar;
@@ -131,6 +131,70 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarEntradaCorre
             .await
             .map_err(|error| ErrorCaso::al_confirmar(error, conflicto_de_entrada))?;
         Ok(ingreso.id())
+    }
+}
+
+/// El formulario de ingreso por correo tal cual está mientras se llena: un
+/// gafete 0 es "todavía no lo escribió".
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComandoValidarEntradaCorreo {
+    pub cedula: String,
+    pub nombre: String,
+    pub motivo: String,
+    pub medio: TipoMedio,
+    pub placa: Option<String>,
+    pub gafete: u32,
+}
+
+/// Dice de una vez todo lo que impide registrar el ingreso, para marcar cada
+/// campo a la vez. Sólo lee: no registra nada. Averigua lo que hace falta (si
+/// ya está adentro, veto, gafete) y el dominio decide.
+#[derive(Debug)]
+pub struct ValidarEntradaCorreo<F> {
+    fabrica: F,
+}
+
+impl<F: FabricaUnidadDeTrabajo> ValidarEntradaCorreo<F> {
+    pub const fn new(fabrica: F) -> Self {
+        Self { fabrica }
+    }
+
+    pub async fn ejecutar(
+        &self,
+        comando: &ComandoValidarEntradaCorreo,
+    ) -> Result<Vec<ErrorIngresoCorreo>, ErrorEntradaCorreo> {
+        let mut uow = self.fabrica.nueva();
+        // Sin cédula válida no hay a quién buscar: eso ya lo marca la cédula.
+        let (adentro_por, vetada) = match cedula_de(&comando.cedula) {
+            Ok(cedula) => (
+                uow.presencias()
+                    .via_adentro(&Identidad::from(&cedula))
+                    .await?,
+                cedula_vetada(uow.contratistas(), &cedula).await?,
+            ),
+            Err(_) => (None, false),
+        };
+        let gafete = NumeroGafete::nuevo(comando.gafete).ok();
+        let situacion_gafete = match gafete {
+            Some(numero) => {
+                situacion_para_prestar(uow.gafetes(), TipoGafete::Visita, numero).await?
+            }
+            None => SituacionGafete::NoRegistrado,
+        };
+        let hechos = HechosEntradaCorreo {
+            adentro_por,
+            vetada,
+            situacion_gafete,
+        };
+        let borrador = BorradorEntradaCorreo {
+            cedula: &comando.cedula,
+            nombre: &comando.nombre,
+            motivo: &comando.motivo,
+            medio: comando.medio,
+            placa: comando.placa.as_deref(),
+            gafete,
+        };
+        Ok(problemas(&borrador, hechos))
     }
 }
 

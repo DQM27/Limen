@@ -24,7 +24,7 @@ use crate::gafete::{ErrorPrestamoGafete, NumeroGafete, SituacionGafete, verifica
 use crate::medio::{ErrorMedio, Medio, TipoMedio};
 use crate::movimiento::{ErrorSalida, Marca, cerrar};
 use crate::presencia::{Via, YaEstaAdentro, verificar_afuera};
-use crate::visitante::{ErrorVisitante, PersonaVetada, Visitante, verificar_veto};
+use crate::visitante::{self, ErrorVisitante, PersonaVetada, Visitante, verificar_veto};
 
 /// Identificador global de un ingreso de proveedor (UUID v7).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -74,6 +74,8 @@ pub enum ErrorIngresoProveedor {
     Visitante(ErrorVisitante),
     #[error("{0}")]
     Medio(ErrorMedio),
+    #[error("La empresa proveedora es obligatoria")]
+    EmpresaRequerida,
     #[error("La empresa proveedora no existe")]
     EmpresaNoExiste,
     #[error("{0}")]
@@ -89,12 +91,63 @@ impl ErrorIngresoProveedor {
         match self {
             Self::Visitante(error) => error.codigo(),
             Self::Medio(error) => error.codigo(),
+            Self::EmpresaRequerida => "empresa_proveedora_requerida",
             Self::EmpresaNoExiste => "empresa_proveedora_no_existe",
             Self::YaEstaAdentro(error) => error.codigo(),
             Self::AccesoDenegado(error) => error.codigo(),
             Self::Gafete(error) => error.codigo(),
         }
     }
+}
+
+/// El formulario de ingreso tal como está mientras se llena: puede faltar la
+/// empresa o el gafete.
+#[derive(Debug, Clone, Copy)]
+pub struct BorradorEntradaProveedor<'a> {
+    pub cedula: &'a str,
+    pub nombre: &'a str,
+    pub empresa: Option<EmpresaProveedoraId>,
+    pub medio: TipoMedio,
+    pub placa: Option<&'a str>,
+    pub gafete: Option<NumeroGafete>,
+}
+
+/// Todo lo que impide registrar este ingreso, en el orden en que se revisa
+/// al registrarlo (vacío si se puede): la persona, el medio, la empresa, si
+/// ya está adentro, el veto y el gafete. Es para marcar cada campo a la vez;
+/// al registrar, el primero es el que se informa.
+pub fn problemas(
+    borrador: &BorradorEntradaProveedor<'_>,
+    hechos: HechosEntradaProveedor,
+) -> Vec<ErrorIngresoProveedor> {
+    let mut problemas: Vec<ErrorIngresoProveedor> =
+        visitante::problemas(borrador.cedula, borrador.nombre)
+            .into_iter()
+            .map(ErrorIngresoProveedor::Visitante)
+            .collect();
+    if let Err(error) = Medio::desde_formulario(borrador.medio, borrador.placa) {
+        problemas.push(ErrorIngresoProveedor::Medio(error));
+    }
+    match borrador.empresa {
+        None => problemas.push(ErrorIngresoProveedor::EmpresaRequerida),
+        Some(_) if !hechos.empresa_existe => problemas.push(ErrorIngresoProveedor::EmpresaNoExiste),
+        Some(_) => {}
+    }
+    if let Err(error) = verificar_afuera(hechos.adentro_por) {
+        problemas.push(ErrorIngresoProveedor::YaEstaAdentro(error));
+    }
+    if let Err(error) = verificar_veto(hechos.vetada) {
+        problemas.push(ErrorIngresoProveedor::AccesoDenegado(error));
+    }
+    let gafete = match borrador.gafete {
+        // Sin número no hay gafete que revisar: no existe en ningún catálogo.
+        None => Err(ErrorPrestamoGafete::NoRegistrado),
+        Some(_) => verificar_prestamo(hechos.situacion_gafete),
+    };
+    if let Err(error) = gafete {
+        problemas.push(ErrorIngresoProveedor::Gafete(error));
+    }
+    problemas
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -257,6 +310,81 @@ mod tests {
         )
     }
 
+    fn borrador() -> BorradorEntradaProveedor<'static> {
+        BorradorEntradaProveedor {
+            cedula: "111111111",
+            nombre: "ANA PEÑA",
+            empresa: Some(EmpresaProveedoraId::desde_uuid(Uuid::from_u128(2))),
+            medio: TipoMedio::Vehiculo,
+            placa: Some("abc-123"),
+            gafete: Some(NumeroGafete::nuevo(4).unwrap()),
+        }
+    }
+
+    #[test]
+    fn un_formulario_correcto_no_tiene_problemas() {
+        assert_eq!(problemas(&borrador(), hechos()).len(), 0, "sin problemas");
+    }
+
+    #[test]
+    fn un_formulario_vacio_marca_todo_lo_que_falta_a_la_vez() {
+        let vacio = BorradorEntradaProveedor {
+            cedula: "",
+            nombre: "",
+            empresa: None,
+            medio: TipoMedio::Vehiculo,
+            placa: None,
+            gafete: None,
+        };
+
+        assert_eq!(
+            problemas(&vacio, hechos()),
+            [
+                ErrorIngresoProveedor::Visitante(ErrorVisitante::CedulaVacia),
+                ErrorIngresoProveedor::Visitante(ErrorVisitante::NombreVacio),
+                ErrorIngresoProveedor::Medio(ErrorMedio::PlacaRequerida),
+                ErrorIngresoProveedor::EmpresaRequerida,
+                ErrorIngresoProveedor::Gafete(ErrorPrestamoGafete::NoRegistrado),
+            ]
+        );
+    }
+
+    #[test]
+    fn los_problemas_incluyen_lo_que_depende_de_la_base() {
+        let mal = HechosEntradaProveedor {
+            empresa_existe: false,
+            adentro_por: Some(Via::Correo),
+            vetada: true,
+            situacion_gafete: SituacionGafete::NoRegistrado,
+        };
+
+        assert_eq!(
+            problemas(&borrador(), mal),
+            [
+                ErrorIngresoProveedor::EmpresaNoExiste,
+                ErrorIngresoProveedor::YaEstaAdentro(YaEstaAdentro(Via::Correo)),
+                ErrorIngresoProveedor::AccesoDenegado(PersonaVetada),
+                ErrorIngresoProveedor::Gafete(ErrorPrestamoGafete::NoRegistrado),
+            ]
+        );
+    }
+
+    #[test]
+    fn el_primer_problema_es_el_que_informa_el_registro() {
+        let mut sin_placa = datos();
+        sin_placa.placa = None;
+        let mut mal = hechos();
+        mal.empresa_existe = false;
+        mal.vetada = true;
+        let mut formulario = borrador();
+        formulario.placa = None;
+
+        assert_eq!(
+            problemas(&formulario, mal).first().copied(),
+            entrar(sin_placa, mal).err()
+        );
+    }
+
     #[test]
     fn entra_con_placa_y_gafete() {
         let ingreso = entrar(datos(), hechos()).unwrap();
@@ -402,6 +530,10 @@ mod tests {
 
     #[test]
     fn todo_error_tiene_codigo() {
+        assert_eq!(
+            ErrorIngresoProveedor::EmpresaRequerida.codigo(),
+            "empresa_proveedora_requerida"
+        );
         assert_eq!(
             ErrorIngresoProveedor::EmpresaNoExiste.codigo(),
             "empresa_proveedora_no_existe"

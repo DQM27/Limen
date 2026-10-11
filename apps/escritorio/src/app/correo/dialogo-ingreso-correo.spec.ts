@@ -15,6 +15,7 @@ type Respuesta = unknown | ((argumentos: Record<string, unknown>) => unknown);
 function responder(respuestas: Record<string, Respuesta> = {}): void {
   const mayusculas = (a: Record<string, unknown>) => String(a['texto']).toUpperCase();
   const normales: Record<string, Respuesta> = {
+    validar_entrada_correo: [],
     registrar_entrada_correo: 'i1',
     nombre_persona_al_escribir: mayusculas,
     placa_al_escribir: mayusculas,
@@ -164,6 +165,34 @@ describe('modal de ingreso por correo', () => {
       expect(campoConError?.querySelector('mat-label')?.textContent?.trim(), campo).toBe(etiqueta);
       expect(campoConError?.querySelector('mat-error')?.textContent).toContain(`Falla en ${campo}`);
     }
+  });
+
+  it('antes de registrar pregunta qué está mal y marca todos los campos a la vez, sin registrar', async () => {
+    responder({
+      validar_entrada_correo: [
+        errorDelNucleo('cedula_vacia', 'La cédula es obligatoria', 'cedula'),
+        errorDelNucleo('nombre_vacio', 'El nombre es obligatorio', 'nombre'),
+        errorDelNucleo('motivo_vacio', 'El motivo es obligatorio', 'motivo'),
+        errorDelNucleo('gafete_no_registrado', 'El gafete no existe', 'gafete'),
+        errorDelNucleo('ya_esta_adentro', 'Ya está adentro', null),
+      ],
+    });
+    const { enviar, raiz, cerrar } = await crear();
+
+    await enviar();
+
+    const mensajes = [...raiz.querySelectorAll('mat-form-field')].map(
+      (f) => f.querySelector('mat-error')?.textContent?.trim() ?? null,
+    );
+    expect(mensajes.filter((m) => m !== null)).toEqual([
+      'La cédula es obligatoria',
+      'El nombre es obligatorio',
+      'El motivo es obligatorio',
+      'El gafete no existe',
+    ]);
+    expect(raiz.querySelector('.error')?.textContent).toContain('Ya está adentro');
+    expect(invoke).not.toHaveBeenCalledWith('registrar_entrada_correo', expect.anything());
+    expect(cerrar).not.toHaveBeenCalled();
   });
 
   it('un rechazo sin campo (por ejemplo, ya está adentro) va arriba de los botones', async () => {

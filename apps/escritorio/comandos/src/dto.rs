@@ -15,12 +15,14 @@ use limen_aplicacion::casos_de_uso::consultas::{
 };
 use limen_aplicacion::casos_de_uso::consultas::{GafeteListado, PersonaAdentroVista};
 use limen_aplicacion::casos_de_uso::contratistas::{ComandoContratista, ComandoValidarContratista};
-use limen_aplicacion::casos_de_uso::correo::ComandoEntradaCorreo;
+use limen_aplicacion::casos_de_uso::correo::{ComandoEntradaCorreo, ComandoValidarEntradaCorreo};
 use limen_aplicacion::casos_de_uso::gafetes::CambioGafete;
 use limen_aplicacion::casos_de_uso::ingresos::{
     CandidatoIngreso, ComandoEntrada, EntradaContratista, GafeteElegido,
 };
-use limen_aplicacion::casos_de_uso::proveedores::ComandoEntradaProveedor;
+use limen_aplicacion::casos_de_uso::proveedores::{
+    ComandoEntradaProveedor, ComandoValidarEntradaProveedor,
+};
 use limen_aplicacion::errores::ErrorCaso;
 use limen_aplicacion::puertos::{IngresoAbierto, MarcaVista, MovimientoHistorial};
 use limen_dominio::acceso::ResultadoAcceso;
@@ -433,6 +435,26 @@ pub struct EntradaProveedorEntrada {
 }
 
 impl EntradaProveedorEntrada {
+    /// El formulario tal cual está mientras se llena: sin empresa elegida
+    /// (vacía) es `None`, y lo marca el núcleo.
+    pub fn a_borrador(&self) -> Result<ComandoValidarEntradaProveedor, ErrorJson> {
+        let empresa = if self.empresa_id.trim().is_empty() {
+            None
+        } else {
+            Some(EmpresaProveedoraId::desde_uuid(
+                leer_uuid(&self.empresa_id).map_err(en(campos::EMPRESA))?,
+            ))
+        };
+        Ok(ComandoValidarEntradaProveedor {
+            cedula: self.cedula.clone(),
+            nombre: self.nombre.clone(),
+            empresa,
+            medio: leer_medio(&self.medio).map_err(en(campos::MEDIO))?,
+            placa: self.placa.clone(),
+            gafete: self.gafete,
+        })
+    }
+
     pub fn a_comando(&self) -> Result<ComandoEntradaProveedor, ErrorJson> {
         Ok(ComandoEntradaProveedor {
             cedula: self.cedula.clone(),
@@ -461,6 +483,18 @@ pub struct EntradaCorreoEntrada {
 }
 
 impl EntradaCorreoEntrada {
+    /// El formulario tal cual está mientras se llena.
+    pub fn a_borrador(&self) -> Result<ComandoValidarEntradaCorreo, ErrorJson> {
+        Ok(ComandoValidarEntradaCorreo {
+            cedula: self.cedula.clone(),
+            nombre: self.nombre.clone(),
+            motivo: self.motivo.clone(),
+            medio: leer_medio(&self.medio).map_err(en(campos::MEDIO))?,
+            placa: self.placa.clone(),
+            gafete: self.gafete,
+        })
+    }
+
     pub fn a_comando(&self) -> Result<ComandoEntradaCorreo, ErrorJson> {
         Ok(ComandoEntradaCorreo {
             cedula: self.cedula.clone(),

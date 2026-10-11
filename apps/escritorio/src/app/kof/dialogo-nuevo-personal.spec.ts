@@ -14,6 +14,7 @@ type Respuesta = unknown | ((argumentos: Record<string, unknown>) => unknown);
 /** Simula el núcleo comando por comando; el nombre al escribir sale en mayúsculas, como en el dominio. */
 function responder(respuestas: Record<string, Respuesta> = {}): void {
   const normales: Record<string, Respuesta> = {
+    validar_personal_kof: [],
     registrar_personal_kof: 'k1',
     nombre_persona_al_escribir: (a: Record<string, unknown>) => String(a['texto']).toUpperCase(),
   };
@@ -127,6 +128,23 @@ describe('modal de personal KOF nuevo', () => {
       expect(conError?.querySelector('mat-label')?.textContent?.trim(), campo).toBe(etiqueta);
       expect(conError?.querySelector('mat-error')?.textContent).toContain(`Falla en ${campo}`);
     }
+  });
+
+  it('antes de registrar pregunta qué está mal y marca el código y el nombre a la vez, sin registrar', async () => {
+    responder({
+      validar_personal_kof: [
+        errorDelNucleo('codigo_empleado_vacio', 'El código es obligatorio', 'codigo_empleado'),
+        errorDelNucleo('nombre_vacio', 'El nombre es obligatorio', 'nombre'),
+      ],
+    });
+    const { enviar, raiz, cerrar } = await crear();
+
+    await enviar();
+
+    const mensajes = [...raiz.querySelectorAll('mat-error')].map((e) => e.textContent?.trim());
+    expect(mensajes).toEqual(['El código es obligatorio', 'El nombre es obligatorio']);
+    expect(invoke).not.toHaveBeenCalledWith('registrar_personal_kof', expect.anything());
+    expect(cerrar).not.toHaveBeenCalled();
   });
 
   it('un rechazo sin campo va arriba de los botones', async () => {

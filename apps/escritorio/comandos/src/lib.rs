@@ -413,6 +413,26 @@ where
         Ok(cambios.iter().map(CambioDto::from).collect())
     }
 
+    /// Todo lo que impide registrar el ingreso de un proveedor, de una vez y
+    /// cada problema con su campo (lista vacía si se puede). No registra nada.
+    pub async fn validar_entrada_proveedor(
+        &self,
+        entrada: &EntradaProveedorEntrada,
+    ) -> Result<Vec<ErrorJson>, ErrorJson> {
+        let borrador = entrada.a_borrador()?;
+        let problemas = self
+            .app
+            .proveedores
+            .validar_entrada
+            .ejecutar(&borrador)
+            .await
+            .map_err(con_campo)?;
+        Ok(problemas
+            .into_iter()
+            .map(|problema| con_campo(ErrorCaso::Negocio(problema)))
+            .collect())
+    }
+
     /// Registra la entrada de un proveedor y devuelve el ingreso.
     pub async fn registrar_entrada_proveedor(
         &self,
@@ -431,6 +451,26 @@ where
     }
 
     // --- Ingreso por correo ---
+
+    /// Todo lo que impide registrar el ingreso por correo, de una vez y cada
+    /// problema con su campo (lista vacía si se puede). No registra nada.
+    pub async fn validar_entrada_correo(
+        &self,
+        entrada: &EntradaCorreoEntrada,
+    ) -> Result<Vec<ErrorJson>, ErrorJson> {
+        let borrador = entrada.a_borrador()?;
+        let problemas = self
+            .app
+            .correo
+            .validar_entrada
+            .ejecutar(&borrador)
+            .await
+            .map_err(con_campo)?;
+        Ok(problemas
+            .into_iter()
+            .map(|problema| con_campo(ErrorCaso::Negocio(problema)))
+            .collect())
+    }
 
     /// Registra la entrada de una visita autorizada por correo y devuelve el
     /// ingreso.
@@ -460,6 +500,54 @@ where
     ) -> Result<Vec<PersonalKofDto>, ErrorJson> {
         let encontrados = self.app.kof.buscar.ejecutar(texto, limite).await?;
         Ok(encontrados.iter().map(PersonalKofDto::from).collect())
+    }
+
+    /// Todo lo que impide dar de alta a esta persona, de una vez y cada
+    /// problema con su campo (lista vacía si se puede). No registra nada.
+    pub async fn validar_personal_kof(
+        &self,
+        codigo_empleado: &str,
+        nombre: &str,
+    ) -> Result<Vec<ErrorJson>, ErrorJson> {
+        let problemas = self
+            .app
+            .kof
+            .validar_personal
+            .ejecutar(codigo_empleado, nombre)
+            .await
+            .map_err(con_campo)?;
+        Ok(problemas
+            .into_iter()
+            .map(|problema| con_campo(ErrorCaso::Negocio(problema)))
+            .collect())
+    }
+
+    /// Todo lo que impide entregar el gafete provisional, de una vez y cada
+    /// problema con su campo (lista vacía si se puede). `personal_id` vacío es
+    /// "todavía no eligió a la persona". No entrega nada.
+    pub async fn validar_entrega_gafete_kof(
+        &self,
+        personal_id: &str,
+        gafete: u32,
+    ) -> Result<Vec<ErrorJson>, ErrorJson> {
+        let persona = if personal_id.trim().is_empty() {
+            None
+        } else {
+            Some(PersonalKofId::desde_uuid(leer_uuid(personal_id).map_err(
+                |e| ErrorJson::from(e).en_campo(Some(campos::PERSONA)),
+            )?))
+        };
+        let problemas = self
+            .app
+            .kof
+            .validar_entrega
+            .ejecutar(persona, gafete)
+            .await
+            .map_err(con_campo)?;
+        Ok(problemas
+            .into_iter()
+            .map(|problema| con_campo(ErrorCaso::Negocio(problema)))
+            .collect())
     }
 
     /// Registra a una persona del personal KOF y devuelve su identificador.
