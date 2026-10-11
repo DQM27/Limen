@@ -122,7 +122,7 @@ crates/
   dominio/                  ✅ reglas puras
   aplicacion/               ✅ casos_de_uso/, puertos/, errores.rs
   infra-surreal/            ✅ repositorios, consultas, Unit of Work, esquema .surql
-  infra-nube/               sincronización con SurrealDB Cloud, avisos en vivo
+  infra-nube/               ✅ conexión y esquema en SurrealDB Cloud; luego sincronización (nube.md)
   infra-plataforma/         ✅ reloj confiable (NTP), IDs, Argon2id; luego DPAPI y Keystore
   infra-memoria/            ✅ dobles en memoria para pruebas
   composicion/              ✅ construir `Aplicacion`
@@ -513,7 +513,8 @@ leyendo el estado, no recorren los hechos.
 
 Pendiente para cuando exista lo que lo necesita:
 
-- **Sitio y equipo** de cada hecho: con el bloque M (equipos).
+- **Unidad operativa y equipo** de cada hecho: con el bloque M (equipos). Qué es global
+  y qué es de cada unidad, en [`nube.md`](nube.md).
 - **`CHANGEFEED`** sobre `hecho`, el **estado de sincronización** (pendiente o
   confirmado) y el **indicador de incidente**: con la sincronización (paso 7).
 - Los cambios de catálogo (contratistas, empresas, gafetes) no son hechos: quedan en la

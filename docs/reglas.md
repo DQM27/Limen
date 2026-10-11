@@ -135,6 +135,8 @@ reconstruir cómo estaba el contratista el día que entró.
 | M1 | Cada equipo se vincula con un código de un solo uso y su propio par de claves. | ⏳ |
 | M2 | Un equipo retirado pierde el acceso al instante y se cierra su sesión. | ⏳ |
 | M3 | Tipos: PC, celular y visor; el visor sólo lee. | ⏳ |
+| M4 | Cada equipo pertenece a una **unidad operativa** (el "sitio" de Lattis). Los catálogos (contratistas, empresas, empresas proveedoras, personal KOF, usuarios) son **globales**: iguales en todas las unidades. Gafetes, ingresos, presencia, préstamos e historial son **de la unidad**: un equipo baja sólo los de la suya. Ver `nube.md`. | ⏳ |
+| M5 | El equipo es desechable: la nube es la fuente de verdad. Guarda una copia local y trabaja sin conexión; lo pendiente se sube al volver la red. | ⏳ |
 
 ## Fuera de alcance por ahora
 

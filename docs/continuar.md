@@ -96,6 +96,15 @@ Gafetes, Dentro, avisos, ingresos de contratista, proveedor, correo y KOF.
 hora sellada) de los ingresos importados antes de su PR. `fix/pruebas-en-windows` tiene 3
 commits en el remoto que no están en `main`: revisarlos o descartarlos.
 
+## La nube (rama `feat/nube`)
+
+Modelo acordado con el dueño y estado en [`nube.md`](nube.md): la nube es la fuente de
+verdad, el equipo es desechable pero guarda su copia local y trabaja sin conexión, los
+catálogos son **globales** y lo demás es **de cada unidad operativa** (el "sitio" de
+Lattis). La instancia `limen` (SurrealDB Cloud, gratis, `aws-use1`) ya existe con el
+esquema aplicado; `crates/infra-nube` conecta y aplica el esquema. Lo siguiente es el
+paso 2 de `nube.md`: unidades operativas y equipos.
+
 ## Decidido y en espera
 
 - **Cifrado en reposo:** se espera a que SurrealKV publique su cifrado (TDE, ya en su
@@ -110,9 +119,6 @@ commits en el remoto que no están en `main`: revisarlos o descartarlos.
   carnet KOF y placa, como en Lattis), o UniFFI + Kotlin/Compose como Lattis. Decidido
   ya, sea cual sea la opción: **la cámara sólo captura y entrega lo crudo; interpretar,
   validar y decidir es del dominio** (`arquitectura.md`, "La cámara es una herramienta").
-- **Sincronización de catálogos** (contratistas, empresas, gafetes, usuarios): no son
-  hechos; la propuesta es changefeed por tabla con "el último cambio gana" y la
-  auditoría como respaldo.
 - **Renombrar una empresa.** El núcleo ya renombra (con auditoría), pero no hay pantalla.
   Opciones: un lápiz junto al «+» del selector que abre el mismo modal (recomendada), una
   lista simple de "Administrar empresas", o corregirlo desde la nube. El dueño dijo que
