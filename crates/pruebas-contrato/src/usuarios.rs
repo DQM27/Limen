@@ -113,32 +113,6 @@ pub async fn la_cedula_de_usuario_repetida_choca<F: FabricaUnidadDeTrabajo>(fabr
     );
 }
 
-pub async fn todos_los_usuarios_van_por_nombre<F: FabricaUnidadDeTrabajo>(fabrica: F) {
-    sembrar_usuarios(
-        &fabrica,
-        &[
-            usuario(1, "111111111", "BETO SOLIS"),
-            usuario(2, "222222222", "ANA MORA"),
-            usuario(3, "333333333", "CARLA RUIZ"),
-        ],
-    )
-    .await;
-    let mut uow = fabrica.nueva();
-    let nombres: Vec<String> = uow
-        .usuarios()
-        .todos()
-        .await
-        .unwrap()
-        .iter()
-        .map(|usuario| usuario.nombre().to_string())
-        .collect();
-    assert_eq!(
-        nombres,
-        ["ANA MORA", "BETO SOLIS", "CARLA RUIZ"],
-        "ordenados por nombre"
-    );
-}
-
 // --- Intentos fallidos ---
 
 fn instante(texto: &str) -> DateTime<Utc> {

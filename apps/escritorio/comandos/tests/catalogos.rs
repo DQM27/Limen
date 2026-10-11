@@ -433,6 +433,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn registrar_un_proveedor_sin_empresa_dice_que_falta_no_que_es_ilegible() {
+        let comandos = comandos();
+
+        let sin_empresa = error_de(
+            comandos
+                .registrar_entrada_proveedor(&sesion(), &proveedor(" "))
+                .await,
+        );
+
+        assert_eq!(
+            codigo_y_campo(&sin_empresa),
+            ("empresa_proveedora_requerida", Some(campos::EMPRESA))
+        );
+    }
+
+    #[tokio::test]
     async fn el_ingreso_por_correo_vacio_marca_todos_sus_campos_a_la_vez() {
         let comandos = comandos();
         let vacio = EntradaCorreoEntrada {

@@ -90,7 +90,10 @@ La regla se hace cumplir con **límites de crate**: el compilador impide que `do
 importe algo que no declara. Además, `crates/dominio/tests/arquitectura.rs` falla si el
 dominio agrega una dependencia fuera de la lista permitida (`chrono`, `thiserror`,
 `uuid`). Cada crate nuevo de las capas internas debe traer su propia prueba de
-arquitectura.
+arquitectura. Las apps también la traen: `apps/escritorio/comandos` no puede depender de
+la infraestructura, y el cascarón de Tauri (`src-tauri`) sólo de `composicion` y de los
+comandos. Los tipos de los adaptadores reales los nombra a través de `composicion`
+(`Almacen`, `RelojLimen`, `IdsLimen`, `ClavesLimen`).
 
 ### La cámara es una herramienta, no decide
 
@@ -310,28 +313,31 @@ En Limen eso se separa en dos cosas:
    transacciones y no tiene reglas.
 
 ```rust
-pub struct Aplicacion {
-    pub contratistas: CasosContratistas, // registrar, editar, buscar…
-    pub empresas: CasosEmpresas,
-    pub accesos: CasosAccesos,
+pub struct Aplicacion<F, R, G, C> {
+    pub contratistas: Contratistas<F, R, G>, // registrar, editar, buscar…
+    pub empresas: Empresas<F, R, G>,
+    pub ingresos: Ingresos<F, R, G>,
     // …
 }
 
-impl Aplicacion {
-    pub async fn construir(config: Config) -> Result<Arc<Self>, ErrorArranque> {
-        let almacen = AlmacenSurreal::abrir(&config.ruta_db).await?; // aplica el esquema
-        let reloj = RelojCostaRica::default();
-        let ids = IdsV7::default();
-        Ok(Arc::new(Self {
-            contratistas: CasosContratistas::new(almacen.clone(), reloj.clone(), ids.clone()),
-            // …
-        }))
+impl AplicacionLimen {
+    /// Crea el reloj confiable, lo sincroniza en segundo plano y abre la base.
+    pub async fn arrancar(config: &Config) -> Result<Self, ErrorArranque> {
+        let reloj = RelojConfiable::new(leer_desfase(&config.ruta_desfase_reloj));
+        reloj.sincronizar_en_segundo_plano(&SERVIDORES_NTP, config.ruta_desfase_reloj.clone());
+        Self::abrir(config, &reloj).await // AlmacenSurreal, Argon2id, UUID v7
     }
 }
 ```
 
-En Tauri se registra como `State<Arc<Aplicacion>>`, **sin `Mutex`**. La concurrencia la
-maneja el adaptador de base de datos, no la aplicación entera.
+Todo lo que la app de escritorio necesita para arrancar sale de aquí: el cascarón de
+Tauri sólo llama a `AplicacionLimen::arrancar` con sus carpetas. Lo guarda como estado
+de Tauri, **sin `Mutex`**: la concurrencia la maneja el adaptador de base de datos, no
+la aplicación entera.
+
+La única excepción a "sin lógica" es la **semilla de desarrollo**
+(`composicion/src/semilla.rs`): sólo existe en compilación de depuración y siembra los
+usuarios de prueba si la base no tiene ninguno. La versión para producción no la trae.
 
 ---
 
@@ -438,8 +444,12 @@ buscador y deja ver la estructura).
 
 ### 8.3 Cómo se escriben las consultas (sin ORM)
 
-1. **SurrealQL en archivos `.surql`** junto a su repositorio, cargados con
-   `include_str!`. Se revisan como código.
+1. **El esquema en archivos `.surql`** (`infra-surreal/src/esquema/`), cargado con
+   `include_str!`. **Las consultas viven junto al método que las usa**, como texto
+   SurrealQL literal (una constante con nombre cuando es larga o se repite). Se revisan
+   como código. Sólo se intercalan nombres de tabla o de campo fijos del propio
+   adaptador (por ejemplo, la etapa del buscador que cambia de tabla); los datos van
+   siempre como parámetros.
 2. **Siempre con parámetros enlazados**, nunca con texto concatenado.
 3. **Mapeo con `serde`:** la infraestructura define structs de persistencia
    (`#[derive(Serialize, Deserialize)]`) y los convierte a entidades del dominio con

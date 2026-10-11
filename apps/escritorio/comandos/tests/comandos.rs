@@ -16,8 +16,9 @@ mod tests {
     use limen_dominio::medio::TipoMedio;
     use limen_dominio::tipo_ingreso::TipoIngreso;
     use limen_escritorio_comandos::{
-        Comandos, ContratistaEntrada, EntradaContratistaEntrada, ErrorJson, TipoErrorJson, campos,
-        nombre_empresa_al_escribir, nombre_persona_al_escribir, placa_al_escribir,
+        Comandos, ContratistaEntrada, EntradaContratistaEntrada, EntradaCorreoEntrada, ErrorJson,
+        TipoErrorJson, campos, nombre_empresa_al_escribir, nombre_persona_al_escribir,
+        placa_al_escribir,
     };
     use limen_infra_memoria::{AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo};
     use serde_json::json;
@@ -255,7 +256,7 @@ mod tests {
             .await
             .unwrap();
         comandos
-            .registrar_salida_por_gafete(&sesion(), "CONTRATISTA", 2)
+            .registrar_salida_por_gafete(&sesion(), Some("CONTRATISTA"), 2)
             .await
             .unwrap();
         assert_eq!(
@@ -355,6 +356,73 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn sin_via_la_salida_por_gafete_busca_en_las_cuatro_y_dice_quien_salio() {
+        let comandos = entran_por_las_cuatro_vias().await;
+
+        let nombre = comandos
+            .registrar_salida_por_gafete(&sesion(), None, 4)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            nombre, "LUIS MORA",
+            "el de visita es del ingreso por correo"
+        );
+        assert_eq!(comandos.dentro().await.unwrap().len(), 3, "salió sólo él");
+    }
+
+    #[tokio::test]
+    async fn la_salida_por_gafete_lo_rechaza_si_nadie_lo_tiene_o_no_se_sabe_quien() {
+        let comandos = entran_por_las_cuatro_vias().await;
+        // El 3 ya lo lleva el contratista; ahora también una visita.
+        comandos
+            .registrar_entrada_correo(
+                &sesion(),
+                &EntradaCorreoEntrada {
+                    cedula: "4-4444-4444".into(),
+                    nombre: "ana rojas".into(),
+                    motivo: "visita".into(),
+                    medio: "A_PIE".into(),
+                    placa: None,
+                    gafete: 3,
+                },
+            )
+            .await
+            .unwrap();
+
+        let nadie = error_de(
+            comandos
+                .registrar_salida_por_gafete(&sesion(), None, 5)
+                .await,
+        );
+        assert_eq!(
+            (nadie.codigo, nadie.campo),
+            ("gafete_sin_portador", Some(campos::GAFETE))
+        );
+        let repetido = error_de(
+            comandos
+                .registrar_salida_por_gafete(&sesion(), None, 3)
+                .await,
+        );
+        assert_eq!(repetido.codigo, "gafete_en_varias_vias");
+        assert!(
+            repetido.mensaje.contains("contratista, ingreso por correo"),
+            "nombra las vías: {}",
+            repetido.mensaje
+        );
+        assert_eq!(
+            comandos.dentro().await.unwrap().len(),
+            5,
+            "no sale nadie: no se adivina"
+        );
+        let en_su_via = comandos
+            .registrar_salida_por_gafete(&sesion(), Some("CORREO"), 3)
+            .await
+            .unwrap();
+        assert_eq!(en_su_via, "ANA ROJAS", "con la vía ya no hay duda");
+    }
+
+    #[tokio::test]
     async fn la_lista_dentro_junta_las_cuatro_vias_y_cada_una_sale_por_su_ingreso() {
         let comandos = entran_por_las_cuatro_vias().await;
         let dentro = comandos.dentro().await.unwrap();
@@ -388,7 +456,7 @@ mod tests {
             ("KOF", 1),
         ] {
             comandos
-                .registrar_salida_por_gafete(&sesion(), via, gafete)
+                .registrar_salida_por_gafete(&sesion(), Some(via), gafete)
                 .await
                 .unwrap();
         }
@@ -620,7 +688,7 @@ mod tests {
             (
                 error_de(
                     comandos
-                        .registrar_salida_por_gafete(&sesion, "OTRA", 1)
+                        .registrar_salida_por_gafete(&sesion, Some("OTRA"), 1)
                         .await,
                 ),
                 "via_invalida",

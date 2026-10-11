@@ -49,7 +49,7 @@ use limen_aplicacion::casos_de_uso::usuarios::{CambiarClave, IniciarSesion};
 use limen_aplicacion::puertos::{
     Claves, Consultas, ErrorPersistencia, FabricaUnidadDeTrabajo, GeneradorIds, Reloj,
 };
-use limen_infra_plataforma::{ClavesArgon2, IdsV7, RelojConfiable};
+use limen_infra_plataforma::{ClavesArgon2, IdsV7, RelojConfiable, SERVIDORES_NTP, leer_desfase};
 use limen_infra_surreal::AlmacenSurreal;
 
 /// Con qué se abre la aplicación.
@@ -57,6 +57,9 @@ use limen_infra_surreal::AlmacenSurreal;
 pub struct Config {
     /// Carpeta de la base de datos de este equipo.
     pub ruta_base: PathBuf,
+    /// Archivo con el último desfase medido del reloj del equipo (E5), para
+    /// arrancar ya corregido.
+    pub ruta_desfase_reloj: PathBuf,
 }
 
 /// No se pudo arrancar la aplicación.
@@ -277,12 +280,28 @@ where
 }
 
 /// La aplicación con los adaptadores reales.
-pub type AplicacionLimen = Aplicacion<AlmacenSurreal, RelojConfiable, IdsV7, ClavesArgon2>;
+/// Los adaptadores reales, con nombre propio: así una app nombra sus tipos
+/// (por ejemplo, el estado de Tauri) sin depender de la infraestructura.
+pub type Almacen = AlmacenSurreal;
+pub type RelojLimen = RelojConfiable;
+pub type IdsLimen = IdsV7;
+pub type ClavesLimen = ClavesArgon2;
+
+pub type AplicacionLimen = Aplicacion<Almacen, RelojLimen, IdsLimen, ClavesLimen>;
 
 impl AplicacionLimen {
-    /// Abre (o crea) la base de este equipo y arma la aplicación. El reloj
-    /// lo crea quien arranca la app, que también lo sincroniza (ver
-    /// [`RelojConfiable::sincronizar_en_segundo_plano`]).
+    /// Arranca la aplicación de este equipo: crea el reloj confiable con el
+    /// último desfase guardado, lo corrige contra NTP en segundo plano (E5:
+    /// hasta la primera medición la hora sale sin comprobar y queda marcada)
+    /// y abre la base.
+    pub async fn arrancar(config: &Config) -> Result<Self, ErrorArranque> {
+        let reloj = RelojConfiable::new(leer_desfase(&config.ruta_desfase_reloj));
+        reloj.sincronizar_en_segundo_plano(&SERVIDORES_NTP, config.ruta_desfase_reloj.clone());
+        Self::abrir(config, &reloj).await
+    }
+
+    /// Abre (o crea) la base de este equipo y arma la aplicación con este
+    /// reloj, sin sincronizarlo (las pruebas no salen a la red).
     pub async fn abrir(config: &Config, reloj: &RelojConfiable) -> Result<Self, ErrorArranque> {
         let almacen = AlmacenSurreal::en_disco(&config.ruta_base).await?;
         let claves = ClavesArgon2::new().map_err(ErrorArranque::Claves)?;

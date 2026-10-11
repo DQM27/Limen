@@ -9,10 +9,12 @@ use limen_dominio::contratista::Contratista;
 use limen_dominio::empresa::Empresa;
 use limen_dominio::empresa_proveedora::EmpresaProveedora;
 use limen_dominio::gafete::{NumeroGafete, Portador, TipoGafete};
+use limen_dominio::gafete_prestado::{ErrorDevolucionGafete, quien_devuelve, quienes_llevan};
 use limen_dominio::nombre::NombrePersona;
 use limen_dominio::permanencia::lleva_demasiado_adentro;
 use limen_dominio::personal_kof::PersonalKof;
 use limen_dominio::praind::DIAS_ADVERTENCIA_PRAIND;
+use limen_dominio::presencia::Via;
 use limen_dominio::rango_fechas::{Atajo, ErrorRango, RangoFechas};
 
 use crate::errores::ErrorCaso;
@@ -72,6 +74,24 @@ impl<C: Consultas, R: Reloj> QuienesEstanAdentro<C, R> {
                 persona,
             })
             .collect())
+    }
+
+    /// Quién devuelve el gafete con este número (F8): entre todos los que
+    /// están adentro o, con `via`, sólo entre los de esa vía. Si nadie lo
+    /// tiene, o el número está en uso en varias vías, lo dice el dominio.
+    pub async fn quien_devuelve(
+        &self,
+        numero: NumeroGafete,
+        via: Option<Via>,
+    ) -> Result<PersonaAdentro, ErrorCaso<ErrorDevolucionGafete>> {
+        let adentro = self.consultas.quienes_estan_adentro().await?;
+        let candidatos = adentro
+            .into_iter()
+            .filter(|persona| via.is_none_or(|via| persona.ingreso.via() == via))
+            .map(|persona| (persona.ingreso.via(), persona.gafete, persona));
+        quien_devuelve(numero, candidatos)
+            .map(|(_, persona)| persona)
+            .map_err(ErrorCaso::Negocio)
     }
 }
 
@@ -360,27 +380,24 @@ impl<F: FabricaUnidadDeTrabajo + Consultas> ListarGafetes<F> {
 
     pub async fn ejecutar(&self, tipo: TipoGafete) -> Result<Vec<GafeteListado>, ErrorConsulta> {
         let resumenes = self.fabrica.listar_gafetes(tipo).await?;
-        // Quién tiene cada gafete prestado: sale de quién está adentro por la
-        // vía de ese tipo (F2).
+        // Quién tiene cada gafete prestado lo decide el dominio (F7) a partir
+        // de quién está adentro.
         let prestados: HashMap<NumeroGafete, AsignadoGafete> =
             if resumenes.iter().any(|r| r.prestado) {
-                self.fabrica
-                    .quienes_estan_adentro()
-                    .await?
-                    .into_iter()
-                    .filter(|persona| persona.ingreso.via() == tipo.via())
-                    .filter_map(|persona| {
-                        persona.gafete.map(|numero| {
-                            (
-                                numero,
-                                AsignadoGafete {
-                                    nombre: Some(persona.nombre),
-                                    identidad: persona.identidad.to_string(),
-                                },
-                            )
-                        })
-                    })
-                    .collect()
+                let adentro = self.fabrica.quienes_estan_adentro().await?;
+                quienes_llevan(
+                    tipo,
+                    adentro.into_iter().map(|persona| {
+                        (
+                            persona.ingreso.via(),
+                            persona.gafete,
+                            AsignadoGafete {
+                                nombre: Some(persona.nombre),
+                                identidad: persona.identidad.to_string(),
+                            },
+                        )
+                    }),
+                )
             } else {
                 HashMap::new()
             };

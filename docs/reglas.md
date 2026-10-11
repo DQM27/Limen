@@ -85,7 +85,8 @@ reconstruir cómo estaba el contratista el día que entró.
 | F4 | Sólo un gafete disponible se da de baja o se marca perdido. | ✅ |
 | F5 | Marcar perdido exige indicar su **último portador** (quién lo tenía), que corresponde al tipo del gafete: un contratista para el de contratista, un proveedor o una visita (por su cédula, que debe ser nacional o de extranjero, A3) para el de proveedor o de visita, y alguien del personal KOF para el provisional. Como en Lattis. | ✅ |
 | F6 | No se da de baja un gafete prestado en este momento. | ✅ |
-| F7 | El listado de gafetes dice **a quién está asignado** cada uno: quien lo tiene prestado ahora (sale de quién está adentro por la vía de ese tipo, F2: `TipoGafete::via`) o, si está perdido, su último portador, con su nombre si está en un catálogo (contratista, personal KOF) y sólo su cédula si es un proveedor o una visita. | ✅ |
+| F7 | El listado de gafetes dice **a quién está asignado** cada uno: quien lo tiene prestado ahora (sale de quién está adentro por la vía de ese tipo, F2: `TipoGafete::via`) o, si está perdido, su último portador, con su nombre si está en un catálogo (contratista, personal KOF) y sólo su cédula si es un proveedor o una visita. Quién lo tiene prestado lo decide `dominio/gafete_prestado.rs` (`quienes_llevan`). | ✅ |
+| F8 | **Salida por número de gafete:** se busca a quien lo devuelve entre los que están adentro (en la vía de la pantalla o en las cuatro). Si nadie lo tiene, se rechaza (`gafete_sin_portador`). Cada tipo tiene su numeración, así que un número puede estar en uso en más de una vía a la vez: entonces no se adivina, se rechaza (`gafete_en_varias_vias`, nombrando las vías) y la salida se registra desde la fila de la persona. | ✅ |
 
 ## H. Proveedores
 

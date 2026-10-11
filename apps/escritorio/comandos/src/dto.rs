@@ -33,6 +33,7 @@ use limen_dominio::empresa::{Empresa, EmpresaId};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
 use limen_dominio::gafete::{NumeroGafete, Portador, Resolucion, TipoGafete};
 use limen_dominio::ingreso_contratista::ErrorIngreso;
+use limen_dominio::ingreso_proveedor::ErrorIngresoProveedor;
 use limen_dominio::medio::{Medio, TipoMedio};
 use limen_dominio::personal_kof::{PersonalKof, PersonalKofId};
 use limen_dominio::presencia::{Via, YaEstaAdentro};
@@ -49,6 +50,18 @@ const VEHICULO: &str = "VEHICULO";
 
 pub fn leer_uuid(texto: &str) -> Result<Uuid, ErrorEntrada> {
     Uuid::parse_str(texto.trim()).map_err(|_| ErrorEntrada::IdInvalido)
+}
+
+/// La persona del personal KOF elegida en el formulario: vacío es "todavía
+/// no la eligió" (`None`; que falte lo dice el dominio) y un identificador
+/// mal formado es un error de entrada en su campo.
+pub fn leer_persona_kof(texto: &str) -> Result<Option<PersonalKofId>, ErrorJson> {
+    if texto.trim().is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(PersonalKofId::desde_uuid(
+        leer_uuid(texto).map_err(en(campos::PERSONA))?,
+    )))
 }
 
 pub fn leer_via(codigo: &str) -> Result<Via, ErrorEntrada> {
@@ -455,16 +468,20 @@ impl EntradaProveedorEntrada {
         })
     }
 
+    /// Sin empresa elegida no es un identificador ilegible: falta, y eso lo
+    /// dice el dominio (`empresa_proveedora_requerida`).
     pub fn a_comando(&self) -> Result<ComandoEntradaProveedor, ErrorJson> {
+        let borrador = self.a_borrador()?;
+        let empresa = borrador.empresa.ok_or_else(|| {
+            campos::con_campo(ErrorCaso::Negocio(ErrorIngresoProveedor::EmpresaRequerida))
+        })?;
         Ok(ComandoEntradaProveedor {
-            cedula: self.cedula.clone(),
-            nombre: self.nombre.clone(),
-            empresa: EmpresaProveedoraId::desde_uuid(
-                leer_uuid(&self.empresa_id).map_err(en(campos::EMPRESA))?,
-            ),
-            medio: leer_medio(&self.medio).map_err(en(campos::MEDIO))?,
-            placa: self.placa.clone(),
-            gafete: self.gafete,
+            cedula: borrador.cedula,
+            nombre: borrador.nombre,
+            empresa,
+            medio: borrador.medio,
+            placa: borrador.placa,
+            gafete: borrador.gafete,
         })
     }
 }

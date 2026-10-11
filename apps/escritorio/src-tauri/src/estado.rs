@@ -1,12 +1,10 @@
 //! Lo que Tauri comparte entre todos los comandos.
 
-use limen_composicion::AplicacionLimen;
+use limen_composicion::{Almacen, AplicacionLimen, ClavesLimen, IdsLimen, RelojLimen};
 use limen_escritorio_comandos::Comandos;
-use limen_infra_plataforma::{ClavesArgon2, IdsV7, RelojConfiable};
-use limen_infra_surreal::AlmacenSurreal;
 
 /// Los comandos con los adaptadores reales.
-pub type ComandosLimen = Comandos<AlmacenSurreal, RelojConfiable, IdsV7, ClavesArgon2>;
+pub type ComandosLimen = Comandos<Almacen, RelojLimen, IdsLimen, ClavesLimen>;
 
 /// Estado administrado por Tauri, sin candado global: la concurrencia de la
 /// base la maneja su adaptador, y la sesión del equipo vive en los comandos.

@@ -403,6 +403,7 @@ mod tests {
         let carpeta = std::env::temp_dir().join(format!("limen-composicion-{}", Uuid::now_v7()));
         let config = Config {
             ruta_base: carpeta.clone(),
+            ruta_desfase_reloj: carpeta.join("reloj-desfase.txt"),
         };
         {
             let app = AplicacionLimen::abrir(&config, &RelojConfiable::new(None))
@@ -456,6 +457,7 @@ mod tests {
         std::fs::write(&archivo, b"no soy una carpeta").unwrap();
         let config = Config {
             ruta_base: archivo.join("base"),
+            ruta_desfase_reloj: archivo.join("reloj-desfase.txt"),
         };
         let error = AplicacionLimen::abrir(&config, &RelojConfiable::new(None))
             .await

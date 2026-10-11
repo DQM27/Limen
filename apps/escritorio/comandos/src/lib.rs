@@ -22,12 +22,13 @@ use limen_composicion::Aplicacion;
 use limen_dominio::contratista::ContratistaId;
 use limen_dominio::empresa::EmpresaId;
 use limen_dominio::empresa_proveedora::EmpresaProveedoraId;
+use limen_dominio::gafete::NumeroGafete;
 use limen_dominio::ingreso_contratista::IngresoId;
 use limen_dominio::ingreso_correo::IngresoCorreoId;
 use limen_dominio::ingreso_proveedor::IngresoProveedorId;
 use limen_dominio::personal_kof::PersonalKofId;
 use limen_dominio::presencia::Via;
-use limen_dominio::prestamo_kof::PrestamoKofId;
+use limen_dominio::prestamo_kof::{ErrorPrestamoKof, PrestamoKofId};
 
 pub use dto::{
     AccesoDto, CambioDto, CambioGafeteEntrada, CandidatoIngresoDto, ContratistaDto,
@@ -40,7 +41,7 @@ pub use error::{ErrorEntrada, ErrorJson, TipoErrorJson};
 pub use sesion::{SesionDelEquipo, UsuarioActual};
 
 use campos::con_campo;
-use dto::{leer_fecha_opcional, leer_tipo_gafete, leer_uuid, leer_via};
+use dto::{leer_fecha_opcional, leer_persona_kof, leer_tipo_gafete, leer_uuid, leer_via};
 use limen_aplicacion::errores::ErrorCaso;
 
 /// El nombre de una persona como se ve mientras se escribe: en mayúsculas y
@@ -166,14 +167,26 @@ where
         Ok(())
     }
 
-    /// Registra la salida por el número del gafete que devuelve la persona.
+    /// Registra la salida de quien devuelve el gafete con este número y
+    /// devuelve su nombre. Sin `via` busca en las cuatro; quién lo tiene (o
+    /// por qué no se sabe) lo decide el dominio (F8).
     pub async fn registrar_salida_por_gafete(
         &self,
         sesion: &Sesion,
-        via: &str,
+        via: Option<&str>,
         numero: u32,
-    ) -> Result<(), ErrorJson> {
-        match leer_via(via)? {
+    ) -> Result<String, ErrorJson> {
+        let via = via.map(leer_via).transpose()?;
+        let numero =
+            NumeroGafete::nuevo(numero).map_err(|error| con_campo(ErrorCaso::Negocio(error)))?;
+        let persona = self
+            .app
+            .quienes_estan_adentro
+            .quien_devuelve(numero, via)
+            .await
+            .map_err(con_campo)?;
+        let numero = numero.valor();
+        match persona.ingreso.via() {
             Via::Contratista => self.app.ingresos.salida.por_gafete(sesion, numero).await?,
             Via::Proveedor => {
                 self.app
@@ -191,7 +204,7 @@ where
                     .await?;
             }
         }
-        Ok(())
+        Ok(persona.nombre.to_string())
     }
 
     /// Todos los contratistas con el nombre de su empresa, para la grilla.
@@ -530,13 +543,7 @@ where
         personal_id: &str,
         gafete: u32,
     ) -> Result<Vec<ErrorJson>, ErrorJson> {
-        let persona = if personal_id.trim().is_empty() {
-            None
-        } else {
-            Some(PersonalKofId::desde_uuid(leer_uuid(personal_id).map_err(
-                |e| ErrorJson::from(e).en_campo(Some(campos::PERSONA)),
-            )?))
-        };
+        let persona = leer_persona_kof(personal_id)?;
         let problemas = self
             .app
             .kof
@@ -595,16 +602,10 @@ where
         personal_id: &str,
         gafete: u32,
     ) -> Result<String, ErrorJson> {
-        // Sin persona elegida no es un identificador ilegible: falta elegirla.
-        if personal_id.trim().is_empty() {
-            return Err(
-                ErrorJson::from(ErrorEntrada::PersonaRequerida).en_campo(Some(campos::PERSONA))
-            );
-        }
-        let persona = PersonalKofId::desde_uuid(
-            leer_uuid(personal_id)
-                .map_err(|e| ErrorJson::from(e).en_campo(Some(campos::PERSONA)))?,
-        );
+        // Sin persona elegida no es un identificador ilegible: falta elegirla,
+        // y eso lo dice el dominio.
+        let persona = leer_persona_kof(personal_id)?
+            .ok_or_else(|| con_campo(ErrorCaso::Negocio(ErrorPrestamoKof::PersonaRequerida)))?;
         let id = self
             .app
             .kof

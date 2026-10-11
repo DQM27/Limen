@@ -225,9 +225,12 @@ export function registrarSalida(via: Via, ingresoId: string): Promise<void> {
   return invocar<void>('registrar_salida', { via, ingresoId });
 }
 
-/** Registra la salida por el número del gafete que devuelve la persona. */
-export function registrarSalidaPorGafete(via: Via, numero: number): Promise<void> {
-  return invocar<void>('registrar_salida_por_gafete', { via, numero });
+/**
+ * Registra la salida de quien devuelve el gafete con este número y devuelve
+ * su nombre. Sin vía (`null`) lo busca en las cuatro.
+ */
+export function registrarSalidaPorGafete(via: Via | null, numero: number): Promise<string> {
+  return invocar<string>('registrar_salida_por_gafete', { via, numero });
 }
 
 // --- Sesión (bloque L) ---

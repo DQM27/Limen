@@ -838,11 +838,6 @@ impl RepositorioUsuarios for UsuariosSurreal {
         Ok(!encontrados.is_empty())
     }
 
-    async fn todos(&self) -> Result<Vec<Usuario>, ErrorPersistencia> {
-        self.varios("SELECT * FROM usuario ORDER BY nombre, cedula", None)
-            .await
-    }
-
     fn guardar(&mut self, usuario: &Usuario) {
         self.pendientes.push(Escritura::guardar(
             id_usuario(usuario.id()),

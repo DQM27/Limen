@@ -210,6 +210,11 @@ describe('comandos del núcleo', () => {
         'registrar_salida_por_gafete',
         { via: 'PROVEEDOR', numero: 4 },
       ],
+      [
+        () => registrarSalidaPorGafete(null, 4),
+        'registrar_salida_por_gafete',
+        { via: null, numero: 4 },
+      ],
     ];
     for (const [llamar, comando, argumentos] of casos) {
       vi.mocked(invoke).mockClear();

@@ -1,15 +1,14 @@
 //! Cascarón de Tauri de la app de escritorio de Limen.
 //!
-//! Sólo hace tres cosas: abre la base de este equipo con
-//! `AplicacionLimen::abrir`, la guarda como estado compartido y registra los
-//! comandos. Las reglas viven en `crates/dominio` y la lógica de cada comando
+//! Sólo hace tres cosas: arranca la aplicación de este equipo con
+//! `AplicacionLimen::arrancar`, la guarda como estado compartido y registra
+//! los comandos. Las reglas viven en `crates/dominio` y la lógica de cada comando
 //! en `limen-escritorio-comandos`.
 
 mod comandos;
 mod estado;
 
 use limen_composicion::{AplicacionLimen, Config};
-use limen_infra_plataforma::{RelojConfiable, SERVIDORES_NTP, leer_desfase};
 use tauri::Manager;
 
 use estado::Estado;
@@ -28,17 +27,10 @@ const ESPERA_MAXIMA_VENTANA_OCULTA: std::time::Duration = std::time::Duration::f
 fn preparar_estado(app: &tauri::App) -> Result<Estado, Box<dyn std::error::Error>> {
     let datos = app.path().app_data_dir()?;
     std::fs::create_dir_all(&datos)?;
-    // La hora se corrige contra NTP en segundo plano: hasta la primera
-    // medición, la hora sale sin comprobar (y queda marcada, regla E5).
-    let ruta_desfase = datos.join(ARCHIVO_DESFASE_RELOJ);
-    let reloj = RelojConfiable::new(leer_desfase(&ruta_desfase));
-    reloj.sincronizar_en_segundo_plano(&SERVIDORES_NTP, ruta_desfase);
-    let aplicacion = tauri::async_runtime::block_on(AplicacionLimen::abrir(
-        &Config {
-            ruta_base: datos.join(CARPETA_BASE),
-        },
-        &reloj,
-    ))?;
+    let aplicacion = tauri::async_runtime::block_on(AplicacionLimen::arrancar(&Config {
+        ruta_base: datos.join(CARPETA_BASE),
+        ruta_desfase_reloj: datos.join(ARCHIVO_DESFASE_RELOJ),
+    }))?;
     Ok(Estado::new(aplicacion))
 }
 

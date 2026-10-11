@@ -1332,19 +1332,6 @@ impl RepositorioUsuarios for UsuariosMemoria {
         std::future::ready(self.almacen.leer(|c| !c.usuarios.is_empty()))
     }
 
-    fn todos(&self) -> impl Future<Output = Result<Vec<Usuario>, ErrorPersistencia>> + Send {
-        std::future::ready(self.almacen.leer(|c| {
-            let mut usuarios: Vec<Usuario> = c.usuarios.values().cloned().collect();
-            usuarios.sort_by(|a, b| {
-                a.nombre()
-                    .as_str()
-                    .cmp(b.nombre().as_str())
-                    .then_with(|| a.cedula().as_str().cmp(b.cedula().as_str()))
-            });
-            usuarios
-        }))
-    }
-
     fn guardar(&mut self, usuario: &Usuario) {
         self.pendientes.push(usuario.clone());
     }

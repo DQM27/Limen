@@ -18,7 +18,7 @@ import { Avisos } from '../compartido/avisos';
 import { DialogoConfirmar, type DatosConfirmar } from '../compartido/dialogo-confirmar';
 import { soloFecha, soloHora } from '../compartido/formato';
 import { Tabla } from '../compartido/tabla/tabla';
-import { dentro, registrarSalida } from '../nucleo/comandos';
+import { dentro, registrarSalida, registrarSalidaPorGafete } from '../nucleo/comandos';
 import { esErrorApp } from '../nucleo/tauri';
 import type { PersonaAdentro, Via } from '../nucleo/tipos';
 import {
@@ -33,6 +33,17 @@ import {
 /** El mensaje de un error del núcleo, o uno general si falló otra cosa. */
 function mensajeDe(error: unknown, general: string): string {
   return esErrorApp(error) ? error.mensaje : general;
+}
+
+/** El título del aviso cuando falla la salida por número de gafete. */
+function tituloDelError(error: unknown): string {
+  if (esErrorApp(error) && error.codigo === 'gafete_sin_portador') {
+    return 'Gafete no encontrado';
+  }
+  if (esErrorApp(error) && error.codigo === 'gafete_en_varias_vias') {
+    return 'Gafete repetido';
+  }
+  return 'No se pudo registrar la salida';
 }
 
 /**
@@ -198,30 +209,23 @@ export class ListaDentro implements OnInit {
   }
 
   /**
-   * La salida de quien devuelve este gafete. Cada tipo de gafete tiene su
-   * numeración, así que un número puede estar en uso en más de una vía a la
-   * vez: si pasa, no se adivina; se pide usar el botón de la fila.
+   * La salida de quien devuelve este gafete, buscándolo en la vía de esta
+   * lista (o en las cuatro). Quién lo tiene, o por qué no se sabe (nadie lo
+   * tiene, o el número está en uso en varias vías), lo decide el núcleo.
    */
   protected async salidaPorGafete(): Promise<void> {
     const texto = this.gafete();
     if (texto === '') {
       return;
     }
-    const numero = Number(texto);
-    const tienen = this.filas().filter((p) => p.gafete === numero);
-    const [unica] = tienen;
-    if (tienen.length === 1 && unica) {
-      await this.salida(unica);
+    try {
+      const nombre = await registrarSalidaPorGafete(this.via(), Number(texto));
+      this.avisos.exito(nombre, 'Salida registrada');
       this.gafete.set('');
-    } else if (tienen.length === 0) {
-      this.avisos.error(`Nadie tiene adentro el gafete ${numero}`, 'Gafete no encontrado');
-    } else {
-      const vias = tienen.map((p) => etiquetaDeVia(p.via)).join(', ');
-      this.avisos.error(
-        `El gafete ${numero} está en uso en varias vías (${vias}): use el botón «Salida» de la fila`,
-        'Gafete repetido',
-      );
+    } catch (error) {
+      this.avisos.error(mensajeDe(error, 'inténtalo de nuevo'), tituloDelError(error));
     }
+    await this.cargar();
   }
 
   /** La salida de una persona, sin pedir confirmación: es lo de todos los días. */

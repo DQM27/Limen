@@ -3145,8 +3145,6 @@ version = "0.1.0"
 dependencies = [
  "limen-composicion",
  "limen-escritorio-comandos",
- "limen-infra-plataforma",
- "limen-infra-surreal",
  "tauri",
  "tauri-build",
  "tauri-plugin-log",

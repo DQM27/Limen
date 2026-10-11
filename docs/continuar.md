@@ -80,8 +80,8 @@ falta el detalle, [`arquitectura.md`](arquitectura.md), [`reglas.md`](reglas.md)
   - **Atajos de teclado** (directiva `compartido/atajo.ts`): `F2` registra el ingreso (o
     entrega el gafete en KOF), `Ctrl+N` crea (contratista, personal), `/` busca en la
     tabla y `F4` lleva al campo de **salida por gafete** de las listas de Dentro (número y
-    Enter). Si el mismo número está en uso en dos vías no se adivina: pide usar el botón
-    de la fila. Con un modal abierto los atajos de atrás no valen.
+    Enter). Quién devuelve el gafete lo decide el núcleo (regla F8): si el mismo número
+    está en uso en dos vías no se adivina y pide usar el botón de la fila. Con un modal abierto los atajos de atrás no valen.
   - **Gafetes:** por tipo, con "asignado a" (regla F7), crear por rango y gestionar
     (perdido con su último portador, pagado, apareció, de baja).
 - Lo que se escribe se ve como quedará al guardarse (nombre y empresa en mayúsculas,

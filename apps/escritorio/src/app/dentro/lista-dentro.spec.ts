@@ -238,7 +238,17 @@ describe('lista de quién está adentro', () => {
     }
 
     it('el campo sólo admite dígitos', async () => {
-      vi.mocked(invoke).mockResolvedValue([]);
+      // El núcleo rechaza la salida: el número queda escrito para revisarlo.
+      vi.mocked(invoke).mockImplementation((comando: string) =>
+        comando === 'registrar_salida_por_gafete'
+          ? Promise.reject({
+              tipo: 'negocio',
+              codigo: 'gafete_sin_portador',
+              mensaje: 'Nadie tiene adentro el gafete 12',
+              campo: 'gafete',
+            })
+          : Promise.resolve([]),
+      );
       const { fixture, raiz } = await crear();
 
       const campo = await escribir(raiz, fixture, '1a2');
@@ -246,49 +256,68 @@ describe('lista de quién está adentro', () => {
       expect(campo.value).toBe('12');
     });
 
-    it('con Enter registra la salida de quien tiene ese gafete y limpia el campo', async () => {
-      vi.mocked(invoke).mockResolvedValue([
-        persona('1', 'ANA', { gafete: 7 }),
-        persona('2', 'BETO'),
-      ]);
+    it('con Enter pide al núcleo la salida de ese gafete en la vía de la lista y limpia el campo', async () => {
+      vi.mocked(invoke).mockImplementation((comando: string) =>
+        Promise.resolve(comando === 'registrar_salida_por_gafete' ? 'ANA' : []),
+      );
       const { fixture, raiz } = await crear();
+      const exito = vi.spyOn(TestBed.inject(Avisos), 'exito');
 
       const campo = await escribir(raiz, fixture, '7');
 
-      await vi.waitFor(() => expect(llamadas('registrar_salida')).toHaveLength(1));
-      expect(llamadas('registrar_salida')[0]?.[1]).toEqual({
-        via: 'CONTRATISTA',
-        ingresoId: '1',
-      });
+      await vi.waitFor(() => expect(llamadas('registrar_salida_por_gafete')).toHaveLength(1));
+      expect(llamadas('registrar_salida_por_gafete')[0]?.[1]).toEqual({ via: null, numero: 7 });
       await vi.waitFor(() => expect(campo.value).toBe(''));
+      expect(exito).toHaveBeenCalledWith('ANA', 'Salida registrada');
     });
 
-    it('si nadie lo tiene, avisa y no registra nada', async () => {
-      vi.mocked(invoke).mockResolvedValue([persona('1', 'ANA', { gafete: 7 })]);
+    it('si nadie lo tiene, muestra lo que dice el núcleo y deja el número', async () => {
+      vi.mocked(invoke).mockImplementation((comando: string) =>
+        comando === 'registrar_salida_por_gafete'
+          ? Promise.reject({
+              tipo: 'negocio',
+              codigo: 'gafete_sin_portador',
+              mensaje: 'Nadie tiene adentro el gafete 9',
+              campo: 'gafete',
+            })
+          : Promise.resolve([]),
+      );
       const { fixture, raiz } = await crear();
       const error = vi.spyOn(TestBed.inject(Avisos), 'error');
 
-      await escribir(raiz, fixture, '9');
+      const campo = await escribir(raiz, fixture, '9');
 
-      expect(error).toHaveBeenCalledWith('Nadie tiene adentro el gafete 9', 'Gafete no encontrado');
-      expect(llamadas('registrar_salida')).toHaveLength(0);
+      await vi.waitFor(() =>
+        expect(error).toHaveBeenCalledWith(
+          'Nadie tiene adentro el gafete 9',
+          'Gafete no encontrado',
+        ),
+      );
+      expect(campo.value).toBe('9');
     });
 
-    it('si el número está en dos vías, no adivina: pide usar el botón de la fila', async () => {
-      vi.mocked(invoke).mockResolvedValue([
-        persona('1', 'ANA', { gafete: 7 }),
-        persona('2', 'BETO', { via: 'PROVEEDOR', gafete: 7 }),
-      ]);
+    it('si el número está en varias vías, el núcleo no adivina y se avisa', async () => {
+      vi.mocked(invoke).mockImplementation((comando: string) =>
+        comando === 'registrar_salida_por_gafete'
+          ? Promise.reject({
+              tipo: 'negocio',
+              codigo: 'gafete_en_varias_vias',
+              mensaje: 'El gafete 7 está en uso en varias vías (contratista, proveedor)',
+              campo: 'gafete',
+            })
+          : Promise.resolve([]),
+      );
       const { fixture, raiz } = await crear();
       const error = vi.spyOn(TestBed.inject(Avisos), 'error');
 
       await escribir(raiz, fixture, '7');
 
-      expect(error).toHaveBeenCalledWith(
-        expect.stringContaining('Contratista, Proveedor'),
-        'Gafete repetido',
+      await vi.waitFor(() =>
+        expect(error).toHaveBeenCalledWith(
+          expect.stringContaining('(contratista, proveedor)'),
+          'Gafete repetido',
+        ),
       );
-      expect(llamadas('registrar_salida')).toHaveLength(0);
     });
 
     it('un campo vacío no hace nada', async () => {
@@ -299,7 +328,7 @@ describe('lista de quién está adentro', () => {
       await escribir(raiz, fixture, '');
 
       expect(error).not.toHaveBeenCalled();
-      expect(llamadas('registrar_salida')).toHaveLength(0);
+      expect(llamadas('registrar_salida_por_gafete')).toHaveLength(0);
     });
   });
 

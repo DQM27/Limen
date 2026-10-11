@@ -180,13 +180,13 @@ pub async fn registrar_salida(
 #[tauri::command]
 pub async fn registrar_salida_por_gafete(
     estado: State<'_, Estado>,
-    via: String,
+    via: Option<String>,
     numero: u32,
-) -> Resultado<()> {
+) -> Resultado<String> {
     let sesion = estado.comandos().sesion()?;
     estado
         .comandos()
-        .registrar_salida_por_gafete(&sesion, &via, numero)
+        .registrar_salida_por_gafete(&sesion, via.as_deref(), numero)
         .await
 }
 
