@@ -101,33 +101,36 @@
           matInput
           autocomplete="off"
           [formControl]="busqueda"
+          [matAutocomplete]="lista"
           (keydown.enter)="alPulsarEnter($event)"
         />
-      </mat-form-field>
-
-      @if (resultados().length > 0) {
-        <ul class="resultados" aria-label="Resultados">
+        <!-- Los resultados flotan bajo el campo: el modal no cambia de tamaño al buscar. -->
+        <mat-autocomplete
+          #lista="matAutocomplete"
+          autoActiveFirstOption
+          class="panel-ingreso"
+          [displayWith]="sinTexto"
+          (optionSelected)="elegir($event.option.value)"
+        >
           @for (candidato of resultados(); track candidato.id) {
-            <li>
-              <button type="button" class="resultado" (click)="elegir(candidato)">
-                <span class="nombre">{{ candidato.nombre }}</span>
-                <span class="detalle">
-                  {{ candidato.cedula }} · {{ candidato.empresa_nombre ?? 'Sin empresa' }}
-                </span>
-                <span class="estado" [class.malo]="!candidato.puede_entrar">
-                  {{ estado(candidato) }}
-                </span>
-              </button>
-            </li>
+            <mat-option class="opcion" [value]="candidato">
+              <span class="nombre">{{ candidato.nombre }}</span>
+              <span class="detalle">
+                {{ candidato.cedula }} · {{ candidato.empresa_nombre ?? 'Sin empresa' }}
+              </span>
+              <span class="estado" [class.malo]="!candidato.puede_entrar">
+                {{ estado(candidato) }}
+              </span>
+            </mat-option>
           }
-        </ul>
-      } @else if (sinResultados()) {
-        <p class="ayuda">
-          No se encontró a nadie. Si es nuevo, créalo antes con «Nuevo contratista».
-        </p>
-      } @else {
-        <p class="ayuda">Escribe la cédula o el nombre. Con Enter se elige el primer resultado.</p>
-      }
+          @if (sinResultados()) {
+            <mat-option disabled class="opcion">
+              No se encontró a nadie. Si es nuevo, créalo antes con «Nuevo contratista».
+            </mat-option>
+          }
+        </mat-autocomplete>
+      </mat-form-field>
+      <p class="ayuda">Escribe la cédula o el nombre. Elige con las flechas y Enter.</p>
     }
 
     <p class="error" role="alert">{{ errorGeneral() }}</p>

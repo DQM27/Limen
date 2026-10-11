@@ -84,12 +84,17 @@ async function crear(
     if (!campo) {
       throw new Error('no hay buscador');
     }
+    // La lista sólo se despliega si el campo tiene el foco, como en uso real.
+    campo.focus();
     campo.value = texto;
     campo.dispatchEvent(new Event('input'));
     await refrescar();
   };
+  /** Las coincidencias flotan en la capa de encima del modal, no dentro de él. */
+  const opciones = () => [...document.querySelectorAll<HTMLElement>('mat-option.opcion')];
   const elegirPrimero = async () => {
-    raiz.querySelector<HTMLButtonElement>('button.resultado')?.click();
+    await vi.waitFor(() => expect(opciones().length).toBeGreaterThan(0));
+    opciones()[0]?.click();
     await refrescar();
   };
   const enviar = async () => {
@@ -103,6 +108,7 @@ async function crear(
     boton,
     refrescar,
     escribirBusqueda,
+    opciones,
     elegirPrimero,
     enviar,
     componente: fixture.componentInstance,
@@ -113,6 +119,7 @@ describe('modal de ingreso de contratista', () => {
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
     responder();
+    document.querySelectorAll('.cdk-overlay-container > *').forEach((e) => e.remove());
   });
 
   it('empieza por buscar y no se puede registrar todavía', async () => {
@@ -137,12 +144,13 @@ describe('modal de ingreso de contratista', () => {
         candidato({ id: 'c3', nombre: 'CARLA', adentro_por: 'CONTRATISTA', puede_entrar: false }),
       ],
     });
-    const { raiz, escribirBusqueda } = await crear();
+    const { escribirBusqueda, opciones } = await crear();
 
     await escribirBusqueda('a');
 
     expect(invoke).toHaveBeenCalledWith('buscar_para_ingreso', { texto: 'a', limite: 8 });
-    const filas = [...raiz.querySelectorAll('button.resultado')].map((b) => ({
+    await vi.waitFor(() => expect(opciones()).toHaveLength(3));
+    const filas = opciones().map((b) => ({
       nombre: b.querySelector('.nombre')?.textContent?.trim(),
       estado: b.querySelector('.estado')?.textContent?.trim(),
       malo: b.querySelector('.estado')?.classList.contains('malo'),
@@ -155,12 +163,32 @@ describe('modal de ingreso de contratista', () => {
   });
 
   it('si no encuentra a nadie, dice cómo crearlo', async () => {
-    const { raiz, escribirBusqueda } = await crear();
+    const { escribirBusqueda } = await crear();
 
     await escribirBusqueda('zzz');
 
-    expect(raiz.textContent).toContain('No se encontró a nadie');
-    expect(raiz.textContent).toContain('Nuevo contratista');
+    await vi.waitFor(() =>
+      expect(document.querySelector('mat-option.opcion')?.textContent).toContain(
+        'No se encontró a nadie',
+      ),
+    );
+    expect(document.querySelector('mat-option.opcion')?.textContent).toContain('Nuevo contratista');
+  });
+
+  it('las coincidencias flotan fuera del modal: no cambian lo que hay dentro de él', async () => {
+    responder({ buscar_para_ingreso: [candidato(), candidato({ id: 'c2', nombre: 'OTRO' })] });
+    const { raiz, escribirBusqueda, opciones } = await crear();
+    const antes = raiz.innerHTML;
+
+    await escribirBusqueda('a');
+    await vi.waitFor(() => expect(opciones()).toHaveLength(2));
+
+    expect(opciones().some((o) => raiz.contains(o))).toBe(false);
+    expect(raiz.querySelector('.resultados, .resultado')).toBeNull();
+    // Lo único que cambia dentro del modal es el texto del campo y el estado del autocompletar.
+    expect(raiz.querySelectorAll('mat-form-field')).toHaveLength(1);
+    expect(antes).toContain('Escribe la cédula o el nombre');
+    expect(raiz.textContent).toContain('Escribe la cédula o el nombre');
   });
 
   it('elegir a alguien que puede entrar muestra su ficha y el formulario del ingreso', async () => {

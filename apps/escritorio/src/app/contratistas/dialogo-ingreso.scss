@@ -2,6 +2,12 @@
 
 @include dialogo.compacto;
 
+// El alto no depende del paso: buscar y ver la ficha ocupan lo mismo, así el
+// modal no da saltos al elegir a alguien ni al aparecer coincidencias.
+mat-dialog-content {
+  min-height: 250px;
+}
+
 .buscador {
   width: 100%;
   margin-top: 8px;
@@ -76,28 +82,20 @@
   }
 }
 
-// Los resultados de la búsqueda: uno bajo otro, cada uno un botón.
-.resultados {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 8px 0 0;
-  padding: 0;
-  list-style: none;
-}
+// Cada coincidencia de la lista flotante: nombre y datos a la izquierda, lo
+// que dijo el núcleo sobre su acceso a la derecha.
+.opcion {
+  --mat-option-label-text-line-height: 1.2;
 
-.resultado {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0 12px;
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--mat-sys-outline-variant);
-  border-radius: 8px;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
+  min-height: 56px;
+
+  ::ng-deep .mdc-list-item__primary-text {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0 12px;
+    align-items: center;
+    width: 100%;
+  }
 
   .nombre {
     grid-column: 1;
@@ -112,7 +110,6 @@
   .estado {
     grid-column: 2;
     grid-row: 1 / span 2;
-    align-self: center;
     max-width: 180px;
     color: var(--aviso-exito);
     font: var(--mat-sys-label-small);
@@ -121,14 +118,5 @@
     &.malo {
       color: var(--mat-sys-error);
     }
-  }
-
-  &:hover {
-    background: var(--mat-sys-secondary-container);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--mat-sys-primary);
-    outline-offset: 1px;
   }
 }

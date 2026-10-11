@@ -87,6 +87,13 @@ h1 {
   background-color: var(--mat-sys-error-container);
 }
 
+// La lista flotante del buscador de ingreso (la capa flotante está fuera del
+// componente): del ancho del campo y con alto máximo, para que desplace.
+.panel-ingreso.mat-mdc-autocomplete-panel {
+  max-height: 300px;
+  border-radius: 12px;
+}
+
 // El botón de una celda de acción ("Salida" en Dentro, "Ingreso" en Contratistas).
 .boton-celda {
   height: 26px;

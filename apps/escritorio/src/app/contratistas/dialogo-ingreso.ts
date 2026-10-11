@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -50,6 +51,7 @@ function soloDigitos(texto: string): string {
   selector: 'app-dialogo-ingreso',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    MatAutocompleteModule,
     MatButtonModule,
     MatButtonToggleModule,
     MatCheckboxModule,
@@ -145,12 +147,19 @@ export class DialogoIngreso {
       : null;
   }
 
-  /** Enter en el buscador elige el primer resultado (el que mejor coincide): sirve al leer una cédula. */
+  /** Al elegir de la lista, el campo no muestra nada: la persona pasa a la ficha. */
+  protected sinTexto = (): string => '';
+
+  /**
+   * Enter en el buscador elige el primer resultado (el que mejor coincide):
+   * sirve al leer una cédula, aunque la lista todavía no se haya desplegado.
+   * Si la lista ya estaba abierta, ella misma elige la opción activa.
+   */
   protected async alPulsarEnter(evento: Event): Promise<void> {
     evento.preventDefault();
     await this.buscar(this.busqueda.value);
     const primero = this.resultados()[0];
-    if (primero) {
+    if (primero && this.candidato() === null) {
       this.elegir(primero);
     }
   }
