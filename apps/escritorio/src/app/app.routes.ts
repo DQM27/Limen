@@ -20,6 +20,11 @@ export const routes: Routes = [
       import('./proveedores/proveedores-pagina').then((m) => m.ProveedoresPagina),
   },
   {
+    path: 'correo',
+    title: 'Correo · Limen',
+    loadComponent: () => import('./correo/correo-pagina').then((m) => m.CorreoPagina),
+  },
+  {
     path: 'gafetes',
     title: 'Gafetes · Limen',
     loadComponent: () => import('./gafetes/gafetes-pagina').then((m) => m.GafetesPagina),
