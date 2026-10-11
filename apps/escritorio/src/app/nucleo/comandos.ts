@@ -69,6 +69,11 @@ export function nombrePersonaAlEscribir(texto: string): Promise<string> {
   return invocar<string>('nombre_persona_al_escribir', { texto });
 }
 
+/** La placa de un vehículo como quedará al guardarse (mayúsculas). */
+export function placaAlEscribir(texto: string): Promise<string> {
+  return invocar<string>('placa_al_escribir', { texto });
+}
+
 /** Lo mismo para el nombre de una empresa (mayúsculas). */
 export function nombreEmpresaAlEscribir(texto: string): Promise<string> {
   return invocar<string>('nombre_empresa_al_escribir', { texto });

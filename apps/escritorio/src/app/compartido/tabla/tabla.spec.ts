@@ -131,4 +131,19 @@ describe('Tabla (la grilla base de toda la app)', () => {
 
     expect(raiz.querySelector('ag-grid-angular')).not.toBeNull();
   });
+
+  it('una columna bloqueada (la del botón de una acción) no se ofrece para ocultarla', async () => {
+    const { fixture } = await crear();
+    const tabla = fixture.debugElement.children[0]?.componentInstance as unknown as {
+      columnasDelMenu(): { clave: string; titulo: string }[];
+    };
+    const anfitrion = fixture.componentInstance;
+    anfitrion.columnas = [
+      ...anfitrion.columnas,
+      { colId: 'accion', headerName: '', lockVisible: true },
+    ];
+    fixture.componentRef.changeDetectorRef.detectChanges();
+
+    expect(tabla.columnasDelMenu().map((c) => c.titulo)).toEqual(['Nombre', 'Empresa']);
+  });
 });

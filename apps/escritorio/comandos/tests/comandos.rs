@@ -17,7 +17,7 @@ mod tests {
     use limen_dominio::tipo_ingreso::TipoIngreso;
     use limen_escritorio_comandos::{
         Comandos, ContratistaEntrada, EntradaContratistaEntrada, ErrorJson, TipoErrorJson, campos,
-        nombre_empresa_al_escribir, nombre_persona_al_escribir,
+        nombre_empresa_al_escribir, nombre_persona_al_escribir, placa_al_escribir,
     };
     use limen_infra_memoria::{AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo};
     use serde_json::json;
@@ -530,6 +530,7 @@ mod tests {
     fn los_nombres_se_ven_en_mayusculas_mientras_se_escriben() {
         assert_eq!(nombre_persona_al_escribir("josé peña "), "JOSE PEÑA ");
         assert_eq!(nombre_empresa_al_escribir("acme s.a. "), "ACME S.A. ");
+        assert_eq!(placa_al_escribir("abc-123 "), "ABC-123 ");
     }
 
     #[tokio::test]

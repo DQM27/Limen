@@ -108,11 +108,12 @@ export class DentroPagina {
       sortable: false,
       filter: false,
       suppressMovable: true,
+      lockVisible: true,
       cellRenderer: () =>
-        '<button type="button" class="boton-salida" aria-label="Registrar salida">Salida</button>',
+        '<button type="button" class="boton-celda" aria-label="Registrar salida">Salida</button>',
       onCellClicked: (evento: CellClickedEvent<PersonaAdentro>) => {
         const clic = evento.event?.target as HTMLElement | null | undefined;
-        if (evento.data && clic?.closest('button.boton-salida')) {
+        if (evento.data && clic?.closest('button.boton-celda')) {
           void this.salida(evento.data);
         }
       },

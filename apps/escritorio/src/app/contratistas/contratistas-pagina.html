@@ -16,7 +16,11 @@
   [idFila]="idFila"
   (filaDobleClic)="abrirFormulario($event)"
 >
-  <button acciones mat-flat-button type="button" class="nuevo" (click)="abrirFormulario()">
+  <button acciones mat-flat-button type="button" class="ingreso" (click)="registrarIngreso()">
+    <mat-icon aria-hidden="true">login</mat-icon>
+    Registrar ingreso
+  </button>
+  <button acciones mat-stroked-button type="button" class="nuevo" (click)="abrirFormulario()">
     <mat-icon aria-hidden="true">add</mat-icon>
     Nuevo contratista
   </button>

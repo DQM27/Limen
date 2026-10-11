@@ -99,6 +99,7 @@ pub fn run() {
             comandos::validar_contratista,
             comandos::nombre_persona_al_escribir,
             comandos::nombre_empresa_al_escribir,
+            comandos::placa_al_escribir,
             comandos::registrar_entrada_contratista,
             comandos::buscar_para_ingreso,
             comandos::preparar_ingreso,

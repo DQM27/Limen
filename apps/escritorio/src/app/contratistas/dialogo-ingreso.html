@@ -1,0 +1,142 @@
+<form (submit)="$event.preventDefault(); registrar()" novalidate>
+  <div class="cabecera">
+    <h2 mat-dialog-title>Registrar ingreso</h2>
+    <button mat-icon-button type="button" class="cerrar" aria-label="Cerrar" (click)="cancelar()">
+      <mat-icon aria-hidden="true">close</mat-icon>
+    </button>
+  </div>
+
+  <mat-dialog-content>
+    @if (candidato(); as persona) {
+      <section class="ficha">
+        <div class="quien">
+          <strong class="nombre">{{ persona.nombre }}</strong>
+          <span class="detalle">
+            {{ persona.cedula }} · {{ persona.empresa_nombre ?? 'Sin empresa' }}
+          </span>
+          <span class="detalle">
+            {{ etiquetaDeTipo(persona.tipo_ingreso) }} · PRAIND vence
+            {{ fechaCorta(persona.fecha_vencimiento_praind) }}
+          </span>
+        </div>
+        @if (!abiertoEnPersona) {
+          <button mat-button type="button" class="cambiar" (click)="cambiar()">Cambiar</button>
+        }
+      </section>
+
+      @if (persona.adentro_por; as via) {
+        <p class="caja info" role="status">
+          Ya está adentro por {{ etiquetaDeVia(via) }}. Su salida se registra en «Dentro».
+        </p>
+      } @else if (!persona.puede_entrar) {
+        <p class="caja error" role="alert">{{ persona.motivo?.mensaje ?? 'No puede entrar.' }}</p>
+      } @else if (advertencia(persona); as texto) {
+        <p class="caja advertencia" role="status">PRAIND: {{ texto }}</p>
+      }
+
+      @if (persona.gafetes_perdidos.length > 0) {
+        <p class="caja info" role="status">
+          Tiene gafetes perdidos a su nombre: {{ persona.gafetes_perdidos.join(', ') }}.
+        </p>
+      }
+
+      @if (puedeEntrar()) {
+        <div class="campos">
+          <mat-button-toggle-group
+            class="medio"
+            aria-label="Medio de ingreso"
+            hideSingleSelectionIndicator
+            [formControl]="medio"
+          >
+            <mat-button-toggle value="A_PIE">A pie</mat-button-toggle>
+            <mat-button-toggle value="VEHICULO">En vehículo</mat-button-toggle>
+          </mat-button-toggle-group>
+
+          @if (enVehiculo()) {
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-label>Placa</mat-label>
+              <input
+                matInput
+                autocomplete="off"
+                [formControl]="placa"
+                (input)="escribirPlaca($event)"
+              />
+              @if (placa.errors?.['nucleo']; as mensaje) {
+                <mat-error>{{ mensaje }}</mat-error>
+              }
+            </mat-form-field>
+          }
+
+          @if (persona.requiere_gafete) {
+            <div class="gafete">
+              <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                <mat-label>Número de gafete</mat-label>
+                <input
+                  matInput
+                  inputmode="numeric"
+                  autocomplete="off"
+                  [formControl]="gafete"
+                  (input)="escribirGafete($event)"
+                />
+                @if (gafete.errors?.['nucleo']; as mensaje) {
+                  <mat-error>{{ mensaje }}</mat-error>
+                }
+              </mat-form-field>
+              <mat-checkbox
+                [checked]="sinGafete.value"
+                (change)="alMarcarSinGafete($event.checked)"
+              >
+                Sin gafete (S/G)
+              </mat-checkbox>
+            </div>
+          } @else {
+            <p class="ayuda">IN HOUSE: su credencial ya es el gafete, no se le asigna uno.</p>
+          }
+        </div>
+      }
+    } @else {
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="buscador">
+        <mat-label>Cédula o nombre</mat-label>
+        <input
+          matInput
+          autocomplete="off"
+          [formControl]="busqueda"
+          (keydown.enter)="alPulsarEnter($event)"
+        />
+      </mat-form-field>
+
+      @if (resultados().length > 0) {
+        <ul class="resultados" aria-label="Resultados">
+          @for (candidato of resultados(); track candidato.id) {
+            <li>
+              <button type="button" class="resultado" (click)="elegir(candidato)">
+                <span class="nombre">{{ candidato.nombre }}</span>
+                <span class="detalle">
+                  {{ candidato.cedula }} · {{ candidato.empresa_nombre ?? 'Sin empresa' }}
+                </span>
+                <span class="estado" [class.malo]="!candidato.puede_entrar">
+                  {{ estado(candidato) }}
+                </span>
+              </button>
+            </li>
+          }
+        </ul>
+      } @else if (sinResultados()) {
+        <p class="ayuda">
+          No se encontró a nadie. Si es nuevo, créalo antes con «Nuevo contratista».
+        </p>
+      } @else {
+        <p class="ayuda">Escribe la cédula o el nombre. Con Enter se elige el primer resultado.</p>
+      }
+    }
+
+    <p class="error" role="alert">{{ errorGeneral() }}</p>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" (click)="cancelar()">Cancelar</button>
+    <button mat-flat-button type="submit" [disabled]="enviando() || !puedeEntrar()">
+      Registrar ingreso
+    </button>
+  </mat-dialog-actions>
+</form>

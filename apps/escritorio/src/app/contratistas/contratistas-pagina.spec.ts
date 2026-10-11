@@ -98,4 +98,56 @@ describe('pantalla de contratistas', () => {
     );
     TestBed.inject(MatDialog).closeAll();
   });
+
+  it('el botón "Registrar ingreso" abre el modal empezando por la búsqueda', async () => {
+    vi.mocked(invoke).mockResolvedValue([]);
+    const { fixture, raiz } = await crear();
+
+    raiz.querySelector<HTMLButtonElement>('button.ingreso')?.click();
+    await fixture.whenStable();
+
+    const modal = document.querySelector('app-dialogo-ingreso');
+    expect(modal?.querySelector('h2')?.textContent).toContain('Registrar ingreso');
+    expect(modal?.querySelector('mat-label')?.textContent).toContain('Cédula o nombre');
+    expect(TestBed.inject(MatDialog).openDialogs[0]?.disableClose).toBe(true);
+    TestBed.inject(MatDialog).closeAll();
+  });
+
+  it('el botón "Ingreso" de una fila abre el modal directo en esa persona', async () => {
+    vi.mocked(invoke).mockImplementation((comando: string) =>
+      Promise.resolve(
+        comando === 'preparar_ingreso'
+          ? { ...fila('1', 'ANA'), puede_entrar: true, gafetes_perdidos: [], adentro_por: null }
+          : [fila('1', 'ANA')],
+      ),
+    );
+    const { fixture } = await crear();
+    const interno = fixture.componentInstance as unknown as {
+      columnas: { colId?: string; onCellClicked?: (e: unknown) => void }[];
+    };
+    const columna = interno.columnas.find((c) => c.colId === 'accion');
+    const boton = document.createElement('button');
+    boton.className = 'boton-celda';
+
+    columna?.onCellClicked?.({ data: fila('1', 'ANA'), event: { target: boton } });
+    columna?.onCellClicked?.({
+      data: fila('2', 'OTRA'),
+      event: { target: document.createElement('div') },
+    });
+    await fixture.whenStable();
+
+    expect(invoke).toHaveBeenCalledWith('preparar_ingreso', { contratistaId: '1' });
+    expect(invoke).not.toHaveBeenCalledWith('preparar_ingreso', { contratistaId: '2' });
+    TestBed.inject(MatDialog).closeAll();
+  });
+
+  it('la columna del botón no se ofrece para ocultarla', async () => {
+    vi.mocked(invoke).mockResolvedValue([]);
+    const { fixture } = await crear();
+    const interno = fixture.componentInstance as unknown as {
+      columnas: { colId?: string; lockVisible?: boolean }[];
+    };
+
+    expect(interno.columnas.find((c) => c.colId === 'accion')?.lockVisible).toBe(true);
+  });
 });

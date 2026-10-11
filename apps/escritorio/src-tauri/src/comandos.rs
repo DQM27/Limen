@@ -230,6 +230,12 @@ pub fn nombre_persona_al_escribir(texto: &str) -> String {
     limen_escritorio_comandos::nombre_persona_al_escribir(texto)
 }
 
+/// La placa de un vehículo en mayúsculas, como quedará al guardarse.
+#[tauri::command]
+pub fn placa_al_escribir(texto: &str) -> String {
+    limen_escritorio_comandos::placa_al_escribir(texto)
+}
+
 /// El nombre de una empresa en mayúsculas, como quedará al guardarse.
 #[tauri::command]
 pub fn nombre_empresa_al_escribir(texto: &str) -> String {

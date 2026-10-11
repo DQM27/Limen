@@ -123,7 +123,7 @@ describe('pantalla Dentro', () => {
     const { interno } = await crear();
     const columna = interno.columnas.find((c) => c.colId === 'accion');
     const boton = document.createElement('button');
-    boton.className = 'boton-salida';
+    boton.className = 'boton-celda';
 
     (columna?.onCellClicked as (e: unknown) => void)({
       data: persona('7', 'LUIS'),

@@ -40,6 +40,13 @@ impl Placa {
     }
 }
 
+/// Lo que la interfaz muestra mientras se escribe la placa: en mayúsculas,
+/// como quedará al guardarse, pero sin tocar los espacios (si no, no se podría
+/// escribir el espacio entre letras y números).
+pub fn placa_mientras_se_escribe(texto: &str) -> String {
+    texto.to_uppercase()
+}
+
 impl fmt::Display for Placa {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
@@ -96,6 +103,12 @@ impl ErrorMedio {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mientras_se_escribe_la_placa_va_en_mayusculas_sin_tocar_los_espacios() {
+        assert_eq!(placa_mientras_se_escribe("abc 12"), "ABC 12");
+        assert_eq!(placa_mientras_se_escribe("cl-12 "), "CL-12 ");
+    }
 
     #[test]
     fn en_vehiculo_la_placa_se_normaliza() {

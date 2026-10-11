@@ -87,8 +87,8 @@ h1 {
   background-color: var(--mat-sys-error-container);
 }
 
-// El botón de una celda de acción ("Salida" en Dentro).
-.boton-salida {
+// El botón de una celda de acción ("Salida" en Dentro, "Ingreso" en Contratistas).
+.boton-celda {
   height: 26px;
   padding: 0 12px;
   border: 1px solid var(--mat-sys-outline);

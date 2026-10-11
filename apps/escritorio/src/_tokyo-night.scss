@@ -53,7 +53,8 @@
   --mat-sys-scrim: #000000;
   --mat-sys-shadow: #000000;
 
-  // Lo que Material no trae: el verde del éxito (los avisos, ver
-  // compartido/avisos.ts).
+  // Lo que Material no trae: el verde del éxito y el amarillo de la
+  // advertencia (los avisos y las fichas).
   --aviso-exito: light-dark(#587539, #9ece6a);
+  --aviso-advertencia: light-dark(#8c6c3e, #e0af68);
 }

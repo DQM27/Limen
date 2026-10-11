@@ -12,6 +12,8 @@
 }
 
 // El botón se ve como parte de la fila de herramientas, de la misma altura.
-.nuevo {
+.nuevo,
+.ingreso {
   --mat-button-filled-container-height: 34px;
+  --mat-button-outlined-container-height: 34px;
 }

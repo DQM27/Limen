@@ -50,6 +50,11 @@ pub fn nombre_persona_al_escribir(texto: &str) -> String {
     limen_dominio::nombre::nombre_mientras_se_escribe(texto)
 }
 
+/// La placa de un vehículo en mayúsculas, como quedará al guardarse.
+pub fn placa_al_escribir(texto: &str) -> String {
+    limen_dominio::medio::placa_mientras_se_escribe(texto)
+}
+
 /// Lo mismo para el nombre de una empresa: en mayúsculas.
 pub fn nombre_empresa_al_escribir(texto: &str) -> String {
     limen_dominio::empresa::nombre_empresa_mientras_se_escribe(texto)

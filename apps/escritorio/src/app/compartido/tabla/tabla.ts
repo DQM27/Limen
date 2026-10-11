@@ -124,11 +124,15 @@ export class Tabla<T> implements OnInit {
     }),
   );
 
-  /** Las columnas que se pueden mostrar u ocultar, para el menú. */
+  /**
+   * Las columnas que se pueden mostrar u ocultar, para el menú. Una columna
+   * con `lockVisible` (por ejemplo, la del botón de una acción) no se ofrece:
+   * siempre se ve.
+   */
   protected readonly columnasDelMenu: Signal<{ clave: string; titulo: string }[]> = computed(() =>
     this.columnas().flatMap((columna) => {
       const clave = claveDeColumna(columna);
-      return clave ? [{ clave, titulo: columna.headerName ?? clave }] : [];
+      return clave && !columna.lockVisible ? [{ clave, titulo: columna.headerName ?? clave }] : [];
     }),
   );
 
