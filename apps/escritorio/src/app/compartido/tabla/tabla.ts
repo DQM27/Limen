@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   input,
   output,
   signal,
@@ -32,7 +33,18 @@ import {
 import { AgGridAngular } from 'ag-grid-angular';
 import { claveDeColumna, textoDeTooltip, tiposDeColumna } from './columnas';
 import { guardarDiseno, leerDiseno } from './diseno-guardado';
+import type { Segmento } from '../../nucleo/tipos';
 import { analizarBusqueda, coincideBusqueda, coincideFiltroDeColumna } from './pliegue';
+import {
+  MAXIMO_TEXTOS_POR_COLUMNA,
+  campoResaltable,
+  claveDeTexto,
+  type ContextoDeResaltado,
+  type Resaltador,
+} from './resaltado';
+
+/** Cuánto se espera tras teclear antes de pedir el resaltado al núcleo. */
+const RETARDO_DE_RESALTADO_MS = 150;
 
 // Los módulos de AG Grid se registran una sola vez, aquí. Hoy todos los de la
 // edición Community; si el tamaño del paquete llegara a importar, se acota en
@@ -74,6 +86,11 @@ export class Tabla<T> implements OnInit {
   readonly filtrosPorColumna = input(true);
   readonly seleccionMultiple = input(false);
   readonly claseFila = input<(fila: T) => string | undefined>();
+  /**
+   * Cómo pedir al núcleo qué resaltar (regla N1). Sin esto, la tabla no
+   * resalta nada. Las columnas que se resaltan se marcan con `resaltable()`.
+   */
+  readonly resaltador = input<Resaltador>();
 
   readonly seleccionCambia = output<T[]>();
   readonly filaDobleClic = output<T>();
@@ -90,6 +107,16 @@ export class Tabla<T> implements OnInit {
   protected readonly filtrosVisibles = signal(true);
   /** Cuántas filas se ven con el filtro puesto. */
   protected readonly visibles = signal<number | null>(null);
+
+  /** Los segmentos que el núcleo devolvió para lo que hay en pantalla. */
+  private readonly resaltados = signal<ReadonlyMap<string, readonly Segmento[]>>(new Map());
+  /** Lo que ven las celdas resaltables (el `context` del grid). */
+  protected readonly contexto: ContextoDeResaltado = {
+    segmentosDe: (campo, texto) => this.resaltados().get(claveDeTexto(campo, texto)),
+  };
+  /** Cada pedido nuevo invalida los anteriores: sólo vale el último. */
+  private pedidoDeResaltado = 0;
+  private temporizadorDeResaltado: ReturnType<typeof setTimeout> | undefined;
 
   private api: GridApi<T> | null = null;
   /** Orden, ancho y fijado de las columnas: lo último guardado o lo que haya hoy. */
@@ -151,6 +178,18 @@ export class Tabla<T> implements OnInit {
       : undefined,
   );
 
+  constructor() {
+    // Lo que se escribe, las filas o la forma de resaltar cambian: se vuelve
+    // a pedir el resaltado, con una pausa para no preguntar en cada tecla.
+    effect((alLimpiar) => {
+      this.filtro();
+      this.resaltador();
+      this.filas();
+      this.programarResaltado();
+      alLimpiar(() => clearTimeout(this.temporizadorDeResaltado));
+    });
+  }
+
   protected escribirFiltro(evento: Event): void {
     this.filtro.set((evento.target as HTMLInputElement).value);
   }
@@ -175,6 +214,78 @@ export class Tabla<T> implements OnInit {
 
   protected alActualizarFilas(evento: ModelUpdatedEvent<T>): void {
     this.visibles.set(evento.api.getDisplayedRowCount());
+    // Un filtro de columna o un orden distinto cambian qué filas se ven.
+    this.programarResaltado();
+  }
+
+  private programarResaltado(): void {
+    clearTimeout(this.temporizadorDeResaltado);
+    this.temporizadorDeResaltado = setTimeout(
+      () => void this.resaltarLoVisible(),
+      RETARDO_DE_RESALTADO_MS,
+    );
+  }
+
+  /**
+   * Pide al núcleo los segmentos de los textos que hay en pantalla, una vez
+   * por columna resaltable, y repinta esas columnas. El resaltado es sólo un
+   * apoyo visual: si el núcleo no responde, se muestra el texto sin resaltar.
+   */
+  private async resaltarLoVisible(): Promise<void> {
+    const api = this.api;
+    const resaltador = this.resaltador();
+    const buscado = this.filtro().trim();
+    const columnas = this.columnas().flatMap((columna) => {
+      const campo = campoResaltable(columna);
+      const clave = claveDeColumna(columna);
+      return campo && clave ? [{ campo, clave }] : [];
+    });
+    if (!api) {
+      return;
+    }
+    const pedido = ++this.pedidoDeResaltado;
+    if (!resaltador || buscado === '' || columnas.length === 0) {
+      this.guardarResaltados(api, columnas, new Map());
+      return;
+    }
+    const pedidos = columnas.map(({ campo, clave }) => ({
+      campo,
+      textos: textosDeLaColumna(api, clave),
+    }));
+    try {
+      const respuestas = await Promise.all(
+        pedidos.map(({ campo, textos }) => resaltador(buscado, campo, textos)),
+      );
+      if (pedido !== this.pedidoDeResaltado) {
+        return;
+      }
+      const segmentos = new Map<string, readonly Segmento[]>();
+      pedidos.forEach(({ campo, textos }, i) => {
+        textos.forEach((texto, j) => {
+          const deEsteTexto = respuestas[i]?.[j];
+          if (deEsteTexto) {
+            segmentos.set(claveDeTexto(campo, texto), deEsteTexto);
+          }
+        });
+      });
+      this.guardarResaltados(api, columnas, segmentos);
+    } catch {
+      if (pedido === this.pedidoDeResaltado) {
+        this.guardarResaltados(api, columnas, new Map());
+      }
+    }
+  }
+
+  private guardarResaltados(
+    api: GridApi<T>,
+    columnas: { clave: string }[],
+    segmentos: ReadonlyMap<string, readonly Segmento[]>,
+  ): void {
+    if (segmentos.size === 0 && this.resaltados().size === 0) {
+      return;
+    }
+    this.resaltados.set(segmentos);
+    api.refreshCells({ columns: columnas.map(({ clave }) => clave), force: true });
   }
 
   protected alMoverColumna(evento: ColumnMovedEvent<T>): void {
@@ -265,6 +376,24 @@ export class Tabla<T> implements OnInit {
       filtrosVisibles: this.filtrosVisibles(),
     });
   }
+}
+
+/**
+ * Los textos distintos que una columna muestra en las filas que pasan los
+ * filtros, hasta [`MAXIMO_TEXTOS_POR_COLUMNA`].
+ */
+function textosDeLaColumna<T>(api: GridApi<T>, clave: string): string[] {
+  const textos = new Set<string>();
+  api.forEachNodeAfterFilter((nodo) => {
+    if (textos.size >= MAXIMO_TEXTOS_POR_COLUMNA) {
+      return;
+    }
+    const valor: unknown = api.getCellValue({ rowNode: nodo, colKey: clave, useFormatter: true });
+    if (valor !== null && valor !== undefined && valor !== '') {
+      textos.add(String(valor));
+    }
+  });
+  return [...textos];
 }
 
 /**

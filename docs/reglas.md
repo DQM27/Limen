@@ -130,7 +130,7 @@ reconstruir cómo estaba el contratista el día que entró.
 
 | Código | Regla | Estado |
 |---|---|---|
-| N1 | Al buscar, lo que coincide se **resalta** en los resultados con la misma regla del buscador: sin importar mayúsculas ni tildes (la Ñ cuenta como N), una palabra completa se resalta entera; el comienzo de una palabra o un fragmento dentro de ella, sólo lo escrito; con errores de tecleo, la palabra parecida entera. Cada palabra escrita se resalta donde aparece; la que no aparece en ese texto no marca nada (qué filas coinciden lo decide el buscador o el filtro, y una búsqueda puede repartir sus palabras entre columnas: nombre y empresa). La cédula se resalta ignorando guiones, puntos y espacios. El dominio entrega el texto partido en segmentos (`dominio/resaltado.rs`); la pantalla sólo los pinta. | ✅ en el dominio · ⏳ en la pantalla |
+| N1 | Al buscar, lo que coincide se **resalta** en los resultados con la misma regla del buscador: sin importar mayúsculas ni tildes (la Ñ cuenta como N), una palabra completa se resalta entera; el comienzo de una palabra o un fragmento dentro de ella, sólo lo escrito; con errores de tecleo, la palabra parecida entera. Cada palabra escrita se resalta donde aparece; la que no aparece en ese texto no marca nada (qué filas coinciden lo decide el buscador o el filtro, y una búsqueda puede repartir sus palabras entre columnas: nombre y empresa). La cédula se resalta ignorando guiones, puntos y espacios. El dominio entrega el texto partido en segmentos (`dominio/resaltado.rs`); la pantalla sólo los pinta. | ✅ |
 
 ## Fuera de alcance por ahora
 

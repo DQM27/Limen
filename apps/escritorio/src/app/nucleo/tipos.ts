@@ -254,3 +254,18 @@ export interface AtajoFecha {
   /** El que abre el historial. */
   por_omision: boolean;
 }
+
+/**
+ * Qué clase de texto se resalta; el núcleo elige la regla de comparación
+ * según esto (regla N1).
+ */
+export type CampoResaltable = 'NOMBRE' | 'IDENTIFICACION' | 'EMPRESA';
+
+/**
+ * Un tramo de un texto. La pantalla pinta los `resaltado`; los segmentos de
+ * un texto, en orden, lo reconstruyen exacto.
+ */
+export interface Segmento {
+  texto: string;
+  resaltado: boolean;
+}

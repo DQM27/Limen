@@ -2,6 +2,7 @@ import type {
   AtajoFecha,
   Cambio,
   CambioGafete,
+  CampoResaltable,
   CandidatoIngreso,
   ContratistaEntrada,
   Empresa,
@@ -15,6 +16,7 @@ import type {
   Historial,
   PersonaAdentro,
   PersonalKof,
+  Segmento,
   TipoGafete,
   UsuarioActual,
   Via,
@@ -29,6 +31,19 @@ import { invocar } from './tauri';
 
 export function listarContratistas(): Promise<FilaContratista[]> {
   return invocar<FilaContratista[]>('listar_contratistas');
+}
+
+/**
+ * Cada texto partido en segmentos, con lo que coincide con lo buscado
+ * resaltado (regla N1). Devuelve un arreglo de segmentos por cada texto, en el
+ * mismo orden. No toca datos: sólo aplica la regla del núcleo.
+ */
+export function resaltarCoincidencias(
+  buscado: string,
+  campo: CampoResaltable,
+  textos: string[],
+): Promise<Segmento[][]> {
+  return invocar<Segmento[][]>('resaltar_coincidencias', { buscado, campo, textos });
 }
 
 /** Empresas de contratistas cuyo nombre coincide, de la mejor a la peor. */

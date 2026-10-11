@@ -1,8 +1,9 @@
 import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import type { ColDef } from 'ag-grid-community';
 import { fechaCorta } from '../compartido/formato';
+import { resaltable } from '../compartido/tabla/resaltado';
 import { Tabla } from '../compartido/tabla/tabla';
-import { listarContratistas } from '../nucleo/comandos';
+import { listarContratistas, resaltarCoincidencias } from '../nucleo/comandos';
 import { esErrorApp } from '../nucleo/tauri';
 import type { FilaContratista } from '../nucleo/tipos';
 import { etiquetaDeAcceso, etiquetaDeTipo } from './etiquetas';
@@ -23,11 +24,18 @@ export class ContratistasPagina {
   protected readonly error = signal<string | null>(null);
 
   protected readonly idFila = (fila: FilaContratista): string => fila.id;
+  protected readonly resaltador = resaltarCoincidencias;
 
   protected readonly columnas: ColDef<FilaContratista>[] = [
-    { field: 'cedula', headerName: 'Cédula', flex: 1.2, minWidth: 120 },
-    { field: 'nombre', headerName: 'Nombre', flex: 2, minWidth: 220 },
-    { field: 'empresa_nombre', headerName: 'Empresa', flex: 1.5, minWidth: 150 },
+    resaltable(
+      { field: 'cedula', headerName: 'Cédula', flex: 1.2, minWidth: 120 },
+      'IDENTIFICACION',
+    ),
+    resaltable({ field: 'nombre', headerName: 'Nombre', flex: 2, minWidth: 220 }, 'NOMBRE'),
+    resaltable(
+      { field: 'empresa_nombre', headerName: 'Empresa', flex: 1.5, minWidth: 150 },
+      'EMPRESA',
+    ),
     {
       field: 'tipo_ingreso',
       headerName: 'Tipo',
