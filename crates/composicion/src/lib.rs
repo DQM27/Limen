@@ -27,7 +27,7 @@ use limen_aplicacion::casos_de_uso::consultas::{
     PraindPorVencer, QuienesEstanAdentro,
 };
 use limen_aplicacion::casos_de_uso::contratistas::{
-    ConsultarContratista, EditarContratista, RegistrarContratista,
+    ConsultarContratista, EditarContratista, RegistrarContratista, ValidarContratista,
 };
 use limen_aplicacion::casos_de_uso::correo::{RegistrarEntradaCorreo, RegistrarSalidaCorreo};
 use limen_aplicacion::casos_de_uso::empresas::{RegistrarEmpresa, RenombrarEmpresa};
@@ -97,6 +97,7 @@ grupo! {
     Contratistas {
         registrar: RegistrarContratista<F, R, G>,
         editar: EditarContratista<F, R, G>,
+        validar: ValidarContratista<F, R>,
         consultar: ConsultarContratista<F, R>,
         buscar: BuscarContratistas<F>,
         praind_por_vencer: PraindPorVencer<F, R>,
@@ -218,6 +219,7 @@ where
             contratistas: Contratistas {
                 registrar: RegistrarContratista::new(a(), r(), i()),
                 editar: EditarContratista::new(a(), r(), i()),
+                validar: ValidarContratista::new(a(), r()),
                 consultar: ConsultarContratista::new(a(), r()),
                 buscar: BuscarContratistas::new(a()),
                 praind_por_vencer: PraindPorVencer::new(a(), r()),

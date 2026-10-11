@@ -208,6 +208,34 @@ pub async fn registrar_contratista(
         .await
 }
 
+/// Todo lo que impide guardar el formulario, de una vez y cada problema con
+/// su campo. No guarda nada.
+#[tauri::command]
+pub async fn validar_contratista(
+    estado: State<'_, Estado>,
+    id: Option<String>,
+    contratista: ContratistaEntrada,
+) -> Resultado<Vec<ErrorJson>> {
+    estado.comandos().sesion()?;
+    estado
+        .comandos()
+        .validar_contratista(id.as_deref(), &contratista)
+        .await
+}
+
+/// El nombre de una persona en mayúsculas y sin tildes, como quedará al
+/// guardarse; lo usa el formulario mientras se escribe.
+#[tauri::command]
+pub fn nombre_persona_al_escribir(texto: &str) -> String {
+    limen_escritorio_comandos::nombre_persona_al_escribir(texto)
+}
+
+/// El nombre de una empresa en mayúsculas, como quedará al guardarse.
+#[tauri::command]
+pub fn nombre_empresa_al_escribir(texto: &str) -> String {
+    limen_escritorio_comandos::nombre_empresa_al_escribir(texto)
+}
+
 #[tauri::command]
 pub async fn editar_contratista(
     estado: State<'_, Estado>,

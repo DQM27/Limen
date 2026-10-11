@@ -10,3 +10,8 @@
   margin: 0;
   color: var(--mat-sys-error);
 }
+
+// El botón se ve como parte de la fila de herramientas, de la misma altura.
+.nuevo {
+  --mat-button-filled-container-height: 34px;
+}

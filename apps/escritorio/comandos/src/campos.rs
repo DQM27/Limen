@@ -66,8 +66,8 @@ impl CampoDelError for ErrorContratista {
             | Self::CedulaRepetida
             | Self::CedulaNoEditableAdentro => CEDULA,
             Self::NombreVacio | Self::NombreInvalido => NOMBRE,
-            Self::EmpresaNoExiste => EMPRESA,
-            Self::PraindVencido => FECHA_VENCIMIENTO_PRAIND,
+            Self::EmpresaRequerida | Self::EmpresaNoExiste => EMPRESA,
+            Self::PraindRequerido | Self::PraindVencido => FECHA_VENCIMIENTO_PRAIND,
         })
     }
 }

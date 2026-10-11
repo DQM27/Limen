@@ -1,4 +1,8 @@
-import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
+import { MatIconModule } from '@angular/material/icon';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import type { ColDef } from 'ag-grid-community';
 import { fechaCorta } from '../compartido/formato';
 import { Tabla } from '../compartido/tabla/tabla';
@@ -6,6 +10,11 @@ import { listarContratistas } from '../nucleo/comandos';
 import { esErrorApp } from '../nucleo/tauri';
 import type { FilaContratista } from '../nucleo/tipos';
 import { etiquetaDeAcceso, etiquetaDeTipo } from './etiquetas';
+import {
+  FormularioContratista,
+  type DatosFormularioContratista,
+  type ResultadoFormularioContratista,
+} from './formulario-contratista';
 
 /** El buscador general sólo mira lo que identifica a la persona. */
 const fueraDelBuscador = (): string => '';
@@ -13,11 +22,14 @@ const fueraDelBuscador = (): string => '';
 @Component({
   selector: 'app-contratistas-pagina',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Tabla],
+  imports: [MatButtonModule, MatIconModule, Tabla],
   templateUrl: './contratistas-pagina.html',
   styleUrl: './contratistas-pagina.scss',
 })
 export class ContratistasPagina {
+  private readonly dialogo = inject(MatDialog);
+  private readonly aviso = inject(MatSnackBar);
+
   protected readonly filas = signal<FilaContratista[]>([]);
   protected readonly cargando = signal(true);
   protected readonly error = signal<string | null>(null);
@@ -57,6 +69,32 @@ export class ContratistasPagina {
 
   constructor() {
     void this.cargar();
+  }
+
+  /** Abre el formulario: sin contratista registra uno nuevo; con él, lo edita. */
+  protected abrirFormulario(contratista?: FilaContratista): void {
+    const datos: DatosFormularioContratista = { contratista };
+    this.dialogo
+      .open<FormularioContratista, DatosFormularioContratista, ResultadoFormularioContratista>(
+        FormularioContratista,
+        { data: datos, autoFocus: 'first-tabbable', width: '380px', disableClose: true },
+      )
+      .afterClosed()
+      .subscribe((resultado) => {
+        if (!resultado) {
+          return;
+        }
+        void this.cargar();
+        this.aviso.open(
+          resultado.tipo === 'registrado'
+            ? 'Contratista registrado'
+            : resultado.cambios.length > 0
+              ? 'Contratista actualizado'
+              : 'Sin cambios',
+          'Cerrar',
+          { duration: 4000 },
+        );
+      });
   }
 
   private async cargar(): Promise<void> {

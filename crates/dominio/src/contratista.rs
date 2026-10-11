@@ -61,6 +61,18 @@ pub struct DatosContratista<'a> {
     pub tiene_acceso: bool,
 }
 
+/// Lo que hay en el formulario mientras todavía puede estar incompleto: sin
+/// empresa elegida o sin fecha de PRAIND. Sirve para saber de una vez qué
+/// falta y qué está mal (ver [`problemas`]). El tipo de ingreso y el acceso
+/// siempre tienen un valor válido, así que no entran acá.
+#[derive(Debug, Clone, Copy)]
+pub struct BorradorContratista<'a> {
+    pub cedula: &'a str,
+    pub nombre: &'a str,
+    pub empresa: Option<EmpresaId>,
+    pub fecha_vencimiento_praind: Option<NaiveDate>,
+}
+
 /// Lo que el caso de uso averiguó en la base antes de pedirle al dominio
 /// que decida.
 #[derive(Debug, Clone, Copy)]
@@ -75,8 +87,9 @@ pub struct HechosContratista {
 
 /// Por qué no se puede guardar. Mismo texto ([`ErrorContratista`] implementa
 /// `Display`) y mismo código ([`ErrorContratista::codigo`]) en todas las
-/// interfaces. Si fallan varias reglas se informa la primera, en el orden
-/// en que aparecen acá.
+/// interfaces. [`Contratista::registrar`] y [`Contratista::editar`] informan
+/// el primer motivo, en el orden en que aparecen acá; [`problemas`] los
+/// informa todos, para que el formulario marque cada campo a la vez.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum ErrorContratista {
     #[error("La cédula es obligatoria")]
@@ -87,8 +100,12 @@ pub enum ErrorContratista {
     NombreVacio,
     #[error("El nombre sólo puede tener letras y espacios")]
     NombreInvalido,
+    #[error("La empresa es obligatoria")]
+    EmpresaRequerida,
     #[error("La empresa no existe")]
     EmpresaNoExiste,
+    #[error("La fecha de vencimiento del PRAIND es obligatoria")]
+    PraindRequerido,
     #[error("El PRAIND está vencido: ingrese una fecha vigente")]
     PraindVencido,
     #[error("Ya existe un contratista con esa cédula")]
@@ -105,7 +122,9 @@ impl ErrorContratista {
             Self::CedulaInvalida => "cedula_invalida",
             Self::NombreVacio => "nombre_vacio",
             Self::NombreInvalido => "nombre_invalido",
+            Self::EmpresaRequerida => "empresa_requerida",
             Self::EmpresaNoExiste => "empresa_no_existe",
+            Self::PraindRequerido => "praind_requerido",
             Self::PraindVencido => "praind_vencido",
             Self::CedulaRepetida => "cedula_repetida",
             Self::CedulaNoEditableAdentro => "cedula_no_editable_adentro",
@@ -122,6 +141,73 @@ pub fn cedula_de_contratista(texto: &str) -> Result<Cedula, ErrorContratista> {
         Err(CedulaInvalida::Vacia) => Err(ErrorContratista::CedulaVacia),
         Ok(_) | Err(_) => Err(ErrorContratista::CedulaInvalida),
     }
+}
+
+/// Todo lo que impide guardar este formulario, en el orden de
+/// [`ErrorContratista`] (vacío si se puede guardar). `anterior` es el
+/// contratista que se edita, si es una edición: la fecha del PRAIND sólo se
+/// revisa si cambió (para poder quitar el acceso o corregir el nombre de
+/// alguien con el PRAIND vencido) y la cédula sólo choca si cambió.
+pub fn problemas(
+    borrador: &BorradorContratista<'_>,
+    hechos: HechosContratista,
+    hoy: NaiveDate,
+    anterior: Option<&Contratista>,
+) -> Vec<ErrorContratista> {
+    let mut problemas = Vec::new();
+    let cedula = cedula_de_contratista(borrador.cedula);
+    if let Err(error) = cedula {
+        problemas.push(error);
+    }
+    if let Err(error) = NombrePersona::nuevo(borrador.nombre) {
+        problemas.push(match error {
+            NombreInvalido::Vacio => ErrorContratista::NombreVacio,
+            NombreInvalido::CaracteresNoPermitidos => ErrorContratista::NombreInvalido,
+        });
+    }
+    match borrador.empresa {
+        None => problemas.push(ErrorContratista::EmpresaRequerida),
+        Some(_) if !hechos.empresa_existe => problemas.push(ErrorContratista::EmpresaNoExiste),
+        Some(_) => {}
+    }
+    match borrador.fecha_vencimiento_praind {
+        None => problemas.push(ErrorContratista::PraindRequerido),
+        Some(fecha) => {
+            let cambia = anterior.is_none_or(|a| a.fecha_vencimiento_praind != fecha);
+            if cambia && praind_vencido(fecha, hoy) {
+                problemas.push(ErrorContratista::PraindVencido);
+            }
+        }
+    }
+    if let Ok(cedula) = cedula {
+        let cambia = anterior.is_none_or(|a| a.cedula != cedula);
+        if cambia && hechos.cedula_en_uso {
+            problemas.push(ErrorContratista::CedulaRepetida);
+        }
+        if anterior.is_some() && cambia && hechos.esta_adentro {
+            problemas.push(ErrorContratista::CedulaNoEditableAdentro);
+        }
+    }
+    problemas
+}
+
+/// El primer motivo por el que no se puede guardar, si hay alguno.
+fn primer_problema(
+    datos: &DatosContratista<'_>,
+    hechos: HechosContratista,
+    hoy: NaiveDate,
+    anterior: Option<&Contratista>,
+) -> Result<(), ErrorContratista> {
+    let borrador = BorradorContratista {
+        cedula: datos.cedula,
+        nombre: datos.nombre,
+        empresa: Some(datos.empresa),
+        fecha_vencimiento_praind: Some(datos.fecha_vencimiento_praind),
+    };
+    problemas(&borrador, hechos, hoy, anterior)
+        .into_iter()
+        .next()
+        .map_or(Ok(()), Err)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -164,16 +250,8 @@ impl Contratista {
         hechos: HechosContratista,
         hoy: NaiveDate,
     ) -> Result<Self, ErrorContratista> {
+        primer_problema(&datos, hechos, hoy, None)?;
         let Validados { cedula, nombre } = validar_formato(&datos)?;
-        if !hechos.empresa_existe {
-            return Err(ErrorContratista::EmpresaNoExiste);
-        }
-        if praind_vencido(datos.fecha_vencimiento_praind, hoy) {
-            return Err(ErrorContratista::PraindVencido);
-        }
-        if hechos.cedula_en_uso {
-            return Err(ErrorContratista::CedulaRepetida);
-        }
         Ok(Self {
             id,
             cedula,
@@ -193,21 +271,8 @@ impl Contratista {
         hechos: HechosContratista,
         hoy: NaiveDate,
     ) -> Result<Vec<CambioCampo>, ErrorContratista> {
+        primer_problema(&datos, hechos, hoy, Some(self))?;
         let Validados { cedula, nombre } = validar_formato(&datos)?;
-        if !hechos.empresa_existe {
-            return Err(ErrorContratista::EmpresaNoExiste);
-        }
-        let cambia_fecha = datos.fecha_vencimiento_praind != self.fecha_vencimiento_praind;
-        if cambia_fecha && praind_vencido(datos.fecha_vencimiento_praind, hoy) {
-            return Err(ErrorContratista::PraindVencido);
-        }
-        let cambia_cedula = cedula != self.cedula;
-        if cambia_cedula && hechos.cedula_en_uso {
-            return Err(ErrorContratista::CedulaRepetida);
-        }
-        if cambia_cedula && hechos.esta_adentro {
-            return Err(ErrorContratista::CedulaNoEditableAdentro);
-        }
 
         let antes = self.campos_auditables();
         self.cedula = cedula;
@@ -436,6 +501,127 @@ mod tests {
         );
     }
 
+    fn borrador() -> BorradorContratista<'static> {
+        BorradorContratista {
+            cedula: "1-1111-1111",
+            nombre: "josé peña",
+            empresa: Some(empresa()),
+            fecha_vencimiento_praind: Some(fecha("2027-01-01")),
+        }
+    }
+
+    #[test]
+    fn un_formulario_completo_y_correcto_no_tiene_problemas() {
+        assert_eq!(problemas(&borrador(), hechos(), hoy(), None), []);
+    }
+
+    #[test]
+    fn un_formulario_vacio_marca_todos_los_campos_a_la_vez() {
+        let vacio = BorradorContratista {
+            cedula: "",
+            nombre: " ",
+            empresa: None,
+            fecha_vencimiento_praind: None,
+        };
+        assert_eq!(
+            problemas(&vacio, hechos(), hoy(), None),
+            [
+                ErrorContratista::CedulaVacia,
+                ErrorContratista::NombreVacio,
+                ErrorContratista::EmpresaRequerida,
+                ErrorContratista::PraindRequerido,
+            ]
+        );
+    }
+
+    #[test]
+    fn un_dato_malo_no_tapa_a_los_demas() {
+        let malo = BorradorContratista {
+            cedula: "AB123",
+            nombre: "Ana 2",
+            empresa: Some(empresa()),
+            fecha_vencimiento_praind: Some(fecha("2026-10-08")),
+        };
+        let sin_empresa = HechosContratista {
+            empresa_existe: false,
+            ..hechos()
+        };
+        assert_eq!(
+            problemas(&malo, sin_empresa, hoy(), None),
+            [
+                ErrorContratista::CedulaInvalida,
+                ErrorContratista::NombreInvalido,
+                ErrorContratista::EmpresaNoExiste,
+                ErrorContratista::PraindVencido,
+            ]
+        );
+    }
+
+    #[test]
+    fn la_cedula_repetida_se_informa_junto_a_los_demas_problemas() {
+        let sin_nombre = BorradorContratista {
+            nombre: "",
+            ..borrador()
+        };
+        let repetida = HechosContratista {
+            cedula_en_uso: true,
+            ..hechos()
+        };
+        assert_eq!(
+            problemas(&sin_nombre, repetida, hoy(), None),
+            [
+                ErrorContratista::NombreVacio,
+                ErrorContratista::CedulaRepetida
+            ]
+        );
+    }
+
+    #[test]
+    fn registrar_informa_el_mismo_primer_problema_que_la_lista() {
+        let mut d = datos();
+        d.cedula = "";
+        d.nombre = "";
+        assert_eq!(registrar(d, hechos()), Err(ErrorContratista::CedulaVacia));
+    }
+
+    #[test]
+    fn al_editar_lo_que_no_cambia_no_se_vuelve_a_revisar() {
+        let contratista = registrado();
+        // Un año después el PRAIND ya venció, pero si no se toca la fecha ni
+        // la cédula se puede corregir lo demás.
+        let despues = fecha("2028-01-01");
+        let chocan = HechosContratista {
+            cedula_en_uso: true,
+            esta_adentro: true,
+            ..hechos()
+        };
+        assert_eq!(
+            problemas(&borrador(), chocan, despues, Some(&contratista)),
+            []
+        );
+
+        let otra_cedula = BorradorContratista {
+            cedula: "222222222",
+            ..borrador()
+        };
+        assert_eq!(
+            problemas(&otra_cedula, chocan, despues, Some(&contratista)),
+            [
+                ErrorContratista::CedulaRepetida,
+                ErrorContratista::CedulaNoEditableAdentro
+            ]
+        );
+
+        let otra_fecha = BorradorContratista {
+            fecha_vencimiento_praind: Some(fecha("2027-12-31")),
+            ..borrador()
+        };
+        assert_eq!(
+            problemas(&otra_fecha, hechos(), despues, Some(&contratista)),
+            [ErrorContratista::PraindVencido]
+        );
+    }
+
     #[test]
     fn editar_audita_todos_los_campos_que_cambian() {
         let mut contratista = registrado();
@@ -554,6 +740,14 @@ mod tests {
     #[test]
     fn cada_motivo_tiene_codigo_estable() {
         assert_eq!(ErrorContratista::PraindVencido.codigo(), "praind_vencido");
+        assert_eq!(
+            ErrorContratista::EmpresaRequerida.codigo(),
+            "empresa_requerida"
+        );
+        assert_eq!(
+            ErrorContratista::PraindRequerido.codigo(),
+            "praind_requerido"
+        );
         assert_eq!(
             ErrorContratista::CedulaInvalida.to_string(),
             "La cédula debe tener sólo números, entre 9 y 13 dígitos"

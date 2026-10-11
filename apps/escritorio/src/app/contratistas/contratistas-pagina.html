@@ -14,4 +14,10 @@
   [filas]="filas()"
   [cargando]="cargando()"
   [idFila]="idFila"
-/>
+  (filaDobleClic)="abrirFormulario($event)"
+>
+  <button acciones mat-flat-button type="button" class="nuevo" (click)="abrirFormulario()">
+    <mat-icon aria-hidden="true">add</mat-icon>
+    Nuevo contratista
+  </button>
+</app-tabla>

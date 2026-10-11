@@ -19,7 +19,7 @@ import type {
   UsuarioActual,
   Via,
 } from './tipos';
-import { invocar } from './tauri';
+import { invocar, type ErrorApp } from './tauri';
 
 /**
  * Los comandos del núcleo con su forma tipada: un método por comando de
@@ -47,6 +47,31 @@ export function registrarEmpresa(nombre: string): Promise<string> {
  */
 export function registrarContratista(contratista: ContratistaEntrada): Promise<string> {
   return invocar<string>('registrar_contratista', { contratista });
+}
+
+/**
+ * Todo lo que impide guardar el formulario, de una vez y cada problema con su
+ * `campo` (lista vacía si se puede guardar). `id` es el contratista que se
+ * edita, o `null` si es uno nuevo. No guarda nada.
+ */
+export function validarContratista(
+  id: string | null,
+  contratista: ContratistaEntrada,
+): Promise<ErrorApp[]> {
+  return invocar<ErrorApp[]>('validar_contratista', { id, contratista });
+}
+
+/**
+ * El nombre de una persona como quedará al guardarse (mayúsculas, sin
+ * tildes), para mostrarlo mientras se escribe. Lo decide el dominio.
+ */
+export function nombrePersonaAlEscribir(texto: string): Promise<string> {
+  return invocar<string>('nombre_persona_al_escribir', { texto });
+}
+
+/** Lo mismo para el nombre de una empresa (mayúsculas). */
+export function nombreEmpresaAlEscribir(texto: string): Promise<string> {
+  return invocar<string>('nombre_empresa_al_escribir', { texto });
 }
 
 /**

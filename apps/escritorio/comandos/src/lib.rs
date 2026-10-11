@@ -41,6 +41,19 @@ pub use sesion::{SesionDelEquipo, UsuarioActual};
 
 use campos::con_campo;
 use dto::{leer_fecha_opcional, leer_tipo_gafete, leer_uuid, leer_via};
+use limen_aplicacion::errores::ErrorCaso;
+
+/// El nombre de una persona como se ve mientras se escribe: en mayúsculas y
+/// sin tildes, igual que al guardar (regla del dominio), sin tocar los
+/// espacios. Sólo da forma al texto: no necesita sesión ni base.
+pub fn nombre_persona_al_escribir(texto: &str) -> String {
+    limen_dominio::nombre::nombre_mientras_se_escribe(texto)
+}
+
+/// Lo mismo para el nombre de una empresa: en mayúsculas.
+pub fn nombre_empresa_al_escribir(texto: &str) -> String {
+    limen_dominio::empresa::nombre_empresa_mientras_se_escribe(texto)
+}
 
 /// Los comandos de la interfaz, sobre una aplicación ya armada, y la
 /// sesión abierta en el equipo.
@@ -234,6 +247,31 @@ where
             .await
             .map_err(con_campo)?;
         Ok(id.uuid().to_string())
+    }
+
+    /// Todo lo que impide guardar el formulario, de una vez y cada problema
+    /// con su campo (lista vacía si se puede guardar). `id` es el contratista
+    /// que se edita, o `None` si es uno nuevo. No guarda nada.
+    pub async fn validar_contratista(
+        &self,
+        id: Option<&str>,
+        entrada: &ContratistaEntrada,
+    ) -> Result<Vec<ErrorJson>, ErrorJson> {
+        let id = id
+            .map(|id| leer_uuid(id).map(ContratistaId::desde_uuid))
+            .transpose()?;
+        let borrador = entrada.a_borrador()?;
+        let problemas = self
+            .app
+            .contratistas
+            .validar
+            .ejecutar(id, &borrador)
+            .await
+            .map_err(con_campo)?;
+        Ok(problemas
+            .into_iter()
+            .map(|problema| con_campo(ErrorCaso::Negocio(problema)))
+            .collect())
     }
 
     /// Edita un contratista con el formulario completo y devuelve lo que

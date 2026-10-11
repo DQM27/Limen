@@ -6,7 +6,8 @@
 mod tests {
     use chrono::{DateTime, NaiveDate, Utc};
     use limen_aplicacion::casos_de_uso::contratistas::{
-        ComandoContratista, ConsultarContratista, EditarContratista, RegistrarContratista,
+        ComandoContratista, ComandoValidarContratista, ConsultarContratista, EditarContratista,
+        RegistrarContratista, ValidarContratista,
     };
     use limen_aplicacion::casos_de_uso::empresas::{RegistrarEmpresa, RenombrarEmpresa};
     use limen_aplicacion::errores::{ErrorCaso, MENSAJE_ERROR_TECNICO, TipoError};
@@ -328,6 +329,108 @@ mod tests {
         assert_eq!(
             editar(&almacen).ejecutar(&sesion(), id, &otro).await,
             Err(ErrorCaso::Negocio(ErrorContratista::CedulaRepetida))
+        );
+    }
+
+    // --- Validar el formulario de un contratista ---
+
+    fn validar(almacen: &AlmacenMemoria) -> ValidarContratista<AlmacenMemoria, RelojFijo> {
+        ValidarContratista::new(almacen.clone(), reloj())
+    }
+
+    fn borrador(empresa: Option<EmpresaId>) -> ComandoValidarContratista {
+        ComandoValidarContratista {
+            cedula: "1-1111-1111".into(),
+            nombre: "josé peña".into(),
+            empresa,
+            fecha_vencimiento_praind: Some(fecha("2027-01-01")),
+        }
+    }
+
+    #[tokio::test]
+    async fn un_formulario_correcto_no_tiene_problemas() {
+        let (almacen, empresa) = almacen_con_empresa();
+        assert_eq!(
+            validar(&almacen)
+                .ejecutar(None, &borrador(Some(empresa)))
+                .await,
+            Ok(vec![])
+        );
+    }
+
+    #[tokio::test]
+    async fn un_formulario_vacio_marca_todo_lo_que_falta_sin_tocar_la_base() {
+        let (almacen, _) = almacen_con_empresa();
+        let vacio = ComandoValidarContratista {
+            cedula: String::new(),
+            nombre: String::new(),
+            empresa: None,
+            fecha_vencimiento_praind: None,
+        };
+        assert_eq!(
+            validar(&almacen).ejecutar(None, &vacio).await,
+            Ok(vec![
+                ErrorContratista::CedulaVacia,
+                ErrorContratista::NombreVacio,
+                ErrorContratista::EmpresaRequerida,
+                ErrorContratista::PraindRequerido,
+            ])
+        );
+        assert_eq!(almacen.contratistas().len(), 0, "validar no guarda nada");
+        assert_eq!(almacen.auditoria().len(), 0, "ni audita");
+    }
+
+    #[tokio::test]
+    async fn avisa_de_la_empresa_inexistente_y_de_la_cedula_repetida_a_la_vez() {
+        let (almacen, empresa) = almacen_con_empresa();
+        con_contratista(&almacen, empresa).await;
+        let otra_empresa = EmpresaId::desde_uuid(Uuid::from_u128(501));
+        assert_eq!(
+            validar(&almacen)
+                .ejecutar(None, &borrador(Some(otra_empresa)))
+                .await,
+            Ok(vec![
+                ErrorContratista::EmpresaNoExiste,
+                ErrorContratista::CedulaRepetida
+            ])
+        );
+    }
+
+    #[tokio::test]
+    async fn al_editar_la_propia_cedula_no_cuenta_como_repetida() {
+        let (almacen, empresa) = almacen_con_empresa();
+        let id = con_contratista(&almacen, empresa).await;
+        assert_eq!(
+            validar(&almacen)
+                .ejecutar(Some(id), &borrador(Some(empresa)))
+                .await,
+            Ok(vec![])
+        );
+    }
+
+    #[tokio::test]
+    async fn al_editar_avisa_si_cambia_la_cedula_de_quien_esta_adentro() {
+        let (almacen, empresa) = almacen_con_empresa();
+        let id = con_contratista(&almacen, empresa).await;
+        let cedula = almacen.contratistas()[0].cedula().clone();
+        almacen.marcar_adentro(&cedula, Via::Contratista);
+        let mut otra = borrador(Some(empresa));
+        otra.cedula = "222222222".into();
+        assert_eq!(
+            validar(&almacen).ejecutar(Some(id), &otra).await,
+            Ok(vec![ErrorContratista::CedulaNoEditableAdentro])
+        );
+    }
+
+    #[tokio::test]
+    async fn validar_la_edicion_de_uno_que_no_existe_es_no_encontrado() {
+        let (almacen, empresa) = almacen_con_empresa();
+        let fantasma = ContratistaId::desde_uuid(Uuid::from_u128(404));
+        assert_eq!(
+            validar(&almacen)
+                .ejecutar(Some(fantasma), &borrador(Some(empresa)))
+                .await,
+            Err(ErrorCaso::NoEncontrado)
         );
     }
 

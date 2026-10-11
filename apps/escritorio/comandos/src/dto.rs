@@ -13,20 +13,21 @@ use chrono::{NaiveDate, SecondsFormat};
 use limen_aplicacion::casos_de_uso::consultas::{
     AtajoConRango, ContratistaEnLista, Historial, MAXIMO_MOVIMIENTOS,
 };
-use limen_aplicacion::casos_de_uso::contratistas::ComandoContratista;
+use limen_aplicacion::casos_de_uso::contratistas::{ComandoContratista, ComandoValidarContratista};
 use limen_aplicacion::casos_de_uso::correo::ComandoEntradaCorreo;
 use limen_aplicacion::casos_de_uso::gafetes::CambioGafete;
 use limen_aplicacion::casos_de_uso::ingresos::{
     CandidatoIngreso, ComandoEntrada, EntradaContratista, GafeteElegido,
 };
 use limen_aplicacion::casos_de_uso::proveedores::ComandoEntradaProveedor;
+use limen_aplicacion::errores::ErrorCaso;
 use limen_aplicacion::puertos::{
     IngresoAbierto, MarcaVista, MovimientoHistorial, PersonaAdentro, ResumenGafete,
 };
 use limen_dominio::acceso::ResultadoAcceso;
 use limen_dominio::auditoria::CambioCampo;
 use limen_dominio::cedula::Cedula;
-use limen_dominio::contratista::{Contratista, ContratistaId};
+use limen_dominio::contratista::{Contratista, ContratistaId, ErrorContratista};
 use limen_dominio::empresa::{Empresa, EmpresaId};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
 use limen_dominio::gafete::{NumeroGafete, Portador, Resolucion, TipoGafete};
@@ -285,28 +286,61 @@ pub struct ContratistaEntrada {
 
 impl ContratistaEntrada {
     /// Lee el formato de cada campo; si uno no se puede leer, el error dice
-    /// cuál es.
+    /// cuál es. Una empresa o una fecha vacías no son "ilegibles", son datos
+    /// que faltan: eso lo dice el dominio (`empresa_requerida`,
+    /// `praind_requerido`), con su mensaje y su campo.
     pub fn a_comando(&self) -> Result<ComandoContratista, ErrorJson> {
-        let en = |campo: &'static str| {
-            move |error: ErrorEntrada| ErrorJson::from(error).en_campo(Some(campo))
-        };
+        let borrador = self.a_borrador()?;
+        let falta = |error: ErrorContratista| campos::con_campo(ErrorCaso::Negocio(error));
+        let empresa = borrador
+            .empresa
+            .ok_or_else(|| falta(ErrorContratista::EmpresaRequerida))?;
+        let fecha_vencimiento_praind = borrador
+            .fecha_vencimiento_praind
+            .ok_or_else(|| falta(ErrorContratista::PraindRequerido))?;
         Ok(ComandoContratista {
             cedula: self.cedula.clone(),
             nombre: self.nombre.clone(),
-            empresa: EmpresaId::desde_uuid(
-                leer_uuid(&self.empresa_id).map_err(en(campos::EMPRESA))?,
-            ),
-            tipo_ingreso: TipoIngreso::desde_codigo(&self.tipo_ingreso)
-                .map_err(|_| ErrorEntrada::TipoIngresoInvalido)
-                .map_err(en(campos::TIPO_INGRESO))?,
-            fecha_vencimiento_praind: NaiveDate::parse_from_str(
-                self.fecha_vencimiento_praind.trim(),
-                "%Y-%m-%d",
-            )
-            .map_err(|_| ErrorEntrada::FechaInvalida)
-            .map_err(en(campos::FECHA_VENCIMIENTO_PRAIND))?,
+            empresa,
+            tipo_ingreso: self.leer_tipo_ingreso()?,
+            fecha_vencimiento_praind,
             tiene_acceso: self.tiene_acceso,
         })
+    }
+
+    /// El formulario tal cual está mientras se llena: sin empresa o sin fecha
+    /// todavía. Sólo un identificador o una fecha escritos pero que no se
+    /// pueden leer son error de entrada.
+    pub fn a_borrador(&self) -> Result<ComandoValidarContratista, ErrorJson> {
+        let en = |campo: &'static str| {
+            move |error: ErrorEntrada| ErrorJson::from(error).en_campo(Some(campo))
+        };
+        let empresa = match self.empresa_id.trim() {
+            "" => None,
+            texto => Some(EmpresaId::desde_uuid(
+                leer_uuid(texto).map_err(en(campos::EMPRESA))?,
+            )),
+        };
+        let fecha_vencimiento_praind = match self.fecha_vencimiento_praind.trim() {
+            "" => None,
+            texto => Some(
+                NaiveDate::parse_from_str(texto, "%Y-%m-%d")
+                    .map_err(|_| ErrorEntrada::FechaInvalida)
+                    .map_err(en(campos::FECHA_VENCIMIENTO_PRAIND))?,
+            ),
+        };
+        Ok(ComandoValidarContratista {
+            cedula: self.cedula.clone(),
+            nombre: self.nombre.clone(),
+            empresa,
+            fecha_vencimiento_praind,
+        })
+    }
+
+    fn leer_tipo_ingreso(&self) -> Result<TipoIngreso, ErrorJson> {
+        TipoIngreso::desde_codigo(&self.tipo_ingreso)
+            .map_err(|_| ErrorEntrada::TipoIngresoInvalido)
+            .map_err(|error| ErrorJson::from(error).en_campo(Some(campos::TIPO_INGRESO)))
     }
 }
 

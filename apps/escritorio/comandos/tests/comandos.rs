@@ -17,6 +17,7 @@ mod tests {
     use limen_dominio::tipo_ingreso::TipoIngreso;
     use limen_escritorio_comandos::{
         Comandos, ContratistaEntrada, EntradaContratistaEntrada, ErrorJson, TipoErrorJson, campos,
+        nombre_empresa_al_escribir, nombre_persona_al_escribir,
     };
     use limen_infra_memoria::{AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo};
     use serde_json::json;
@@ -401,6 +402,133 @@ mod tests {
 
     fn error_de<T: std::fmt::Debug>(resultado: Result<T, ErrorJson>) -> ErrorJson {
         resultado.unwrap_err()
+    }
+
+    #[tokio::test]
+    async fn un_formulario_vacio_devuelve_todos_los_problemas_cada_uno_con_su_campo() {
+        let comandos = Comandos::new(aplicacion().await);
+        let vacio = ContratistaEntrada {
+            cedula: String::new(),
+            nombre: String::new(),
+            empresa_id: String::new(),
+            tipo_ingreso: "PRAIND".into(),
+            fecha_vencimiento_praind: String::new(),
+            tiene_acceso: true,
+        };
+
+        let problemas = comandos.validar_contratista(None, &vacio).await.unwrap();
+
+        let resumen: Vec<_> = problemas
+            .iter()
+            .map(|p| (p.codigo, p.campo.unwrap_or("")))
+            .collect();
+        assert_eq!(
+            resumen,
+            [
+                ("cedula_vacia", campos::CEDULA),
+                ("nombre_vacio", campos::NOMBRE),
+                ("empresa_requerida", campos::EMPRESA),
+                ("praind_requerido", campos::FECHA_VENCIMIENTO_PRAIND),
+            ]
+        );
+        assert!(
+            problemas.iter().all(|p| !p.mensaje.is_empty()),
+            "cada problema trae su mensaje"
+        );
+    }
+
+    #[tokio::test]
+    async fn un_formulario_correcto_no_devuelve_problemas() {
+        let comandos = Comandos::new(aplicacion().await);
+        let empresa = comandos.registrar_empresa(&sesion(), "acme").await.unwrap();
+
+        let problemas = comandos
+            .validar_contratista(None, &formulario(&empresa))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            problemas.len(),
+            0,
+            "un formulario correcto no tiene problemas"
+        );
+    }
+
+    #[tokio::test]
+    async fn al_editar_la_propia_cedula_no_choca_pero_la_de_otro_si() {
+        let (comandos, contratista) = con_contratista().await;
+        let empresa = comandos
+            .buscar_empresas("acme", 1)
+            .await
+            .unwrap()
+            .remove(0)
+            .id;
+        let mut otro = formulario(&empresa);
+        otro.cedula = "2-2222-2222".into();
+        comandos
+            .registrar_contratista(&sesion(), &otro)
+            .await
+            .unwrap();
+
+        let propia = comandos
+            .validar_contratista(Some(&contratista), &formulario(&empresa))
+            .await
+            .unwrap();
+        assert_eq!(propia.len(), 0, "su propia cédula no es repetida");
+
+        let ajena = comandos
+            .validar_contratista(Some(&contratista), &otro)
+            .await
+            .unwrap();
+        assert_eq!(ajena.len(), 1);
+        assert_eq!(ajena[0].codigo, "cedula_repetida");
+        assert_eq!(ajena[0].campo, Some(campos::CEDULA));
+    }
+
+    #[tokio::test]
+    async fn un_identificador_ilegible_es_error_de_entrada() {
+        let comandos = Comandos::new(aplicacion().await);
+
+        let mal_id = error_de(
+            comandos
+                .validar_contratista(Some("no-es-un-id"), &formulario(""))
+                .await,
+        );
+        assert_eq!(mal_id.codigo, "id_invalido");
+
+        let mal_empresa = error_de(
+            comandos
+                .validar_contratista(None, &formulario("tampoco"))
+                .await,
+        );
+        assert_eq!(mal_empresa.codigo, "id_invalido");
+        assert_eq!(mal_empresa.campo, Some(campos::EMPRESA));
+    }
+
+    #[tokio::test]
+    async fn registrar_sin_empresa_o_sin_fecha_dice_que_falta_no_que_es_ilegible() {
+        let comandos = Comandos::new(aplicacion().await);
+
+        let sin_empresa = error_de(
+            comandos
+                .registrar_contratista(&sesion(), &formulario(""))
+                .await,
+        );
+        assert_eq!(sin_empresa.codigo, "empresa_requerida");
+        assert_eq!(sin_empresa.campo, Some(campos::EMPRESA));
+
+        let empresa = comandos.registrar_empresa(&sesion(), "acme").await.unwrap();
+        let mut sin_fecha = formulario(&empresa);
+        sin_fecha.fecha_vencimiento_praind = " ".into();
+        let sin_fecha = error_de(comandos.registrar_contratista(&sesion(), &sin_fecha).await);
+        assert_eq!(sin_fecha.codigo, "praind_requerido");
+        assert_eq!(sin_fecha.campo, Some(campos::FECHA_VENCIMIENTO_PRAIND));
+    }
+
+    #[test]
+    fn los_nombres_se_ven_en_mayusculas_mientras_se_escriben() {
+        assert_eq!(nombre_persona_al_escribir("josé peña "), "JOSE PEÑA ");
+        assert_eq!(nombre_empresa_al_escribir("acme s.a. "), "ACME S.A. ");
     }
 
     #[tokio::test]

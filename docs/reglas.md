@@ -23,9 +23,11 @@ Estado: ✅ implementada en `crates/dominio` · ⏳ acordada, pendiente de imple
 |---|---|---|
 | B1 | Cédula y nombre obligatorios (A1–A6). | ✅ |
 | B2 | La cédula no se repite. | ✅ |
-| B3 | Todo contratista pertenece a una empresa que existe. | ✅ |
+| B3 | Todo contratista pertenece a una empresa que existe. Sin empresa elegida es `empresa_requerida` ("La empresa es obligatoria"); con una que no existe, `empresa_no_existe`. | ✅ |
 | B4 | Tipos de ingreso: sólo PRAIND e IN HOUSE. No existen SWAT, POR CORREO ni personal de ruta. | ✅ |
-| B5 | El PRAIND (cursos de seguridad, con vencimiento) es obligatorio para todos. | ✅ |
+| B5 | El PRAIND (cursos de seguridad, con vencimiento) es obligatorio para todos. Sin fecha es `praind_requerido`. | ✅ |
+| B5b | El formulario del contratista informa **todos** los problemas a la vez, cada uno con su campo (`contratista::problemas`, en el orden de `ErrorContratista`); registrar y editar informan el primero. El caso de uso `ValidarContratista` lee lo que hace falta (cédula en uso, empresa existente, si está adentro) y el dominio decide. | ✅ |
+| B5c | Mientras se escribe, el nombre de una persona se ve como quedará (mayúsculas y sin tildes: `nombre_mientras_se_escribe`) y el de una empresa en mayúsculas (`nombre_empresa_mientras_se_escribe`); la forma la da el dominio. | ✅ |
 | B6 | No se registra un contratista con el PRAIND vencido. Vencer hoy todavía es vigente. | ✅ |
 | B8 | Al editar, el vencimiento sólo se revisa si cambió la fecha (para poder quitar el acceso o corregir el nombre de alguien con el PRAIND vencido). | ✅ |
 | B9 | No se cambia la cédula de alguien que está adentro. | ✅ |

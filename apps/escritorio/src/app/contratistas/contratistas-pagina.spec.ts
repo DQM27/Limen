@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { MatDialog } from '@angular/material/dialog';
 import { invoke } from '@tauri-apps/api/core';
 import type { FilaContratista } from '../nucleo/tipos';
 import { ContratistasPagina } from './contratistas-pagina';
@@ -65,5 +66,36 @@ describe('pantalla de contratistas', () => {
     expect(raiz.querySelector('[role="alert"]')?.textContent).toContain(
       'No se pudieron cargar los contratistas',
     );
+  });
+
+  it('el botón "Nuevo contratista" abre el formulario vacío', async () => {
+    vi.mocked(invoke).mockResolvedValue([]);
+    const { fixture, raiz } = await crear();
+
+    raiz.querySelector<HTMLButtonElement>('button.nuevo')?.click();
+    await fixture.whenStable();
+
+    const dialogo = document.querySelector('app-formulario-contratista');
+    expect(dialogo?.querySelector('h2')?.textContent).toContain('Nuevo contratista');
+    // Un clic fuera no lo cierra.
+    expect(TestBed.inject(MatDialog).openDialogs[0]?.disableClose).toBe(true);
+    TestBed.inject(MatDialog).closeAll();
+  });
+
+  it('abrir una fila para editar precarga sus datos', async () => {
+    vi.mocked(invoke).mockResolvedValue([fila('1', 'ANA')]);
+    const { fixture } = await crear();
+
+    (
+      fixture.componentInstance as unknown as { abrirFormulario(f: FilaContratista): void }
+    ).abrirFormulario(fila('1', 'ANA'));
+    await fixture.whenStable();
+
+    const dialogo = document.querySelector('app-formulario-contratista');
+    expect(dialogo?.querySelector('h2')?.textContent).toContain('Editar contratista');
+    expect(dialogo?.querySelector<HTMLInputElement>('input[formControlName=nombre]')?.value).toBe(
+      'ANA',
+    );
+    TestBed.inject(MatDialog).closeAll();
   });
 });
