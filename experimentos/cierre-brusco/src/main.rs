@@ -32,6 +32,15 @@ fn en() -> DateTime<Utc> {
 }
 
 async fn abrir(motor: &str, ruta: &Path) -> AlmacenSurreal {
+    // La configuración del motor embebido viaja en la ruta: `ruta?clave=valor`.
+    let con_parametros;
+    let ruta = match std::env::var("LIMEN_EXP_PARAMS") {
+        Ok(parametros) => {
+            con_parametros = PathBuf::from(format!("{}?{parametros}", ruta.display()));
+            con_parametros.as_path()
+        }
+        Err(_) => ruta,
+    };
     match motor {
         "surrealkv" => AlmacenSurreal::en_disco(ruta).await.unwrap(),
         #[cfg(feature = "rocksdb")]
@@ -88,10 +97,55 @@ fn azar(estado: &mut u64) -> u64 {
     *estado
 }
 
-fn padre(motor: &str, filas: u128, repeticiones: u32, max_ms: u64) {
+/// Todos los archivos de la carpeta de datos (recursivo).
+fn archivos(carpeta: &Path, dentro: &mut std::collections::HashSet<PathBuf>) {
+    let Ok(entradas) = std::fs::read_dir(carpeta) else {
+        return;
+    };
+    for entrada in entradas.flatten() {
+        let ruta = entrada.path();
+        if ruta.is_dir() {
+            archivos(&ruta, dentro);
+        } else {
+            dentro.insert(ruta);
+        }
+    }
+}
+
+/// Modo `rotacion`: espera a que el motor cree un archivo nuevo (rotación de
+/// la memoria de escritura o del registro) y mata el proceso a los pocos
+/// milisegundos. Si no aparece en `max_ms`, se mata igual (`disparo` = tiempo).
+fn esperar_archivo_nuevo(ruta: &Path, max_ms: u64, estado: &mut u64) -> (u64, String) {
+    std::thread::sleep(Duration::from_millis(300));
+    let mut base = std::collections::HashSet::new();
+    archivos(ruta, &mut base);
+    let inicio = Instant::now();
+    loop {
+        let mut ahora = std::collections::HashSet::new();
+        archivos(ruta, &mut ahora);
+        if let Some(nuevo) = ahora.iter().find(|f| !base.contains(*f)) {
+            let nombre = nuevo
+                .file_name()
+                .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+            std::thread::sleep(Duration::from_millis(azar(estado) % 20));
+            return (
+                u64::try_from(inicio.elapsed().as_millis()).unwrap_or(0),
+                format!("archivo:{nombre}"),
+            );
+        }
+        if inicio.elapsed() > Duration::from_millis(max_ms) {
+            return (max_ms, "tiempo".to_owned());
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+}
+
+fn padre(motor: &str, filas: u128, repeticiones: u32, max_ms: u64, rotacion: bool) {
     let yo = std::env::current_exe().unwrap();
     let mut estado = 0x9E37_79B9_7F4A_7C15_u64 ^ u64::from(std::process::id());
-    println!("motor,filas_por_tx,rep,kill_ms,confirmadas,encontradas,perdidas,reapertura_ms,error");
+    println!(
+        "motor,filas_por_tx,rep,kill_ms,confirmadas,encontradas,perdidas,reapertura_ms,error,disparo"
+    );
     for rep in 1..=repeticiones {
         let ruta: PathBuf = std::env::temp_dir().join(format!("limen-cierre-{motor}-{rep}"));
         drop(std::fs::remove_dir_all(&ruta));
@@ -118,8 +172,13 @@ fn padre(motor: &str, filas: u128, repeticiones: u32, max_ms: u64) {
         while listo.load(Ordering::SeqCst) == 0 {
             std::thread::sleep(Duration::from_millis(5));
         }
-        let espera = 50 + azar(&mut estado) % max_ms;
-        std::thread::sleep(Duration::from_millis(espera));
+        let (espera, disparo) = if rotacion {
+            esperar_archivo_nuevo(&ruta, max_ms, &mut estado)
+        } else {
+            let espera = 50 + azar(&mut estado) % max_ms;
+            std::thread::sleep(Duration::from_millis(espera));
+            (espera, "tiempo".to_owned())
+        };
         // Windows: `taskkill /F` (TerminateProcess). Linux: `kill -9` (SIGKILL).
         let mut orden = if cfg!(windows) {
             let mut c = Command::new("taskkill");
@@ -162,7 +221,7 @@ fn padre(motor: &str, filas: u128, repeticiones: u32, max_ms: u64) {
             });
         let perdidas = confirmadas.saturating_sub(encontradas);
         println!(
-            "{motor},{filas},{rep},{espera},{confirmadas},{encontradas},{perdidas},{reapertura},{error}"
+            "{motor},{filas},{rep},{espera},{confirmadas},{encontradas},{perdidas},{reapertura},{error},{disparo}"
         );
         drop(std::fs::remove_dir_all(&ruta));
     }
@@ -183,6 +242,7 @@ fn main() {
             a(3).parse().unwrap(),
             a(4).parse().unwrap(),
             a(5).parse().unwrap(),
+            args.get(6).is_some_and(|m| m == "rotacion"),
         ),
         otro => panic!("modo desconocido: {otro}"),
     }
