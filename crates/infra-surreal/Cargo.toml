@@ -6,6 +6,10 @@ edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+[features]
+# EXPERIMENTO (rama exp/rocksdb): enciende el motor RocksDB junto a SurrealKV.
+rocksdb = ["surrealdb/kv-rocksdb"]
+
 [dependencies]
 limen-dominio.workspace = true
 limen-aplicacion.workspace = true

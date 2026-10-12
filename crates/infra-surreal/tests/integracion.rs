@@ -165,6 +165,40 @@ mod tests {
         assert_eq!(ficha.acceso, ResultadoAcceso::Permitido, "PRAIND vigente");
     }
 
+    /// EXPERIMENTO (`--features rocksdb`): la misma prueba de persistencia
+    /// con `RocksDB`.
+    #[cfg(feature = "rocksdb")]
+    #[tokio::test]
+    async fn los_datos_persisten_en_disco_con_rocksdb() {
+        let carpeta = CarpetaTemporal::nueva();
+        let ids = IdsSecuenciales::new();
+        {
+            let almacen = AlmacenSurreal::en_disco_rocksdb(&carpeta.0).await.unwrap();
+            registrar_todo(&almacen, &ids).await;
+        }
+
+        // RocksDB libera el candado al soltar la última conexión; se reintenta.
+        let mut reabierto = None;
+        for _ in 0..100 {
+            match AlmacenSurreal::en_disco_rocksdb(&carpeta.0).await {
+                Ok(almacen) => {
+                    reabierto = Some(almacen);
+                    break;
+                }
+                Err(error) if error.to_string().to_lowercase().contains("lock") => {
+                    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+                }
+                Err(error) => panic!("no se pudo reabrir la base: {error}"),
+            }
+        }
+        let reabierto = reabierto.expect("RocksDB nunca liberó el candado");
+        let ficha = ConsultarContratista::new(reabierto, reloj())
+            .ejecutar("111111111")
+            .await
+            .unwrap();
+        assert_eq!(ficha.contratista.nombre().as_str(), "JOSE PEÑA");
+    }
+
     fn entrada_con_gafete(
         contratista: limen_dominio::contratista::ContratistaId,
     ) -> ComandoEntrada {

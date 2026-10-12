@@ -4,7 +4,10 @@ use std::path::Path;
 
 use limen_aplicacion::puertos::{ErrorPersistencia, RegistroAuditado};
 use surrealdb::Surreal;
+#[cfg(feature = "rocksdb")]
+use surrealdb::engine::local::RocksDb;
 use surrealdb::engine::local::{Db, Mem, SurrealKv};
+use surrealdb::types::SurrealValue;
 
 use crate::error::tecnica;
 use crate::registros::AuditoriaRegistro;
@@ -40,6 +43,31 @@ impl AlmacenSurreal {
         })?;
         let db = Surreal::new::<SurrealKv>(ruta).await.map_err(tecnica)?;
         Self::preparar(db).await
+    }
+
+    /// EXPERIMENTO: lo mismo que [`Self::en_disco`] pero con `RocksDB`.
+    #[cfg(feature = "rocksdb")]
+    pub async fn en_disco_rocksdb(ruta: &Path) -> Result<Self, ErrorPersistencia> {
+        let ruta = ruta.to_str().ok_or_else(|| {
+            ErrorPersistencia::Tecnica(format!("ruta no válida: {}", ruta.display()))
+        })?;
+        let db = Surreal::new::<RocksDb>(ruta).await.map_err(tecnica)?;
+        Self::preparar(db).await
+    }
+
+    /// EXPERIMENTO: cuántos hechos hay guardados (prueba de cierre brusco).
+    pub async fn contar_hechos(&self) -> Result<u64, ErrorPersistencia> {
+        #[derive(SurrealValue)]
+        struct Cuenta {
+            n: i64,
+        }
+        let mut respuesta = self
+            .db
+            .query("SELECT count() AS n FROM hecho GROUP ALL")
+            .await
+            .map_err(tecnica)?;
+        let fila: Option<Cuenta> = respuesta.take(0).map_err(tecnica)?;
+        Ok(fila.map_or(0, |f| u64::try_from(f.n).unwrap_or(0)))
     }
 
     async fn preparar(db: Surreal<Db>) -> Result<Self, ErrorPersistencia> {

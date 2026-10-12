@@ -1,0 +1,18 @@
+[package]
+name = "limen-exp-cierre-brusco"
+description = "EXPERIMENTO: mata el proceso a destiempo y cuenta los hechos confirmados que faltan"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+rocksdb = ["limen-infra-surreal/rocksdb"]
+
+[dependencies]
+limen-dominio.workspace = true
+limen-aplicacion.workspace = true
+limen-infra-surreal.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "time"] }

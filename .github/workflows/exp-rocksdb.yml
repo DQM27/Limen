@@ -1,0 +1,86 @@
+name: Experimento RocksDB
+
+# EXPERIMENTO: sólo vive en la rama `exp/rocksdb`; no se fusiona a `main`.
+# Compila Limen con RocksDB, corre las pruebas de `infra-surreal` y la prueba
+# de cierre brusco (matar el proceso a destiempo) contra los dos motores, en
+# Linux y en Windows (MSVC). Los resultados quedan como artefactos.
+on:
+  push:
+    branches: [exp/rocksdb]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rocksdb:
+    name: RocksDB (${{ matrix.so }})
+    runs-on: ${{ matrix.so }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        so: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Rust del proyecto
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+
+      - name: Entorno
+        run: |
+          mkdir -p resultados
+          {
+            rustc -vV
+            echo "--- cpu y memoria"
+            nproc 2>/dev/null || echo "$NUMBER_OF_PROCESSORS procesadores"
+            echo "--- compiladores"
+            g++ --version 2>&1 | head -1 || true
+            clang --version 2>&1 | head -1 || true
+            cmake --version 2>&1 | head -1 || true
+          } | tee resultados/entorno.txt
+
+      - name: Compilar en release con RocksDB (tiempo)
+        run: |
+          inicio=$(date +%s)
+          cargo build --release --locked -p limen-exp-cierre-brusco --features rocksdb
+          echo "compilacion_release_rocksdb_segundos=$(( $(date +%s) - inicio ))" | tee resultados/compilacion.txt
+          ls -l target/release/limen-exp-cierre-brusco* | tee -a resultados/compilacion.txt
+
+      - name: Pruebas de infra-surreal (SurrealKV y RocksDB en disco)
+        run: cargo test --locked -p limen-infra-surreal --features rocksdb 2>&1 | tee resultados/pruebas.txt
+
+      - name: Cierre brusco, SurrealKV
+        run: |
+          exe=target/release/limen-exp-cierre-brusco
+          $exe padre surrealkv 1 100 1500 > resultados/surrealkv-pequena.csv
+          $exe padre surrealkv 500 100 4000 > resultados/surrealkv-grande.csv
+          SURREAL_SURREALKV_MAX_MEMTABLE_SIZE=8388608 $exe padre surrealkv 500 100 4000 > resultados/surrealkv-grande-memtable8.csv
+
+      - name: Cierre brusco, RocksDB
+        run: |
+          exe=target/release/limen-exp-cierre-brusco
+          $exe padre rocksdb 1 100 1500 > resultados/rocksdb-pequena.csv
+          $exe padre rocksdb 500 100 4000 > resultados/rocksdb-grande.csv
+
+      - name: Resumen
+        if: always()
+        run: |
+          for f in resultados/*.csv; do
+            echo "== $f"
+            awk -F, 'NR>1 {n++; if ($7>0) p++; s+=$7; if ($9!="") e++} END {printf "repeticiones=%d con_perdida=%d perdidas_total=%d con_error=%d\n", n, p, s, e}' "$f"
+          done | tee resultados/resumen.txt
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: resultados-${{ matrix.so }}
+          path: resultados/
