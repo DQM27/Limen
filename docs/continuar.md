@@ -219,6 +219,14 @@ ver qué hay instalado y avisar al dueño de lo que falte, sin instalar nada a c
    por hecho) y grande (transacciones de ~500 filas, que fuerzan la rotación y reproducen el
    reporte #428). Matar el proceso no es lo mismo que cortar la energía: decirlo en el
    informe.
+   **Repetir cada combinación variando el parámetro `sync`** de SurrealDB (`never`,
+   `every` o una duración como `5s`), que según su documentación decide cuándo se vuelca
+   la base al sistema de archivos. Averiguar además **cuál es el valor por omisión con el
+   que abre hoy** `AlmacenSurreal::en_disco` (se abre sin parámetros) y cómo se pasa en el
+   modo embebido. RocksDB, por su parte, escribe de forma asíncrona por omisión: un cierre
+   del proceso no pierde nada, pero una caída de la máquina puede perder las últimas
+   escrituras ([wiki de RocksDB](https://github.com/facebook/rocksdb/wiki/Basic-Operations)).
+   Esto puede pesar más que la elección del motor.
 5. **Informe:** `docs/motor-de-base-de-datos.md` con los números y una recomendación. El
    dueño decide; el motor por defecto no cambia en esta prueba. Probar en Android queda
    aparte.
