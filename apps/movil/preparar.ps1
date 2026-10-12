@@ -2,7 +2,7 @@
 #
 #   .\preparar.ps1 [-Base <carpeta "base" a sembrar>] [-SinRust]
 #
-# 1. Compila la interfaz de Angular del escritorio y la copia a `web/`.
+# 1. Compila la interfaz móvil (`ui/`, Angular) y la copia a `web/`.
 # 2. Comprime la base de pruebas como `web/semilla.zip` (sin el archivo LOCK ni
 #    la identidad del equipo: el teléfono crea la suya). `web/` no se sube al
 #    repositorio: lleva datos reales del cliente.
@@ -22,7 +22,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $raiz = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$escritorio = Join-Path $raiz 'apps\escritorio'
+$ui = Join-Path $PSScriptRoot 'ui'
 $web = Join-Path $PSScriptRoot 'web'
 $android = Join-Path $PSScriptRoot 'src-tauri\gen\android'
 $jdk = "$env:LOCALAPPDATA\jdk-21"
@@ -33,12 +33,13 @@ $env:ANDROID_NDK_HOME = Get-ChildItem "$env:ANDROID_HOME\ndk" | Sort-Object Name
 $env:JAVA_HOME = $jdk
 $env:PATH = "$jdk\bin;$env:PATH"
 
-Push-Location $escritorio
+Push-Location $ui
+if (-not (Test-Path node_modules)) { npm install }
 npm run build
 Pop-Location
 
 if (Test-Path $web) { Remove-Item $web -Recurse -Force }
-Copy-Item "$escritorio\dist\limen-escritorio\browser" $web -Recurse
+Copy-Item "$ui\dist\limen-movil\browser" $web -Recurse
 
 $temporal = Join-Path $env:TEMP 'limen-semilla'
 if (Test-Path $temporal) { Remove-Item $temporal -Recurse -Force }

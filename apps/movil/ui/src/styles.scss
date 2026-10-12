@@ -1,0 +1,360 @@
+// Interfaz móvil de Limen. Colores y formas tomados de la app Android de
+// Lattis (acento azul turquesa, fondo lavanda muy claro, esquinas redondeadas).
+:root {
+  --primario: #0b7eb0;
+  --sobre-primario: #fff;
+  --primario-suave: #d9f0f2;
+  --fondo: #f4f3fa;
+  --superficie: #fff;
+  --superficie-2: #ecebf6;
+  --texto: #1b1b23;
+  --texto-2: #6b7280;
+  --borde: #e5e3f1;
+  --error: #dc2626;
+  --error-suave: #fbe7e7;
+  --ok: #15803d;
+  --radio: 16px;
+  --barra-sup: 56px;
+  --barra-inf: 64px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primario: #6fc3e8;
+    --sobre-primario: #06343a;
+    --primario-suave: #0b4e56;
+    --fondo: #0f1115;
+    --superficie: #1b1d24;
+    --superficie-2: #2a2d36;
+    --texto: #ecebf6;
+    --texto-2: #a9aec0;
+    --borde: #3a3d48;
+    --error: #f2a29c;
+    --error-suave: #5c1a15;
+    --ok: #86efac;
+  }
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 16px;
+  overscroll-behavior: none;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+// Los componentes no añaden una caja: su contenido cuelga de `.pantalla`.
+app-login,
+app-cambiar-clave {
+  display: contents;
+}
+
+.pantalla {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  padding-top: env(safe-area-inset-top);
+}
+
+// --- Inicio de sesión ---
+.entrada {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: safe center;
+  overflow-y: auto;
+  gap: 14px;
+  padding: 24px;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+
+  .logo {
+    width: 88px;
+    height: 88px;
+    margin: 0 auto;
+    border-radius: 24px;
+    background: #0b1216;
+    display: grid;
+    place-items: center;
+    color: #3cc9e2;
+    font-size: 44px;
+    font-weight: 700;
+  }
+  h1 {
+    margin: 8px 0 0;
+    text-align: center;
+    font-size: 1.6rem;
+  }
+  .sub {
+    margin: -8px 0 8px;
+    text-align: center;
+    color: var(--texto-2);
+  }
+}
+
+.campo {
+  width: 100%;
+  min-height: 56px;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-radius: var(--radio);
+  background: var(--superficie);
+  outline: none;
+
+  &:focus {
+    border-color: var(--primario);
+  }
+}
+
+.boton {
+  width: 100%;
+  min-height: 52px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--primario);
+  color: var(--sobre-primario);
+  font-weight: 600;
+  cursor: pointer;
+
+  &:disabled {
+    background: var(--superficie-2);
+    color: var(--texto-2);
+  }
+  &.secundario {
+    background: var(--superficie-2);
+    color: var(--texto);
+  }
+  &.peligro {
+    background: var(--error);
+    color: #fff;
+  }
+}
+
+.error {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--error-suave);
+  color: var(--error);
+  font-size: 0.95rem;
+}
+
+// --- Estructura principal ---
+.barra-sup {
+  height: var(--barra-sup);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 20px;
+
+  h1 {
+    flex: 1;
+    margin: 0;
+    font-size: 1.25rem;
+  }
+  .quien {
+    color: var(--texto-2);
+    font-size: 0.85rem;
+    max-width: 38%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.icono {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.contenido {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.barra-inf {
+  flex: none;
+  height: calc(var(--barra-inf) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  display: flex;
+  background: var(--superficie);
+  border-top: 1px solid var(--borde);
+
+  button {
+    flex: 1;
+    border: 0;
+    background: transparent;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    font-size: 0.75rem;
+    color: var(--texto-2);
+    cursor: pointer;
+
+    &.activa {
+      color: var(--primario);
+      font-weight: 600;
+    }
+  }
+}
+
+// --- Activos ---
+.buscador {
+  flex: none;
+  padding: 4px 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modos {
+  display: flex;
+  gap: 8px;
+
+  button {
+    flex: 1;
+    min-height: 40px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--superficie-2);
+    color: var(--texto-2);
+    cursor: pointer;
+
+    &.activa {
+      background: var(--primario-suave);
+      color: var(--primario);
+      font-weight: 600;
+    }
+  }
+}
+
+.lista {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.vacio {
+  margin: auto;
+  padding: 24px;
+  text-align: center;
+  color: var(--texto-2);
+}
+
+.tarjeta {
+  width: 100%;
+  display: block;
+  text-align: left;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: var(--radio);
+  background: var(--superficie);
+  cursor: pointer;
+
+  .nombre {
+    font-weight: 500;
+  }
+  .detalle {
+    margin-top: 2px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--texto-2);
+
+    b {
+      color: var(--primario);
+    }
+  }
+  .hora {
+    margin-top: 2px;
+    font-size: 0.8rem;
+    color: var(--texto-2);
+  }
+  .estado {
+    margin-top: 6px;
+    font-size: 0.85rem;
+    color: var(--error);
+
+    &.ok {
+      color: var(--ok);
+    }
+  }
+}
+
+.resumen {
+  flex: none;
+  padding: 0 20px 6px;
+  font-size: 0.85rem;
+  color: var(--texto-2);
+}
+
+// --- Hoja inferior ---
+.velo {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 45%);
+  display: flex;
+  align-items: flex-end;
+  z-index: 10;
+}
+
+.hoja {
+  width: 100%;
+  max-height: 90dvh;
+  overflow-y: auto;
+  padding: 20px 20px calc(20px + env(safe-area-inset-bottom));
+  border-radius: 24px 24px 0 0;
+  background: var(--fondo);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  h2 {
+    margin: 0;
+    font-size: 1.15rem;
+  }
+  .dato {
+    color: var(--texto-2);
+    font-size: 0.9rem;
+  }
+  label.fila {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+  }
+  input[type='checkbox'] {
+    width: 22px;
+    height: 22px;
+    accent-color: var(--primario);
+  }
+}
