@@ -64,12 +64,18 @@ jobs:
           $exe padre surrealkv 1 100 1500 > resultados/surrealkv-pequena.csv
           $exe padre surrealkv 500 100 4000 > resultados/surrealkv-grande.csv
           SURREAL_SURREALKV_MAX_MEMTABLE_SIZE=8388608 $exe padre surrealkv 500 100 4000 > resultados/surrealkv-grande-memtable8.csv
+          # Memoria de escritura de 1 MiB: rota cada ~7 transacciones grandes, y el cierre
+          # cae seguido sobre una rotacion (el caso del reporte 428 de surrealkv).
+          SURREAL_SURREALKV_MAX_MEMTABLE_SIZE=1048576 $exe padre surrealkv 500 100 4000 > resultados/surrealkv-grande-memtable1.csv
+          SURREAL_SURREALKV_MAX_MEMTABLE_SIZE=1048576 $exe padre surrealkv 1 100 1500 > resultados/surrealkv-pequena-memtable1.csv
 
       - name: Cierre brusco, RocksDB
         run: |
           exe=target/release/limen-exp-cierre-brusco
           $exe padre rocksdb 1 100 1500 > resultados/rocksdb-pequena.csv
           $exe padre rocksdb 500 100 4000 > resultados/rocksdb-grande.csv
+          SURREAL_ROCKSDB_WRITE_BUFFER_SIZE=1048576 $exe padre rocksdb 500 100 4000 > resultados/rocksdb-grande-buffer1.csv
+          SURREAL_ROCKSDB_WRITE_BUFFER_SIZE=1048576 $exe padre rocksdb 1 100 1500 > resultados/rocksdb-pequena-buffer1.csv
 
       - name: Resumen
         if: always()
