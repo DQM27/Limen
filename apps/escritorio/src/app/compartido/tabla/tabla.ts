@@ -26,25 +26,27 @@ import {
   type GetRowIdParams,
   type GridApi,
   type GridReadyEvent,
+  type IRowNode,
   type ModelUpdatedEvent,
   type RowClassParams,
   type SelectionChangedEvent,
+  type TextMatcherParams,
 } from 'ag-grid-community';
 import { AgGridAngular } from 'ag-grid-angular';
 import { claveDeColumna, textoDeTooltip, tiposDeColumna } from './columnas';
 import { guardarDiseno, leerDiseno } from './diseno-guardado';
-import type { Segmento } from '../../nucleo/tipos';
-import { analizarBusqueda, coincideBusqueda, coincideFiltroDeColumna } from './pliegue';
+import type { ReglasDeBusqueda } from '../../nucleo/busqueda';
+import type { CampoDeTexto, CampoResaltable, Segmento } from '../../nucleo/tipos';
+import { DecisionesDeColumna, operacionDeFiltro } from './decisiones-de-columna';
 import {
   MAXIMO_TEXTOS_POR_COLUMNA,
   campoResaltable,
   claveDeTexto,
   type ContextoDeResaltado,
-  type Resaltador,
 } from './resaltado';
 
-/** Cuánto se espera tras teclear antes de pedir el resaltado al núcleo. */
-const RETARDO_DE_RESALTADO_MS = 150;
+/** Cuánto se espera tras teclear antes de preguntarle al núcleo. */
+const RETARDO_DE_BUSQUEDA_MS = 150;
 
 // Los módulos de AG Grid se registran una sola vez, aquí. Hoy todos los de la
 // edición Community; si el tamaño del paquete llegara a importar, se acota en
@@ -55,8 +57,8 @@ ModuleRegistry.registerModules([AllCommunityModule]);
  * La tabla de toda la app. Cada pantalla le da sus columnas y sus filas, y
  * hereda el diseño unificado: AG Grid con su aspecto de serie (claro u oscuro
  * según el sistema), una sola fila de herramientas, textos en español,
- * buscador y filtros por columna que no distinguen tildes, filtros de fecha y
- * número, orden, columnas visibles, anchos, selección múltiple opcional,
+ * buscador y filtros de texto por columna (decididos por el núcleo, reglas N1
+ * y N2), filtros de fecha y número, orden, columnas visibles, anchos, selección múltiple opcional,
  * estados de carga y vacío, y el diseño que cada persona le da queda guardado.
  * Un cambio de diseño se hace aquí y lo heredan todas.
  *
@@ -87,10 +89,12 @@ export class Tabla<T> implements OnInit {
   readonly seleccionMultiple = input(false);
   readonly claseFila = input<(fila: T) => string | undefined>();
   /**
-   * Cómo pedir al núcleo qué resaltar (regla N1). Sin esto, la tabla no
-   * resalta nada. Las columnas que se resaltan se marcan con `resaltable()`.
+   * Las reglas de búsqueda del núcleo (N1 y N2): qué filas coinciden con el
+   * buscador, qué celdas cumplen un filtro de columna y qué resaltar. La
+   * tabla no decide ninguna. El buscador y el resaltado miran las columnas
+   * marcadas con `resaltable()`.
    */
-  readonly resaltador = input<Resaltador>();
+  readonly reglas = input.required<ReglasDeBusqueda>();
 
   readonly seleccionCambia = output<T[]>();
   readonly filaDobleClic = output<T>();
@@ -99,8 +103,6 @@ export class Tabla<T> implements OnInit {
   /** Quartz de serie; el esquema (claro u oscuro) sigue al del sistema. */
   protected readonly tema = themeQuartz.withPart(colorSchemeVariable);
   protected readonly tiposDeColumna: ColTypeDefs<T> = tiposDeColumna as ColTypeDefs<T>;
-  protected readonly analizarBusqueda = analizarBusqueda;
-  protected readonly coincideBusqueda = coincideBusqueda;
 
   protected readonly filtro = signal('');
   protected readonly ocultas = signal<ReadonlySet<string>>(new Set());
@@ -118,6 +120,33 @@ export class Tabla<T> implements OnInit {
   private pedidoDeResaltado = 0;
   private temporizadorDeResaltado: ReturnType<typeof setTimeout> | undefined;
 
+  /**
+   * Las filas que el núcleo dice que pasan el buscador (`null`: no hay
+   * búsqueda). Se identifican por su `idFila` si la hay, o por la fila misma.
+   */
+  private filasQuePasan: ReadonlySet<unknown> | null = null;
+  private pedidoDeBusqueda = 0;
+  private temporizadorDeBusqueda: ReturnType<typeof setTimeout> | undefined;
+
+  /** AG Grid filtra por lo que decidió el núcleo, no por una regla propia. */
+  protected readonly hayBusqueda = (): boolean => this.filasQuePasan !== null;
+  protected readonly pasaLaBusqueda = (nodo: IRowNode<T>): boolean =>
+    this.filasQuePasan === null ||
+    (nodo.data !== undefined && this.filasQuePasan.has(this.claveDeFila(nodo.data)));
+
+  /** Los filtros de texto de cada columna: los decide el núcleo (N2). */
+  private readonly decisiones = new DecisionesDeColumna(
+    (pedidos) => this.reglas().celdasQueCumplen(pedidos),
+    () => this.api?.onFilterChanged(),
+  );
+  private readonly coincideFiltroDeColumna = (parametros: TextMatcherParams): boolean =>
+    parametros.filterText === null ||
+    this.decisiones.cumple(
+      operacionDeFiltro(parametros.filterOption),
+      parametros.filterText,
+      String(parametros.value ?? ''),
+    );
+
   private api: GridApi<T> | null = null;
   /** Orden, ancho y fijado de las columnas: lo último guardado o lo que haya hoy. */
   private columnasGuardadas: ColumnState[] = [];
@@ -129,7 +158,12 @@ export class Tabla<T> implements OnInit {
     flex: 1,
     filter: true,
     floatingFilter: this.filtrosPorColumna() && this.filtrosVisibles(),
-    filterParams: { textMatcher: coincideFiltroDeColumna },
+    // AG Grid pasaría el texto ya en minúsculas; el núcleo debe recibir el
+    // original: la pantalla no transforma texto antes de que él decida.
+    filterParams: {
+      textMatcher: this.coincideFiltroDeColumna,
+      textFormatter: (texto: string) => texto,
+    },
     tooltipValueGetter: textoDeTooltip,
     ...(this.idFila() ? { enableCellChangeFlash: true } : {}),
   }));
@@ -179,14 +213,17 @@ export class Tabla<T> implements OnInit {
   );
 
   constructor() {
-    // Lo que se escribe, las filas o la forma de resaltar cambian: se vuelve
-    // a pedir el resaltado, con una pausa para no preguntar en cada tecla.
+    // Lo que se escribe, las filas o las reglas cambian: se vuelve a preguntar
+    // al núcleo, con una pausa para no preguntar en cada tecla.
     effect((alLimpiar) => {
       this.filtro();
-      this.resaltador();
+      this.reglas();
       this.filas();
-      this.programarResaltado();
-      alLimpiar(() => clearTimeout(this.temporizadorDeResaltado));
+      this.programarBusqueda();
+      alLimpiar(() => {
+        clearTimeout(this.temporizadorDeBusqueda);
+        this.decisiones.cancelar();
+      });
     });
   }
 
@@ -218,11 +255,79 @@ export class Tabla<T> implements OnInit {
     this.programarResaltado();
   }
 
+  private programarBusqueda(): void {
+    clearTimeout(this.temporizadorDeBusqueda);
+    this.temporizadorDeBusqueda = setTimeout(() => void this.buscar(), RETARDO_DE_BUSQUEDA_MS);
+  }
+
+  /** Primero qué filas pasan el buscador; después qué resaltar en las que quedan. */
+  private async buscar(): Promise<void> {
+    await this.filtrarFilas();
+    await this.resaltarLoVisible();
+  }
+
+  private readonly claveDeFila = (fila: T): unknown => this.idFila()?.(fila) ?? fila;
+
+  /** Las columnas que declararon su campo con `resaltable()`: las que se buscan. */
+  private columnasDeBusqueda(): { campo: CampoResaltable; clave: string }[] {
+    return this.columnas().flatMap((columna) => {
+      const campo = campoResaltable(columna);
+      const clave = claveDeColumna(columna);
+      return campo && clave ? [{ campo, clave }] : [];
+    });
+  }
+
+  /**
+   * Le pregunta al núcleo qué filas coinciden con el buscador y filtra con su
+   * respuesta (regla N2). Si el núcleo no responde, no se oculta nada.
+   */
+  private async filtrarFilas(): Promise<void> {
+    const api = this.api;
+    if (!api) {
+      return;
+    }
+    const buscado = this.filtro().trim();
+    const pedido = ++this.pedidoDeBusqueda;
+    if (buscado === '') {
+      this.aplicarBusqueda(api, null);
+      return;
+    }
+    const columnas = this.columnasDeBusqueda();
+    const claves: unknown[] = [];
+    const filas: CampoDeTexto[][] = [];
+    api.forEachNode((nodo) => {
+      if (nodo.data !== undefined) {
+        claves.push(this.claveDeFila(nodo.data));
+        filas.push(
+          columnas.map(({ campo, clave }) => ({ campo, texto: textoDeCelda(api, nodo, clave) })),
+        );
+      }
+    });
+    try {
+      const respuestas = await this.reglas().filasQueCoinciden(buscado, filas);
+      if (pedido === this.pedidoDeBusqueda) {
+        this.aplicarBusqueda(api, new Set(claves.filter((_, i) => respuestas[i])));
+      }
+    } catch {
+      if (pedido === this.pedidoDeBusqueda) {
+        this.aplicarBusqueda(api, null);
+      }
+    }
+  }
+
+  private aplicarBusqueda(api: GridApi<T>, pasan: ReadonlySet<unknown> | null): void {
+    if (pasan === null && this.filasQuePasan === null) {
+      return;
+    }
+    this.filasQuePasan = pasan;
+    api.onFilterChanged();
+  }
+
   private programarResaltado(): void {
     clearTimeout(this.temporizadorDeResaltado);
     this.temporizadorDeResaltado = setTimeout(
       () => void this.resaltarLoVisible(),
-      RETARDO_DE_RESALTADO_MS,
+      RETARDO_DE_BUSQUEDA_MS,
     );
   }
 
@@ -233,18 +338,13 @@ export class Tabla<T> implements OnInit {
    */
   private async resaltarLoVisible(): Promise<void> {
     const api = this.api;
-    const resaltador = this.resaltador();
     const buscado = this.filtro().trim();
-    const columnas = this.columnas().flatMap((columna) => {
-      const campo = campoResaltable(columna);
-      const clave = claveDeColumna(columna);
-      return campo && clave ? [{ campo, clave }] : [];
-    });
+    const columnas = this.columnasDeBusqueda();
     if (!api) {
       return;
     }
     const pedido = ++this.pedidoDeResaltado;
-    if (!resaltador || buscado === '' || columnas.length === 0) {
+    if (buscado === '' || columnas.length === 0) {
       this.guardarResaltados(api, columnas, new Map());
       return;
     }
@@ -254,7 +354,7 @@ export class Tabla<T> implements OnInit {
     }));
     try {
       const respuestas = await Promise.all(
-        pedidos.map(({ campo, textos }) => resaltador(buscado, campo, textos)),
+        pedidos.map(({ campo, textos }) => this.reglas().resaltar(buscado, campo, textos)),
       );
       if (pedido !== this.pedidoDeResaltado) {
         return;
@@ -378,6 +478,12 @@ export class Tabla<T> implements OnInit {
   }
 }
 
+/** El texto que una celda muestra (con su formato), vacío si no tiene. */
+function textoDeCelda<T>(api: GridApi<T>, nodo: IRowNode<T>, clave: string): string {
+  const valor: unknown = api.getCellValue({ rowNode: nodo, colKey: clave, useFormatter: true });
+  return valor === null || valor === undefined ? '' : String(valor);
+}
+
 /**
  * Los textos distintos que una columna muestra en las filas que pasan los
  * filtros, hasta [`MAXIMO_TEXTOS_POR_COLUMNA`].
@@ -388,9 +494,9 @@ function textosDeLaColumna<T>(api: GridApi<T>, clave: string): string[] {
     if (textos.size >= MAXIMO_TEXTOS_POR_COLUMNA) {
       return;
     }
-    const valor: unknown = api.getCellValue({ rowNode: nodo, colKey: clave, useFormatter: true });
-    if (valor !== null && valor !== undefined && valor !== '') {
-      textos.add(String(valor));
+    const texto = textoDeCelda(api, nodo, clave);
+    if (texto !== '') {
+      textos.add(texto);
     }
   });
   return [...textos];

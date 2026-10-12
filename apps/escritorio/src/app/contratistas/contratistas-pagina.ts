@@ -3,13 +3,11 @@ import type { ColDef } from 'ag-grid-community';
 import { fechaCorta } from '../compartido/formato';
 import { resaltable } from '../compartido/tabla/resaltado';
 import { Tabla } from '../compartido/tabla/tabla';
-import { listarContratistas, resaltarCoincidencias } from '../nucleo/comandos';
+import { reglasDelNucleo } from '../nucleo/busqueda';
+import { listarContratistas } from '../nucleo/comandos';
 import { esErrorApp } from '../nucleo/tauri';
 import type { FilaContratista } from '../nucleo/tipos';
 import { etiquetaDeAcceso, etiquetaDeTipo } from './etiquetas';
-
-/** El buscador general sólo mira lo que identifica a la persona. */
-const fueraDelBuscador = (): string => '';
 
 @Component({
   selector: 'app-contratistas-pagina',
@@ -24,7 +22,7 @@ export class ContratistasPagina {
   protected readonly error = signal<string | null>(null);
 
   protected readonly idFila = (fila: FilaContratista): string => fila.id;
-  protected readonly resaltador = resaltarCoincidencias;
+  protected readonly reglas = reglasDelNucleo;
 
   protected readonly columnas: ColDef<FilaContratista>[] = [
     resaltable(
@@ -42,7 +40,6 @@ export class ContratistasPagina {
       flex: 1,
       minWidth: 100,
       valueGetter: (p) => (p.data ? etiquetaDeTipo(p.data.tipo_ingreso) : ''),
-      getQuickFilterText: fueraDelBuscador,
     },
     {
       field: 'fecha_vencimiento_praind',
@@ -51,7 +48,6 @@ export class ContratistasPagina {
       flex: 1.2,
       minWidth: 140,
       valueFormatter: (p) => fechaCorta(p.value),
-      getQuickFilterText: fueraDelBuscador,
     },
     {
       colId: 'estado',
@@ -59,7 +55,6 @@ export class ContratistasPagina {
       flex: 1.2,
       minWidth: 150,
       valueGetter: (p) => (p.data ? etiquetaDeAcceso(p.data.acceso) : ''),
-      getQuickFilterText: fueraDelBuscador,
     },
   ];
 

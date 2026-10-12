@@ -261,6 +261,23 @@ export interface AtajoFecha {
  */
 export type CampoResaltable = 'NOMBRE' | 'IDENTIFICACION' | 'EMPRESA';
 
+/** Un texto de una fila de la tabla y de qué clase es (regla N2). */
+export interface CampoDeTexto {
+  campo: CampoResaltable;
+  texto: string;
+}
+
+/** Los filtros de texto de una columna que el núcleo sabe decidir (regla N2). */
+export type OperacionDeFiltro =
+  'CONTIENE' | 'NO_CONTIENE' | 'IGUAL' | 'DISTINTO' | 'EMPIEZA_CON' | 'TERMINA_CON';
+
+/** Una celda y el filtro de columna que se le aplica. */
+export interface PedidoDeFiltro {
+  operacion: OperacionDeFiltro;
+  celda: string;
+  filtro: string;
+}
+
 /**
  * Un tramo de un texto. La pantalla pinta los `resaltado`; los segmentos de
  * un texto, en orden, lo reconstruyen exacto.

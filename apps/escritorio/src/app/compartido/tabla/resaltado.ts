@@ -7,17 +7,10 @@ import type { CampoResaltable, Segmento } from '../../nucleo/tipos';
  * La regla vive en el núcleo (`dominio/resaltado.rs`): la pantalla sólo pide
  * los segmentos de cada texto y pinta los resaltados. Nada de comparar,
  * plegar ni contar caracteres aquí.
+ *
+ * Declarar el campo de una columna con `resaltable()` hace dos cosas: sus
+ * celdas se resaltan y el buscador de la tabla la tiene en cuenta (N2).
  */
-
-/**
- * Cómo se piden los segmentos al núcleo: lo buscado, de qué clase son los
- * textos y los textos; devuelve un arreglo de segmentos por texto, en orden.
- */
-export type Resaltador = (
-  buscado: string,
-  campo: CampoResaltable,
-  textos: string[],
-) => Promise<Segmento[][]>;
 
 /** Lo que la tabla pone a disposición de las celdas (el `context` del grid). */
 export interface ContextoDeResaltado {

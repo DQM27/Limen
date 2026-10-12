@@ -14,7 +14,7 @@
 //! errores de tecleo). Si lo escrito son sólo números, se busca por cédula o
 //! código, y también dentro de la empresa. Un buscador vacío no excluye a nadie.
 //!
-//! Se usa la misma coincidencia que el resaltado ([`crate::coincidencia`]), así
+//! Se usa la misma coincidencia que el resaltado (módulo interno `coincidencia`), así
 //! que lo resaltado es exactamente lo que hizo que la fila coincidiera.
 //!
 //! # Los filtros de columna
