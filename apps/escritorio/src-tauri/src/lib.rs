@@ -73,6 +73,8 @@ pub fn run() {
             comandos::buscar_contratistas,
             comandos::buscar_empresas,
             comandos::resaltar_coincidencias,
+            comandos::filas_que_coinciden,
+            comandos::celdas_que_cumplen,
             comandos::registrar_salida,
             comandos::registrar_salida_por_gafete,
             comandos::registrar_empresa,

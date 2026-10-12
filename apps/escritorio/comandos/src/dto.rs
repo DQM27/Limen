@@ -29,6 +29,7 @@ use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::{Contratista, ContratistaId};
 use limen_dominio::empresa::{Empresa, EmpresaId};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
+use limen_dominio::filtro_de_tabla::Operacion;
 use limen_dominio::gafete::{NumeroGafete, Portador, Resolucion, TipoGafete};
 use limen_dominio::ingreso_contratista::ErrorIngreso;
 use limen_dominio::medio::{Medio, TipoMedio};
@@ -56,6 +57,10 @@ pub fn leer_via(codigo: &str) -> Result<Via, ErrorEntrada> {
 
 pub fn leer_campo_resaltable(codigo: &str) -> Result<Campo, ErrorEntrada> {
     Campo::desde_codigo(codigo).ok_or(ErrorEntrada::CampoInvalido)
+}
+
+pub fn leer_operacion_de_filtro(codigo: &str) -> Result<Operacion, ErrorEntrada> {
+    Operacion::desde_codigo(codigo).ok_or(ErrorEntrada::OperacionInvalida)
 }
 
 fn leer_medio(codigo: &str) -> Result<TipoMedio, ErrorEntrada> {
@@ -290,6 +295,24 @@ impl From<EntradaContratista> for EntradaRegistradaDto {
 }
 
 // --- Entrada: lo que llena el operador ---
+
+/// Un texto de una fila de la tabla y de qué clase es (`NOMBRE`,
+/// `IDENTIFICACION` o `EMPRESA`): con eso el núcleo decide con qué regla lo
+/// compara (regla N2).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct CampoDeTextoEntrada {
+    pub campo: String,
+    pub texto: String,
+}
+
+/// Una celda y el filtro de columna que se le aplica: `CONTIENE`,
+/// `NO_CONTIENE`, `IGUAL`, `DISTINTO`, `EMPIEZA_CON` o `TERMINA_CON`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct PedidoDeFiltroEntrada {
+    pub operacion: String,
+    pub celda: String,
+    pub filtro: String,
+}
 
 /// El formulario de un contratista, tal cual se escribió. Las reglas (cédula,
 /// nombre, PRAIND) las aplica el dominio; aquí sólo se lee el formato.

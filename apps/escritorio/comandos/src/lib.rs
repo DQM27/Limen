@@ -22,6 +22,7 @@ use limen_composicion::Aplicacion;
 use limen_dominio::contratista::ContratistaId;
 use limen_dominio::empresa::EmpresaId;
 use limen_dominio::empresa_proveedora::EmpresaProveedoraId;
+use limen_dominio::filtro_de_tabla::{CampoDeFila, cumple_filtro_de_columna, fila_coincide};
 use limen_dominio::ingreso_contratista::IngresoId;
 use limen_dominio::ingreso_correo::IngresoCorreoId;
 use limen_dominio::ingreso_proveedor::IngresoProveedorId;
@@ -36,11 +37,15 @@ pub use dto::{
     GafeteDto, MotivoDto, PersonaAdentroDto, PersonalKofDto, SegmentoDto,
 };
 pub use dto::{AtajoFechaDto, HistorialDto, MovimientoDto, OperadorDto};
+pub use dto::{CampoDeTextoEntrada, PedidoDeFiltroEntrada};
 pub use error::{ErrorEntrada, ErrorJson, TipoErrorJson};
 pub use sesion::{SesionDelEquipo, UsuarioActual};
 
 use campos::con_campo;
-use dto::{leer_campo_resaltable, leer_fecha_opcional, leer_tipo_gafete, leer_uuid, leer_via};
+use dto::{
+    leer_campo_resaltable, leer_fecha_opcional, leer_operacion_de_filtro, leer_tipo_gafete,
+    leer_uuid, leer_via,
+};
 
 /// Los comandos de la interfaz, sobre una aplicación ya armada, y la
 /// sesión abierta en el equipo.
@@ -207,6 +212,52 @@ where
             .iter()
             .map(|segmentos| segmentos.iter().map(SegmentoDto::from).collect())
             .collect())
+    }
+
+    /// De cada fila de la tabla, si coincide con lo escrito en el buscador
+    /// (regla N2): una respuesta por fila, en el mismo orden. Como el
+    /// resaltado, sólo aplica el dominio a los textos que ya están en pantalla.
+    pub fn filas_que_coinciden(
+        &self,
+        buscado: &str,
+        filas: &[Vec<CampoDeTextoEntrada>],
+    ) -> Result<Vec<bool>, ErrorJson> {
+        filas
+            .iter()
+            .map(|fila| {
+                let campos = fila
+                    .iter()
+                    .map(|c| {
+                        Ok(CampoDeFila {
+                            campo: leer_campo_resaltable(&c.campo)?,
+                            texto: c.texto.as_str(),
+                        })
+                    })
+                    .collect::<Result<Vec<_>, ErrorEntrada>>()?;
+                Ok(fila_coincide(buscado, &campos))
+            })
+            .collect::<Result<Vec<_>, ErrorEntrada>>()
+            .map_err(ErrorJson::from)
+    }
+
+    /// De cada celda, si cumple el filtro de columna que se le pide (regla
+    /// N2): una respuesta por pedido, en el mismo orden.
+    pub fn celdas_que_cumplen(
+        &self,
+        pedidos: &[PedidoDeFiltroEntrada],
+    ) -> Result<Vec<bool>, ErrorJson> {
+        pedidos
+            .iter()
+            .map(|pedido| {
+                let operacion = leer_operacion_de_filtro(&pedido.operacion)?;
+                Ok(cumple_filtro_de_columna(
+                    operacion,
+                    &pedido.celda,
+                    &pedido.filtro,
+                ))
+            })
+            .collect::<Result<Vec<_>, ErrorEntrada>>()
+            .map_err(ErrorJson::from)
     }
 
     /// Busca empresas de contratistas por nombre.

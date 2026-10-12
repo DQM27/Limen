@@ -16,7 +16,8 @@ mod tests {
     use limen_dominio::medio::TipoMedio;
     use limen_dominio::tipo_ingreso::TipoIngreso;
     use limen_escritorio_comandos::{
-        Comandos, ContratistaEntrada, EntradaContratistaEntrada, ErrorJson, TipoErrorJson, campos,
+        CampoDeTextoEntrada, Comandos, ContratistaEntrada, EntradaContratistaEntrada, ErrorJson,
+        PedidoDeFiltroEntrada, TipoErrorJson, campos,
     };
     use limen_infra_memoria::{AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo};
     use serde_json::json;
@@ -418,6 +419,70 @@ mod tests {
 
         let error = error_de(comandos.resaltar("jos", "COLOR", &textos));
         assert_eq!(error.codigo, "campo_invalido", "el campo debe ser conocido");
+    }
+
+    fn campo(campo: &str, texto: &str) -> CampoDeTextoEntrada {
+        CampoDeTextoEntrada {
+            campo: campo.into(),
+            texto: texto.into(),
+        }
+    }
+
+    #[tokio::test]
+    async fn el_buscador_de_la_tabla_decide_por_fila_con_las_columnas_de_cada_una() {
+        let (comandos, _) = con_contratista().await;
+        let filas = vec![
+            vec![
+                campo("IDENTIFICACION", "112340000"),
+                campo("NOMBRE", "Carlos Sánchez"),
+                campo("EMPRESA", "Acme S.A."),
+            ],
+            vec![
+                campo("IDENTIFICACION", "999999999"),
+                campo("NOMBRE", "Beto Rojas"),
+                campo("EMPRESA", "Zeta"),
+            ],
+        ];
+
+        assert_eq!(
+            comandos.filas_que_coinciden("carlos acme", &filas).unwrap(),
+            [true, false],
+            "las palabras pueden repartirse entre nombre y empresa"
+        );
+        assert_eq!(
+            comandos.filas_que_coinciden("", &filas).unwrap(),
+            [true, true],
+            "sin nada escrito pasan todas"
+        );
+        let error = error_de(comandos.filas_que_coinciden("x", &[vec![campo("COLOR", "rojo")]]));
+        assert_eq!(error.codigo, "campo_invalido", "el campo debe ser conocido");
+    }
+
+    #[tokio::test]
+    async fn los_filtros_de_columna_se_deciden_por_celda_y_rechazan_una_operacion_desconocida() {
+        let (comandos, _) = con_contratista().await;
+        let pedido = |operacion: &str, celda: &str, filtro: &str| PedidoDeFiltroEntrada {
+            operacion: operacion.into(),
+            celda: celda.into(),
+            filtro: filtro.into(),
+        };
+
+        assert_eq!(
+            comandos
+                .celdas_que_cumplen(&[
+                    pedido("CONTIENE", "Carlos Mauricio Sánchez", "sanchez carlos"),
+                    pedido("EMPIEZA_CON", "Ñandú", "nan"),
+                    pedido("IGUAL", "Ana", "beto"),
+                ])
+                .unwrap(),
+            [true, true, false],
+            "una respuesta por pedido, en orden"
+        );
+        let error = error_de(comandos.celdas_que_cumplen(&[pedido("contains", "a", "a")]));
+        assert_eq!(
+            error.codigo, "operacion_invalida",
+            "sólo los códigos nuestros"
+        );
     }
 
     fn error_de<T: std::fmt::Debug>(resultado: Result<T, ErrorJson>) -> ErrorJson {

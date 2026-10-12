@@ -16,11 +16,11 @@
 )]
 
 use limen_escritorio_comandos::{
-    AtajoFechaDto, CambioDto, CambioGafeteEntrada, CandidatoIngresoDto, ContratistaDto,
-    ContratistaEntrada, EmpresaDto, EmpresaProveedoraDto, EntradaContratistaEntrada,
-    EntradaCorreoEntrada, EntradaProveedorEntrada, EntradaRegistradaDto, ErrorJson,
-    FilaContratistaDto, GafeteDto, HistorialDto, PersonaAdentroDto, PersonalKofDto, SegmentoDto,
-    UsuarioActual,
+    AtajoFechaDto, CambioDto, CambioGafeteEntrada, CampoDeTextoEntrada, CandidatoIngresoDto,
+    ContratistaDto, ContratistaEntrada, EmpresaDto, EmpresaProveedoraDto,
+    EntradaContratistaEntrada, EntradaCorreoEntrada, EntradaProveedorEntrada, EntradaRegistradaDto,
+    ErrorJson, FilaContratistaDto, GafeteDto, HistorialDto, PedidoDeFiltroEntrada,
+    PersonaAdentroDto, PersonalKofDto, SegmentoDto, UsuarioActual,
 };
 use tauri::State;
 
@@ -104,6 +104,27 @@ pub async fn buscar_contratistas(
 ) -> Resultado<Vec<ContratistaDto>> {
     estado.comandos().sesion()?;
     estado.comandos().buscar_contratistas(&texto, limite).await
+}
+
+/// De cada fila de la tabla, si coincide con el buscador (regla N2).
+#[tauri::command]
+pub fn filas_que_coinciden(
+    estado: State<'_, Estado>,
+    buscado: String,
+    filas: Vec<Vec<CampoDeTextoEntrada>>,
+) -> Resultado<Vec<bool>> {
+    estado.comandos().sesion()?;
+    estado.comandos().filas_que_coinciden(&buscado, &filas)
+}
+
+/// De cada celda, si cumple el filtro de columna que se le pide (regla N2).
+#[tauri::command]
+pub fn celdas_que_cumplen(
+    estado: State<'_, Estado>,
+    pedidos: Vec<PedidoDeFiltroEntrada>,
+) -> Resultado<Vec<bool>> {
+    estado.comandos().sesion()?;
+    estado.comandos().celdas_que_cumplen(&pedidos)
 }
 
 /// Parte cada texto en segmentos con lo buscado resaltado (regla N1).
