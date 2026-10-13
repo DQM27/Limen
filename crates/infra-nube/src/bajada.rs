@@ -610,6 +610,146 @@ mod tests {
         );
     }
 
+    // --- Un equipo con token limitado a su unidad ---
+
+    const ACCESO_DE_PRUEBA: &str = "
+        DEFINE ACCESS OVERWRITE equipo ON DATABASE TYPE RECORD WITH JWT ALGORITHM HS512
+            KEY 'clave-de-prueba-que-solo-conocen-el-worker-y-la-base'
+            AUTHENTICATE { RETURN type::record('equipo', $token.equipo) }
+            DURATION FOR SESSION 1h;
+    ";
+
+    /// El token que en producción emite el Worker del panel, para la unidad de las pruebas.
+    fn token_de_pruebas() -> String {
+        use base64::Engine as _;
+        use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+        use hmac::{Hmac, Mac};
+        use sha2::Sha512;
+
+        let cabecera = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS512","typ":"JWT"}"#);
+        let datos = format!(
+            r#"{{"ns":"limen","db":"principal","ac":"equipo","unidad":"{}","equipo":"equipo-1","iat":1700000000,"exp":4000000000}}"#,
+            limen_infra_surreal::UNIDAD_DE_PRUEBAS
+        );
+        let cuerpo = format!("{cabecera}.{}", URL_SAFE_NO_PAD.encode(datos));
+        let mut firma =
+            Hmac::<Sha512>::new_from_slice(b"clave-de-prueba-que-solo-conocen-el-worker-y-la-base")
+                .unwrap();
+        firma.update(cuerpo.as_bytes());
+        format!(
+            "{cuerpo}.{}",
+            URL_SAFE_NO_PAD.encode(firma.finalize().into_bytes())
+        )
+    }
+
+    /// La nube tal como la ve un equipo con token (otra sesión sobre la misma base) y la nube del
+    /// administrador, que siembra y revisa sin pasar por los permisos.
+    async fn nube_con_token_de_un_equipo() -> (Nube, Nube) {
+        let administrador = nube().await;
+        administrador
+            .db
+            .query(ACCESO_DE_PRUEBA)
+            .await
+            .unwrap()
+            .check()
+            .unwrap();
+        let sesion = administrador.db.clone();
+        sesion.authenticate(token_de_pruebas()).await.unwrap();
+        (administrador, Nube { db: sesion })
+    }
+
+    async fn cuantas_presencias(nube: &Nube) -> usize {
+        let mut respuesta = nube
+            .db
+            .query("SELECT VALUE id FROM presencia")
+            .await
+            .unwrap();
+        let ids: Vec<RecordId> = respuesta.take(0).unwrap();
+        ids.len()
+    }
+
+    /// El equipo entra con su token (no con una clave de administrador): sube lo suyo, baja lo
+    /// global y lo de su unidad, y de otra unidad no recibe nada.
+    #[tokio::test]
+    async fn un_equipo_con_token_sube_y_baja_solo_lo_de_su_unidad() {
+        let (administrador, nube_del_equipo) = nube_con_token_de_un_equipo().await;
+        administrador
+            .db
+            .query(
+                "CREATE presencia:`222222222` CONTENT { unidad: 'OTRA', via: 'PROVEEDOR', \
+                 desde: d'2026-10-09T08:00:00Z' }; \
+                 CREATE empresa:u'0199c7a2-0000-7000-8000-0000000000cc' \
+                 CONTENT { nombre: 'ACME', nombre_busqueda: 'acme' };",
+            )
+            .await
+            .unwrap()
+            .check()
+            .unwrap();
+        let equipo = AlmacenSurreal::en_memoria().await.unwrap();
+        entra(&equipo, "111111111").await;
+
+        nube_del_equipo.subir_cambios(&equipo).await.unwrap();
+        nube_del_equipo.bajar_cambios(&equipo).await.unwrap();
+
+        assert_eq!(
+            cuantas_presencias(&administrador).await,
+            2,
+            "lo del equipo llegó a la nube, junto a lo de la otra unidad"
+        );
+        assert!(
+            !adentro(&equipo, "222222222").await,
+            "lo de otra unidad no baja"
+        );
+        assert_eq!(
+            equipo.filas("empresa").await.unwrap().len(),
+            1,
+            "los catálogos globales sí bajan"
+        );
+        assert!(adentro(&equipo, "111111111").await);
+    }
+
+    /// Una persona que ya está adentro en otra unidad (regla A7): la nube rechaza el segundo
+    /// registro aunque el equipo no pueda verla. Eso no debe frenar lo demás: se anota y se sigue.
+    #[tokio::test]
+    async fn un_choque_con_otra_unidad_no_frena_el_resto_de_la_subida() {
+        let (administrador, nube_del_equipo) = nube_con_token_de_un_equipo().await;
+        administrador
+            .db
+            .query(
+                "CREATE presencia:`111111111` CONTENT { unidad: 'OTRA', via: 'PROVEEDOR', \
+                 desde: d'2026-10-09T08:00:00Z' }",
+            )
+            .await
+            .unwrap()
+            .check()
+            .unwrap();
+        let equipo = AlmacenSurreal::en_memoria().await.unwrap();
+        entra(&equipo, "111111111").await;
+        entra(&equipo, "333333333").await;
+
+        nube_del_equipo
+            .subir_cambios(&equipo)
+            .await
+            .expect("el choque no debe cortar la subida");
+
+        assert_eq!(
+            cuantas_presencias(&administrador).await,
+            2,
+            "la de la otra unidad sigue siendo suya y la otra persona sí subió"
+        );
+        let mut respuesta = administrador
+            .db
+            .query("SELECT VALUE unidad FROM presencia:`111111111`")
+            .await
+            .unwrap();
+        let unidades: Vec<String> = respuesta.take(0).unwrap();
+        assert_eq!(
+            unidades,
+            vec!["OTRA".to_owned()],
+            "no se la quitó a la otra unidad"
+        );
+    }
+
     #[tokio::test]
     async fn lo_de_otra_unidad_no_baja() {
         let nube = nube().await;
