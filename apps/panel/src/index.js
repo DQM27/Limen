@@ -36,6 +36,28 @@ function autorizado(request, env) {
   return clave === env.PANEL_CLAVE;
 }
 
+// SurrealDB no acepta a un usuario de base de datos con Basic auth: se entra por
+// /signin y se usa el token (dura 1 h). Se guarda mientras viva el Worker.
+let sesion = { token: '', hasta: 0 };
+
+async function token(env) {
+  if (sesion.token && Date.now() < sesion.hasta) return sesion.token;
+  const respuesta = await fetch(`${env.SURREAL_URL}/signin`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ns: NAMESPACE,
+      db: BASE,
+      user: env.SURREAL_USUARIO,
+      pass: env.SURREAL_CLAVE,
+    }),
+  });
+  const cuerpo = await respuesta.json();
+  if (!cuerpo.token) throw new Error('signin');
+  sesion = { token: cuerpo.token, hasta: Date.now() + 50 * 60 * 1000 };
+  return sesion.token;
+}
+
 async function equipos(env) {
   const respuesta = await fetch(`${env.SURREAL_URL}/sql`, {
     method: 'POST',
@@ -44,14 +66,16 @@ async function equipos(env) {
       'Content-Type': 'text/plain',
       'Surreal-NS': NAMESPACE,
       'Surreal-DB': BASE,
-      Authorization: 'Basic ' + btoa(`${env.SURREAL_USUARIO}:${env.SURREAL_CLAVE}`),
+      Authorization: 'Bearer ' + (await token(env)),
     },
     body: 'SELECT equipo, unidad, en_linea, iniciada, visto FROM conexion ORDER BY unidad, equipo;',
   });
-  const cuerpo = await respuesta.json();
-  const filas = cuerpo?.[0]?.result ?? [];
+  const [resultado] = await respuesta.json();
+  // Si todavía ningún equipo anunció su conexión, la tabla no existe: no hay equipos.
+  if (resultado?.status === 'ERR' && resultado.kind === 'NotFound') return [];
+  if (resultado?.status !== 'OK') throw new Error('consulta');
   const ahora = Date.now();
-  return filas.map((f) => ({
+  return resultado.result.map((f) => ({
     equipo: f.equipo,
     unidad: f.unidad,
     iniciada: f.iniciada,
