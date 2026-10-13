@@ -21,6 +21,11 @@ export interface EquipoConectado {
   estado: 'en_linea' | 'caido' | 'fuera';
 }
 
+export interface Unidad {
+  codigo: string;
+  nombre: string;
+}
+
 export interface CodigoEmitido {
   id: string;
   codigo: string;
@@ -55,6 +60,9 @@ async function pedir<T>(camino: string, metodo = 'GET', cuerpo?: unknown): Promi
 
 export const listarDispositivos = async (): Promise<Dispositivo[]> =>
   (await pedir<{ dispositivos: Dispositivo[] }>('/api/dispositivos')).dispositivos;
+
+export const listarUnidades = async (): Promise<Unidad[]> =>
+  (await pedir<{ unidades: Unidad[] }>('/api/unidades')).unidades;
 
 export const listarEquipos = async (): Promise<EquipoConectado[]> =>
   (await pedir<{ equipos: EquipoConectado[] }>('/api/equipos')).equipos;

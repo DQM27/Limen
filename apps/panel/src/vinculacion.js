@@ -44,11 +44,21 @@ async function evento(env, tipo, detalle) {
   }).catch(() => {});
 }
 
+/** Las unidades operativas que existen: lo único que se puede elegir al registrar. */
+export async function unidades(env) {
+  const [s] = await consultar(env, LECTURA, 'SELECT record::id(id) AS codigo, nombre FROM unidad_operativa ORDER BY nombre;');
+  return resultado(s);
+}
+
 /** Registra un equipo y emite su código. */
 export async function registrar(env, { nombre, unidad, tipo }) {
   if (!nombre?.trim() || !unidad?.trim() || !TIPOS.includes(tipo)) {
     return { estado: 400, cuerpo: { error: 'datos_invalidos' } };
   }
+  // Sólo vale una unidad que exista: la pantalla la elige de una lista, y aquí se comprueba.
+  const existentes = await unidades(env);
+  const elegida = existentes.find((u) => u.codigo === unidad.trim().toUpperCase());
+  if (!elegida) return { estado: 400, cuerpo: { error: 'unidad_inexistente' } };
   const id = crypto.randomUUID();
   const codigo = generar_codigo(crypto.getRandomValues(new Uint8Array(10)));
   const huella = await huellaDelCodigo(codigo);
@@ -59,7 +69,7 @@ export async function registrar(env, { nombre, unidad, tipo }) {
      CREATE type::record('dispositivo', $id) SET nombre = $nombre, unidad = $unidad, tipo = $tipo, creado = time::now();
      CREATE type::record('codigo_vinculacion', $huella) SET dispositivo = $id, emitido = time::now(), usado = false, anulado = false;
      COMMIT;`,
-    { id, nombre: nombre.trim(), unidad: unidad.trim().toUpperCase(), tipo, huella },
+    { id, nombre: nombre.trim(), unidad: elegida.codigo, tipo, huella },
   );
   hechas.forEach((s) => resultado(s));
   return {

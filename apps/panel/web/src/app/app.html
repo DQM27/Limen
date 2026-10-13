@@ -19,18 +19,19 @@
           autocomplete="off"
           placeholder="PC portería"
           [value]="nombre()"
-          (input)="escribir('nombre', $event)"
+          (input)="escribir($event)"
         />
       </label>
       <label>
-        Unidad
-        <input
-          type="text"
-          name="unidad"
-          autocomplete="off"
-          [value]="unidad()"
-          (input)="escribir('unidad', $event)"
-        />
+        Unidad operativa
+        <select name="unidad" [value]="unidad()" (change)="elegirUnidad($event)">
+          <option value="" disabled [selected]="unidad() === ''">Elija una unidad</option>
+          @for (opcion of unidades(); track opcion.codigo) {
+            <option [value]="opcion.codigo" [selected]="opcion.codigo === unidad()">
+              {{ opcion.nombre }}
+            </option>
+          }
+        </select>
       </label>
       <label>
         Tipo
@@ -40,7 +41,9 @@
           }
         </select>
       </label>
-      <button type="submit" [disabled]="enviando()">Registrar y emitir código</button>
+      <button type="submit" [disabled]="enviando() || unidad() === ''">
+        Registrar y emitir código
+      </button>
     </form>
     @if (errorFormulario(); as mensaje) {
       <p class="error" role="alert">{{ mensaje }}</p>

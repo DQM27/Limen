@@ -10,12 +10,14 @@ import {
   ErrorPanel,
   listarDispositivos,
   listarEquipos,
+  listarUnidades,
   registrarDispositivo,
   retirarDispositivo,
   type CodigoEmitido,
   type Dispositivo,
   type EquipoConectado,
   type TipoDispositivo,
+  type Unidad,
 } from './panel';
 
 const CADA_CUANTO_MS = 15_000;
@@ -37,6 +39,8 @@ const ETIQUETA_ESTADO: Record<string, string> = {
 
 const MENSAJE_ERROR: Record<string, string> = {
   datos_invalidos: 'Revise el nombre, la unidad y el tipo del equipo.',
+  nube: 'El panel no pudo hablar con la base de datos. Revise los secretos del Worker.',
+  unidad_inexistente: 'Esa unidad operativa no existe. Elija una de la lista.',
 };
 
 /**
@@ -59,7 +63,8 @@ export class App {
   protected readonly error = signal<string | null>(null);
 
   protected readonly nombre = signal('');
-  protected readonly unidad = signal('BRISAS');
+  protected readonly unidades = signal<Unidad[]>([]);
+  protected readonly unidad = signal('');
   protected readonly tipo = signal<TipoDispositivo>('pc');
   protected readonly enviando = signal(false);
   protected readonly errorFormulario = signal<string | null>(null);
@@ -99,8 +104,12 @@ export class App {
     return valor ? new Date(valor).toLocaleString('es-CR') : '';
   }
 
-  protected escribir(campo: 'nombre' | 'unidad', evento: Event): void {
-    this[campo].set((evento.target as HTMLInputElement).value);
+  protected escribir(evento: Event): void {
+    this.nombre.set((evento.target as HTMLInputElement).value);
+  }
+
+  protected elegirUnidad(evento: Event): void {
+    this.unidad.set((evento.target as HTMLSelectElement).value);
   }
 
   protected elegirTipo(evento: Event): void {
@@ -148,9 +157,18 @@ export class App {
 
   private async cargar(): Promise<void> {
     try {
-      const [dispositivos, equipos] = await Promise.all([listarDispositivos(), listarEquipos()]);
+      const [dispositivos, equipos, unidades] = await Promise.all([
+        listarDispositivos(),
+        listarEquipos(),
+        listarUnidades(),
+      ]);
       this.dispositivos.set(dispositivos);
       this.equipos.set(equipos);
+      this.unidades.set(unidades);
+      // Con una sola unidad no hay nada que decidir: queda elegida.
+      if (this.unidad() === '' && unidades.length === 1) {
+        this.unidad.set(unidades[0]?.codigo ?? '');
+      }
       this.error.set(null);
     } catch (error) {
       this.error.set(this.mensaje(error));
