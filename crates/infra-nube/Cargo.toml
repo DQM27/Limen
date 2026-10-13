@@ -17,18 +17,23 @@ surrealdb = { workspace = true, features = ["protocol-ws", "rustls"] }
 # instala `ring` al arrancar (`instalar_cifrado`).
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 limen-dominio.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
+uuid.workspace = true
 log.workspace = true
 tokio = { workspace = true, features = ["time", "sync"] }
 # Para leer los avisos en vivo de la nube (`LIVE SELECT`).
 futures = "0.3"
 # Espera aleatoria (*jitter*) de los reintentos (`espera.rs`, docs/nube.md sección 11). No es para claves ni nonces.
 rand = "0.9"
+# Vinculación del equipo con su código (docs/panel.md): el equipo genera su par de claves
+# P-256 (la privada no sale de él) y canjea el código en el Worker del panel.
+p256 = { version = "0.13", features = ["ecdsa", "jwk"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 [dev-dependencies]
 limen-aplicacion.workspace = true
 chrono.workspace = true
-uuid.workspace = true
 
 [lints]
 workspace = true

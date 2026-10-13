@@ -1506,6 +1506,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5e6043086bf7973472e0c7dff2142ea0b680d30e18d9cc40f267efbf222bd47"
 dependencies = [
  "base16ct",
+ "base64ct",
  "crypto-bigint",
  "digest",
  "ff",
@@ -1516,6 +1517,8 @@ dependencies = [
  "pkcs8",
  "rand_core 0.6.4",
  "sec1",
+ "serde_json",
+ "serdect",
  "subtle",
  "zeroize",
 ]
@@ -3229,6 +3232,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "limen-dominio-wasm"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "limen-dominio",
+ "uuid",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "limen-escritorio"
 version = "0.1.0"
 dependencies = [
@@ -3279,8 +3292,11 @@ dependencies = [
  "limen-infra-plataforma",
  "limen-infra-surreal",
  "log",
+ "p256",
  "rand 0.9.5",
+ "reqwest 0.12.28",
  "rustls",
+ "serde_json",
  "surrealdb",
  "thiserror 2.0.21",
  "tokio",
@@ -5504,6 +5520,7 @@ dependencies = [
  "der",
  "generic-array 0.14.7",
  "pkcs8",
+ "serdect",
  "subtle",
  "zeroize",
 ]
@@ -5708,6 +5725,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.6",
+]
+
+[[package]]
+name = "serdect"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a84f14a19e9a014bb9f4512488d9829a68e04ecabffb0f9904cd1ace94598177"
+dependencies = [
+ "base16ct",
+ "serde",
 ]
 
 [[package]]

@@ -14,7 +14,7 @@ use surrealdb::types::Value;
 use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 
-use crate::subida::TABLAS;
+use crate::subida::{SOLO_BAJADA, TABLAS};
 use crate::{ErrorNube, Nube};
 
 /// Cuántas veces se intenta suscribirse antes de rendirse.
@@ -66,8 +66,9 @@ impl Nube {
         unidad: &str,
         avisos: Arc<Notify>,
     ) -> Result<Escucha, ErrorNube> {
-        let sentencias: Vec<String> = TABLAS
+        let sentencias: Vec<String> = SOLO_BAJADA
             .iter()
+            .chain(TABLAS.iter())
             .map(|(tabla, _)| {
                 if crate::bajada::es_de_la_unidad(tabla) {
                     format!("LIVE SELECT * FROM {tabla} WHERE unidad = $unidad;")

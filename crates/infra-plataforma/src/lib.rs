@@ -8,7 +8,7 @@ mod equipo;
 mod reloj;
 mod sntp;
 
-pub use equipo::origen_del_equipo;
+pub use equipo::{guardar_origen, origen_del_equipo};
 pub use reloj::{RelojConfiable, SERVIDORES_NTP, guardar_desfase, leer_desfase};
 pub use sntp::{Medicion, medir as medir_sntp};
 

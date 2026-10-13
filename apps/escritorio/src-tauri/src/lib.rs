@@ -20,6 +20,9 @@ const CARPETA_BASE: &str = "base";
 const ARCHIVO_DESFASE_RELOJ: &str = "reloj-desfase.txt";
 /// La identidad del equipo: su unidad operativa y su ID.
 const ARCHIVO_EQUIPO: &str = "equipo.txt";
+/// Pila del hilo que arranca la aplicación. El hilo principal de Windows tiene sólo 1 MB y,
+/// en depuración, abrir la base y aplicar el esquema lo desbordaba (`STATUS_STACK_OVERFLOW`).
+const PILA_DEL_ARRANQUE: usize = 64 * 1024 * 1024;
 /// El evento con que la interfaz se entera de que bajaron cambios de la nube
 /// (de otros equipos) y recarga lo que muestra.
 const EVENTO_CAMBIOS_DE_LA_NUBE: &str = "nube-cambios";
@@ -38,14 +41,22 @@ fn preparar_estado(app: &tauri::App) -> Result<Estado, Box<dyn std::error::Error
         // Si la ventana ya se cerró, no hay a quién avisar.
         drop(ventanas.emit(EVENTO_CAMBIOS_DE_LA_NUBE, ()));
     };
-    let aplicacion = tauri::async_runtime::block_on(AplicacionLimen::arrancar(
-        &Config {
-            ruta_base: datos.join(CARPETA_BASE),
-            ruta_desfase_reloj: datos.join(ARCHIVO_DESFASE_RELOJ),
-            ruta_equipo: datos.join(ARCHIVO_EQUIPO),
-        },
-        avisar_a_la_interfaz,
-    ))?;
+    let config = Config {
+        ruta_base: datos.join(CARPETA_BASE),
+        ruta_desfase_reloj: datos.join(ARCHIVO_DESFASE_RELOJ),
+        ruta_equipo: datos.join(ARCHIVO_EQUIPO),
+    };
+    // En un hilo con pila grande; las tareas de fondo que lanza (la sincronización) siguen
+    // en el motor de Tauri cuando este hilo termina.
+    let aplicacion = std::thread::Builder::new()
+        .name("arranque".to_owned())
+        .stack_size(PILA_DEL_ARRANQUE)
+        .spawn(move || {
+            tauri::async_runtime::block_on(AplicacionLimen::arrancar(&config, avisar_a_la_interfaz))
+                .map_err(|e| e.to_string())
+        })?
+        .join()
+        .map_err(|_| "el arranque de la aplicación se interrumpió")??;
     Ok(Estado::new(aplicacion))
 }
 
@@ -88,6 +99,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             comandos::modo_ventana,
             comandos::salir,
+            comandos::estado_vinculacion_equipo,
+            comandos::vincular_equipo_con_codigo,
+            comandos::reiniciar,
             comandos::iniciar_sesion,
             comandos::cerrar_sesion,
             comandos::usuario_actual,

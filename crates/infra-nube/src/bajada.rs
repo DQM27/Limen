@@ -13,7 +13,7 @@
 use limen_infra_surreal::{AlmacenSurreal, Cambio, TABLAS_DE_LA_UNIDAD, entradas};
 use surrealdb::types::Value;
 
-use crate::subida::{Copia, TABLAS};
+use crate::subida::{Copia, SOLO_BAJADA, TABLAS};
 use crate::{ErrorNube, Nube};
 
 /// Cuántas entradas del registro de la nube se piden por consulta.
@@ -29,7 +29,8 @@ impl Nube {
     pub async fn bajar_cambios(&self, almacen: &AlmacenSurreal) -> Result<usize, ErrorNube> {
         let unidad = almacen.unidad().as_str().to_owned();
         let mut cambiadas = 0;
-        for (tabla, copia) in TABLAS {
+        // Los usuarios primero: sin ellos nadie puede iniciar sesión.
+        for (tabla, copia) in SOLO_BAJADA.into_iter().chain(TABLAS) {
             let error = |e: &dyn std::fmt::Display| ErrorNube::Bajada(format!("{tabla}: {e}"));
             let inmutable = copia == Copia::Agregar;
             let de_la_unidad = es_de_la_unidad(tabla);
@@ -228,6 +229,61 @@ mod tests {
         vuelta(&nube, &b).await;
         assert!(vuelta(&nube, &a).await > 0);
         assert!(!adentro(&a, "111111111").await, "A sabe que ya salió");
+    }
+
+    const USUARIO: &str = "0199c7a2-0000-7000-8000-0000000000aa";
+
+    async fn usuario_en_la_nube(nube: &Nube, nombre: &str) {
+        nube.db
+            .query(
+                "UPSERT type::record('usuario', <uuid>$id) CONTENT { cedula: '155824395105', \
+                 nombre: $nombre, activo: true, clave: 'hash-de-prueba', \
+                 debe_cambiar_clave: false };",
+            )
+            .bind(("id", USUARIO.to_owned()))
+            .bind(("nombre", nombre.to_owned()))
+            .await
+            .unwrap()
+            .check()
+            .unwrap();
+    }
+
+    async fn nombres_de_usuarios(equipo: &AlmacenSurreal) -> Vec<String> {
+        equipo
+            .filas("usuario")
+            .await
+            .unwrap()
+            .into_iter()
+            .filter_map(|fila| match fila {
+                Value::Object(campos) => match campos.get("nombre") {
+                    Some(Value::String(nombre)) => Some(nombre.clone()),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn los_usuarios_de_la_nube_bajan_al_equipo_y_sus_cambios_tambien() {
+        let nube = nube().await;
+        let equipo = AlmacenSurreal::en_memoria().await.unwrap();
+        usuario_en_la_nube(&nube, "ANA MORA").await;
+
+        vuelta(&nube, &equipo).await;
+        assert_eq!(
+            nombres_de_usuarios(&equipo).await,
+            vec!["ANA MORA".to_owned()],
+            "la carga inicial trae al usuario de la nube"
+        );
+
+        usuario_en_la_nube(&nube, "ANA MORA SOTO").await;
+        vuelta(&nube, &equipo).await;
+        assert_eq!(
+            nombres_de_usuarios(&equipo).await,
+            vec!["ANA MORA SOTO".to_owned()],
+            "un cambio posterior llega por el registro de cambios"
+        );
     }
 
     #[tokio::test]

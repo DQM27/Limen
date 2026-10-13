@@ -13,6 +13,7 @@ mod dto;
 mod error;
 mod sesion;
 mod usuarios;
+mod vinculacion;
 
 use std::fmt;
 
@@ -41,6 +42,7 @@ pub use dto::{AtajoFechaDto, HistorialDto, MovimientoDto, OperadorDto};
 pub use dto::{CampoDeTextoEntrada, PedidoDeFiltroEntrada};
 pub use error::{ErrorEntrada, ErrorJson, TipoErrorJson};
 pub use sesion::{SesionDelEquipo, UsuarioActual};
+pub use vinculacion::{EstadoVinculacionDto, estado_vinculacion, vincular_equipo};
 
 use campos::con_campo;
 use dto::{

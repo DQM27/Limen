@@ -39,4 +39,5 @@ pub mod reloj;
 pub mod resaltado;
 pub mod tipo_ingreso;
 pub mod usuario;
+pub mod vinculacion;
 pub mod visitante;

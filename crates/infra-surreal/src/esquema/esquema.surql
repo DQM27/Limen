@@ -167,7 +167,9 @@ DEFINE FIELD OVERWRITE en ON reloj TYPE datetime;
 
 -- Usuarios (bloque L). La clave nunca se guarda: sólo su hash
 -- Argon2id en formato PHC (lleva la sal y los parámetros).
-DEFINE TABLE OVERWRITE usuario SCHEMAFULL;
+-- Los usuarios son globales y los administra la nube: el equipo sólo los **baja** (registro
+-- de cambios para eso) y nunca los sube (`subida::SOLO_BAJADA`).
+DEFINE TABLE OVERWRITE usuario SCHEMAFULL CHANGEFEED 30d;
 DEFINE FIELD OVERWRITE cedula ON usuario TYPE string ASSERT string::len($value) > 0;
 DEFINE FIELD OVERWRITE nombre ON usuario TYPE string ASSERT string::len($value) > 0;
 DEFINE FIELD OVERWRITE activo ON usuario TYPE bool;
@@ -251,3 +253,31 @@ DEFINE FIELD OVERWRITE equipo ON conexion TYPE string;
 DEFINE FIELD OVERWRITE en_linea ON conexion TYPE bool;
 DEFINE FIELD OVERWRITE iniciada ON conexion TYPE option<datetime>;
 DEFINE FIELD OVERWRITE visto ON conexion TYPE datetime;
+
+-- Vinculación de equipos (bloque M, reglas M6 a M8). Los escribe el Worker del panel,
+-- no los equipos: no entran a la sincronización.
+-- Un dispositivo: dispositivo:⟨uuid⟩, y ese uuid es el del equipo (`conexion` y
+-- `hecho.equipo` lo usan). Hasta que canjea su código no tiene clave; retirado = sin acceso.
+DEFINE TABLE OVERWRITE dispositivo SCHEMAFULL;
+DEFINE FIELD OVERWRITE nombre ON dispositivo TYPE string ASSERT string::len($value) > 0;
+DEFINE FIELD OVERWRITE unidad ON dispositivo TYPE string;
+DEFINE FIELD OVERWRITE tipo ON dispositivo TYPE 'pc' | 'celular' | 'visor';
+DEFINE FIELD OVERWRITE creado ON dispositivo TYPE datetime;
+DEFINE FIELD OVERWRITE huella ON dispositivo TYPE option<string>;
+DEFINE FIELD OVERWRITE clave_publica ON dispositivo TYPE option<object> FLEXIBLE;
+DEFINE FIELD OVERWRITE vinculado ON dispositivo TYPE option<datetime>;
+DEFINE FIELD OVERWRITE retirado ON dispositivo TYPE option<datetime>;
+
+-- Un código emitido: codigo_vinculacion:⟨SHA-256 del código⟩ (el código no se guarda).
+-- La clave natural hace que dos canjes a la vez no puedan usar el mismo código.
+DEFINE TABLE OVERWRITE codigo_vinculacion SCHEMAFULL;
+DEFINE FIELD OVERWRITE dispositivo ON codigo_vinculacion TYPE string;
+DEFINE FIELD OVERWRITE emitido ON codigo_vinculacion TYPE datetime;
+DEFINE FIELD OVERWRITE usado ON codigo_vinculacion TYPE bool;
+DEFINE FIELD OVERWRITE anulado ON codigo_vinculacion TYPE bool;
+
+-- Lo que el panel muestra como alerta: códigos inexistentes, usados, vencidos, etc.
+DEFINE TABLE OVERWRITE evento_seguridad SCHEMAFULL;
+DEFINE FIELD OVERWRITE tipo ON evento_seguridad TYPE string;
+DEFINE FIELD OVERWRITE detalle ON evento_seguridad TYPE string;
+DEFINE FIELD OVERWRITE en ON evento_seguridad TYPE datetime;

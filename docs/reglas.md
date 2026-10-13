@@ -137,6 +137,9 @@ reconstruir cómo estaba el contratista el día que entró.
 | M3 | Tipos: PC, celular y visor; el visor sólo lee. | ⏳ |
 | M4 | Cada equipo pertenece a una **unidad operativa** (el "sitio" de Lattis). Los catálogos (contratistas, empresas, empresas proveedoras, personal KOF, usuarios) son **globales**: iguales en todas las unidades. Gafetes, ingresos, presencia, préstamos e historial son **de la unidad**: un equipo baja sólo los de la suya. Ver `nube.md`. | ✅ en el equipo: cada hecho lleva su unidad y su equipo, y lo de la unidad lleva su campo `unidad` (los gafetes, también en la clave). El reparto llega con la sincronización. |
 | M5 | El equipo es desechable: la nube es la fuente de verdad. Guarda una copia local y trabaja sin conexión; lo pendiente se sube al volver la red. | ✅ subida y bajada en tiempo real, carga inicial de un equipo nuevo (`nube.md`). |
+| M6 | El administrador **registra** un equipo desde el panel y recibe un código de 10 caracteres (sin 0, 1, I ni O) que vale 15 minutos y sirve **una sola vez**. | ✅ dominio (`vinculacion.rs`), Worker (registrar y canjear) y pantalla de primer arranque en la app. Falta la pantalla del panel. |
+| M7 | Sólo hay dos acciones sobre un equipo: **registrar** y **retirar**. Un equipo reinstalado se registra como nuevo y el anterior se retira. | ⏳ |
+| M8 | El código se guarda sólo como huella (SHA-256) y no se imprime en los registros técnicos. Un código usado, anulado o vencido deja un evento de seguridad. | ✅ la regla; ⏳ el evento. |
 
 ## N. Buscador
 

@@ -1,0 +1,68 @@
+/* tslint:disable */
+/* eslint-disable */
+
+/**
+ * El código como se le muestra a la persona (`XXXXX-XXXXX`).
+ */
+export function codigo_para_mostrar(texto: string): string;
+
+/**
+ * Un código nuevo con el azar que entrega el Worker (`crypto.getRandomValues`, 10 bytes).
+ */
+export function generar_codigo(azar: Uint8Array): string;
+
+/**
+ * Lee lo que escribió o escaneó una persona y lo deja en su forma canónica (lo que se
+ * transforma en huella).
+ */
+export function leer_codigo(texto: string): string;
+
+/**
+ * ¿Se puede canjear un código emitido en `emitido_ms`? Vacío si sí; si no, el código
+ * de la regla que lo impide.
+ */
+export function motivo_de_rechazo(emitido_ms: number, usado: boolean, anulado: boolean, ahora_ms: number): string;
+
+/**
+ * Cuántos minutos vale un código.
+ */
+export function vigencia_minutos(): number;
+
+export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
+
+export interface InitOutput {
+    readonly memory: WebAssembly.Memory;
+    readonly codigo_para_mostrar: (a: number, b: number) => [number, number, number, number];
+    readonly generar_codigo: (a: number, b: number) => [number, number, number, number];
+    readonly leer_codigo: (a: number, b: number) => [number, number, number, number];
+    readonly motivo_de_rechazo: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly vigencia_minutos: () => number;
+    readonly __wbindgen_externrefs: WebAssembly.Table;
+    readonly __wbindgen_malloc: (a: number, b: number) => number;
+    readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+    readonly __externref_table_dealloc: (a: number) => void;
+    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
+    readonly __wbindgen_start: () => void;
+}
+
+export type SyncInitInput = BufferSource | WebAssembly.Module;
+
+/**
+ * Instantiates the given `module`, which can either be bytes or
+ * a precompiled `WebAssembly.Module`.
+ *
+ * @param {{ module: SyncInitInput }} module - Passing `SyncInitInput` directly is deprecated.
+ *
+ * @returns {InitOutput}
+ */
+export function initSync(module: { module: SyncInitInput } | SyncInitInput): InitOutput;
+
+/**
+ * If `module_or_path` is {RequestInfo} or {URL}, makes a request and
+ * for everything else, calls `WebAssembly.instantiate` directly.
+ *
+ * @param {{ module_or_path: InitInput | Promise<InitInput> }} module_or_path - Passing `InitInput` directly is deprecated.
+ *
+ * @returns {Promise<InitOutput>}
+ */
+export default function __wbg_init (module_or_path?: { module_or_path: InitInput | Promise<InitInput> } | InitInput | Promise<InitInput>): Promise<InitOutput>;

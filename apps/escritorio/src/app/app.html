@@ -2,6 +2,12 @@
   @case ('cargando') {
     <app-splash />
   }
+  @case ('vincular') {
+    <app-pantalla-vinculacion
+      [desarrollo]="vinculacion()?.desarrollo === true"
+      (omitir)="vinculacionOmitida.set(true)"
+    />
+  }
   @case ('entrada') {
     <app-pantalla-entrada />
   }
