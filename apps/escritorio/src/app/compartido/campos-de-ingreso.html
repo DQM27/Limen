@@ -1,0 +1,33 @@
+<mat-button-toggle-group
+  class="medio"
+  aria-label="Medio de ingreso"
+  hideSingleSelectionIndicator
+  [formControl]="medio()"
+>
+  <mat-button-toggle value="A_PIE">A pie</mat-button-toggle>
+  <mat-button-toggle value="VEHICULO">En vehículo</mat-button-toggle>
+</mat-button-toggle-group>
+
+@if (enVehiculo()) {
+  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+    <mat-label>Placa</mat-label>
+    <input matInput autocomplete="off" [formControl]="placa()" (input)="escribirPlaca($event)" />
+    @if (placa().errors?.['nucleo']; as mensaje) {
+      <mat-error>{{ mensaje }}</mat-error>
+    }
+  </mat-form-field>
+}
+
+<mat-form-field appearance="outline" subscriptSizing="dynamic">
+  <mat-label>{{ etiquetaGafete() }}</mat-label>
+  <input
+    matInput
+    inputmode="numeric"
+    autocomplete="off"
+    [formControl]="gafete()"
+    (input)="escribirGafete($event)"
+  />
+  @if (gafete().errors?.['nucleo']; as mensaje) {
+    <mat-error>{{ mensaje }}</mat-error>
+  }
+</mat-form-field>

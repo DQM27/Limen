@@ -119,7 +119,6 @@ macro_rules! bateria_de_contrato {
             // Usuarios e inicio de sesión (`usuarios`).
             guarda_y_lee_un_usuario_tal_cual,
             la_cedula_de_usuario_repetida_choca,
-            todos_los_usuarios_van_por_nombre,
             los_intentos_fallidos_se_anotan_y_se_borran,
         );
     };

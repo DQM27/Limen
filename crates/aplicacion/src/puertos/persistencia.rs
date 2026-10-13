@@ -356,9 +356,6 @@ pub trait RepositorioUsuarios: Send + Sync {
     /// Si hay al menos un usuario (activo o no).
     fn hay_usuarios(&self) -> impl Future<Output = Result<bool, ErrorPersistencia>> + Send;
 
-    /// Todos los usuarios, por nombre.
-    fn todos(&self) -> impl Future<Output = Result<Vec<Usuario>, ErrorPersistencia>> + Send;
-
     /// Anota el alta o el cambio. Al confirmar falla con
     /// ([`Restriccion::CedulaUsuario`]) si la cédula ya está en uso.
     fn guardar(&mut self, usuario: &Usuario);

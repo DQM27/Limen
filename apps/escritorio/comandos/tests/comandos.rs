@@ -16,9 +16,13 @@ mod tests {
     use limen_dominio::medio::TipoMedio;
     use limen_dominio::tipo_ingreso::TipoIngreso;
     use limen_escritorio_comandos::{
-        Comandos, ContratistaEntrada, EntradaContratistaEntrada, ErrorJson, TipoErrorJson, campos,
+        CampoDeTextoEntrada, Comandos, ContratistaEntrada, EntradaContratistaEntrada,
+        EntradaCorreoEntrada, ErrorJson, PedidoDeFiltroEntrada, TipoErrorJson, campos,
+        nombre_empresa_al_escribir, nombre_persona_al_escribir, placa_al_escribir,
     };
-    use limen_infra_memoria::{AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo};
+    use limen_infra_memoria::{
+        AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo, origen_de_pruebas,
+    };
     use serde_json::json;
     use uuid::Uuid;
 
@@ -26,7 +30,10 @@ mod tests {
     type Prueba = Comandos<AlmacenMemoria, RelojFijo, IdsSecuenciales, ClavesFalsas>;
 
     fn sesion() -> Sesion {
-        Sesion::nueva(OperadorId::desde_uuid(Uuid::from_u128(900)))
+        Sesion::nueva(
+            OperadorId::desde_uuid(Uuid::from_u128(900)),
+            origen_de_pruebas(),
+        )
     }
 
     /// Una aplicación en memoria con el reloj fijo el 9 de octubre de 2026,
@@ -37,7 +44,13 @@ mod tests {
             "2026-10-09T14:00:00Z".parse().unwrap(),
             NaiveDate::from_ymd_opt(2026, 10, 9).unwrap(),
         );
-        let app = Aplicacion::nueva(&almacen, &reloj, &almacen.ids(), &ClavesFalsas);
+        let app = Aplicacion::nueva(
+            &almacen,
+            &reloj,
+            &almacen.ids(),
+            &ClavesFalsas,
+            &origen_de_pruebas(),
+        );
         for tipo in [
             TipoGafete::Contratista,
             TipoGafete::Proveedor,
@@ -151,6 +164,7 @@ mod tests {
                     "id": "00000000-0000-0000-0000-000000000384",
                     "nombre": null,
                 },
+                "demasiado_tiempo": false,
             }]),
             "la fila de la lista dentro"
         );
@@ -253,7 +267,7 @@ mod tests {
             .await
             .unwrap();
         comandos
-            .registrar_salida_por_gafete(&sesion(), "CONTRATISTA", 2)
+            .registrar_salida_por_gafete(&sesion(), Some("CONTRATISTA"), 2)
             .await
             .unwrap();
         assert_eq!(
@@ -353,6 +367,73 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn sin_via_la_salida_por_gafete_busca_en_las_cuatro_y_dice_quien_salio() {
+        let comandos = entran_por_las_cuatro_vias().await;
+
+        let nombre = comandos
+            .registrar_salida_por_gafete(&sesion(), None, 4)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            nombre, "LUIS MORA",
+            "el de visita es del ingreso por correo"
+        );
+        assert_eq!(comandos.dentro().await.unwrap().len(), 3, "salió sólo él");
+    }
+
+    #[tokio::test]
+    async fn la_salida_por_gafete_lo_rechaza_si_nadie_lo_tiene_o_no_se_sabe_quien() {
+        let comandos = entran_por_las_cuatro_vias().await;
+        // El 3 ya lo lleva el contratista; ahora también una visita.
+        comandos
+            .registrar_entrada_correo(
+                &sesion(),
+                &EntradaCorreoEntrada {
+                    cedula: "4-4444-4444".into(),
+                    nombre: "ana rojas".into(),
+                    motivo: "visita".into(),
+                    medio: "A_PIE".into(),
+                    placa: None,
+                    gafete: 3,
+                },
+            )
+            .await
+            .unwrap();
+
+        let nadie = error_de(
+            comandos
+                .registrar_salida_por_gafete(&sesion(), None, 5)
+                .await,
+        );
+        assert_eq!(
+            (nadie.codigo, nadie.campo),
+            ("gafete_sin_portador", Some(campos::GAFETE))
+        );
+        let repetido = error_de(
+            comandos
+                .registrar_salida_por_gafete(&sesion(), None, 3)
+                .await,
+        );
+        assert_eq!(repetido.codigo, "gafete_en_varias_vias");
+        assert!(
+            repetido.mensaje.contains("contratista, ingreso por correo"),
+            "nombra las vías: {}",
+            repetido.mensaje
+        );
+        assert_eq!(
+            comandos.dentro().await.unwrap().len(),
+            5,
+            "no sale nadie: no se adivina"
+        );
+        let en_su_via = comandos
+            .registrar_salida_por_gafete(&sesion(), Some("CORREO"), 3)
+            .await
+            .unwrap();
+        assert_eq!(en_su_via, "ANA ROJAS", "con la vía ya no hay duda");
+    }
+
+    #[tokio::test]
     async fn la_lista_dentro_junta_las_cuatro_vias_y_cada_una_sale_por_su_ingreso() {
         let comandos = entran_por_las_cuatro_vias().await;
         let dentro = comandos.dentro().await.unwrap();
@@ -386,7 +467,7 @@ mod tests {
             ("KOF", 1),
         ] {
             comandos
-                .registrar_salida_por_gafete(&sesion(), via, gafete)
+                .registrar_salida_por_gafete(&sesion(), Some(via), gafete)
                 .await
                 .unwrap();
         }
@@ -399,8 +480,221 @@ mod tests {
 
     // --- Errores ---
 
+    #[tokio::test]
+    async fn el_resaltado_llega_en_segmentos_json_y_rechaza_un_campo_desconocido() {
+        let (comandos, _) = con_contratista().await;
+        let textos = vec!["José Peña".to_owned()];
+
+        let segmentos = comandos.resaltar("jos pe", "NOMBRE", &textos).unwrap();
+        assert_eq!(
+            serde_json::to_value(&segmentos).unwrap(),
+            json!([[
+                { "texto": "Jos", "resaltado": true },
+                { "texto": "é ", "resaltado": false },
+                { "texto": "Pe", "resaltado": true },
+                { "texto": "ña", "resaltado": false }
+            ]]),
+            "el texto original, con sus tildes, partido en segmentos"
+        );
+
+        let error = error_de(comandos.resaltar("jos", "COLOR", &textos));
+        assert_eq!(error.codigo, "campo_invalido", "el campo debe ser conocido");
+    }
+
+    fn campo(campo: &str, texto: &str) -> CampoDeTextoEntrada {
+        CampoDeTextoEntrada {
+            campo: campo.into(),
+            texto: texto.into(),
+        }
+    }
+
+    #[tokio::test]
+    async fn el_buscador_de_la_tabla_decide_por_fila_con_las_columnas_de_cada_una() {
+        let (comandos, _) = con_contratista().await;
+        let filas = vec![
+            vec![
+                campo("IDENTIFICACION", "112340000"),
+                campo("NOMBRE", "Carlos Sánchez"),
+                campo("EMPRESA", "Acme S.A."),
+            ],
+            vec![
+                campo("IDENTIFICACION", "999999999"),
+                campo("NOMBRE", "Beto Rojas"),
+                campo("EMPRESA", "Zeta"),
+            ],
+        ];
+
+        assert_eq!(
+            comandos.filas_que_coinciden("carlos acme", &filas).unwrap(),
+            [true, false],
+            "las palabras pueden repartirse entre nombre y empresa"
+        );
+        assert_eq!(
+            comandos.filas_que_coinciden("", &filas).unwrap(),
+            [true, true],
+            "sin nada escrito pasan todas"
+        );
+        let error = error_de(comandos.filas_que_coinciden("x", &[vec![campo("COLOR", "rojo")]]));
+        assert_eq!(error.codigo, "campo_invalido", "el campo debe ser conocido");
+    }
+
+    #[tokio::test]
+    async fn los_filtros_de_columna_se_deciden_por_celda_y_rechazan_una_operacion_desconocida() {
+        let (comandos, _) = con_contratista().await;
+        let pedido = |operacion: &str, celda: &str, filtro: &str| PedidoDeFiltroEntrada {
+            operacion: operacion.into(),
+            celda: celda.into(),
+            filtro: filtro.into(),
+        };
+
+        assert_eq!(
+            comandos
+                .celdas_que_cumplen(&[
+                    pedido("CONTIENE", "Carlos Mauricio Sánchez", "sanchez carlos"),
+                    pedido("EMPIEZA_CON", "Ñandú", "nan"),
+                    pedido("IGUAL", "Ana", "beto"),
+                ])
+                .unwrap(),
+            [true, true, false],
+            "una respuesta por pedido, en orden"
+        );
+        let error = error_de(comandos.celdas_que_cumplen(&[pedido("contains", "a", "a")]));
+        assert_eq!(
+            error.codigo, "operacion_invalida",
+            "sólo los códigos nuestros"
+        );
+    }
+
     fn error_de<T: std::fmt::Debug>(resultado: Result<T, ErrorJson>) -> ErrorJson {
         resultado.unwrap_err()
+    }
+
+    #[tokio::test]
+    async fn un_formulario_vacio_devuelve_todos_los_problemas_cada_uno_con_su_campo() {
+        let comandos = Comandos::new(aplicacion().await);
+        let vacio = ContratistaEntrada {
+            cedula: String::new(),
+            nombre: String::new(),
+            empresa_id: String::new(),
+            tipo_ingreso: "PRAIND".into(),
+            fecha_vencimiento_praind: String::new(),
+            tiene_acceso: true,
+        };
+
+        let problemas = comandos.validar_contratista(None, &vacio).await.unwrap();
+
+        let resumen: Vec<_> = problemas
+            .iter()
+            .map(|p| (p.codigo, p.campo.unwrap_or("")))
+            .collect();
+        assert_eq!(
+            resumen,
+            [
+                ("cedula_vacia", campos::CEDULA),
+                ("nombre_vacio", campos::NOMBRE),
+                ("empresa_requerida", campos::EMPRESA),
+                ("praind_requerido", campos::FECHA_VENCIMIENTO_PRAIND),
+            ]
+        );
+        assert!(
+            problemas.iter().all(|p| !p.mensaje.is_empty()),
+            "cada problema trae su mensaje"
+        );
+    }
+
+    #[tokio::test]
+    async fn un_formulario_correcto_no_devuelve_problemas() {
+        let comandos = Comandos::new(aplicacion().await);
+        let empresa = comandos.registrar_empresa(&sesion(), "acme").await.unwrap();
+
+        let problemas = comandos
+            .validar_contratista(None, &formulario(&empresa))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            problemas.len(),
+            0,
+            "un formulario correcto no tiene problemas"
+        );
+    }
+
+    #[tokio::test]
+    async fn al_editar_la_propia_cedula_no_choca_pero_la_de_otro_si() {
+        let (comandos, contratista) = con_contratista().await;
+        let empresa = comandos
+            .buscar_empresas("acme", 1)
+            .await
+            .unwrap()
+            .remove(0)
+            .id;
+        let mut otro = formulario(&empresa);
+        otro.cedula = "2-2222-2222".into();
+        comandos
+            .registrar_contratista(&sesion(), &otro)
+            .await
+            .unwrap();
+
+        let propia = comandos
+            .validar_contratista(Some(&contratista), &formulario(&empresa))
+            .await
+            .unwrap();
+        assert_eq!(propia.len(), 0, "su propia cédula no es repetida");
+
+        let ajena = comandos
+            .validar_contratista(Some(&contratista), &otro)
+            .await
+            .unwrap();
+        assert_eq!(ajena.len(), 1);
+        assert_eq!(ajena[0].codigo, "cedula_repetida");
+        assert_eq!(ajena[0].campo, Some(campos::CEDULA));
+    }
+
+    #[tokio::test]
+    async fn un_identificador_ilegible_es_error_de_entrada() {
+        let comandos = Comandos::new(aplicacion().await);
+
+        let mal_id = error_de(
+            comandos
+                .validar_contratista(Some("no-es-un-id"), &formulario(""))
+                .await,
+        );
+        assert_eq!(mal_id.codigo, "id_invalido");
+
+        let mal_empresa = error_de(
+            comandos
+                .validar_contratista(None, &formulario("tampoco"))
+                .await,
+        );
+        assert_eq!(mal_empresa.codigo, "id_invalido");
+        assert_eq!(mal_empresa.campo, Some(campos::EMPRESA));
+    }
+
+    #[tokio::test]
+    async fn registrar_sin_empresa_o_sin_fecha_dice_que_falta_no_que_es_ilegible() {
+        let comandos = Comandos::new(aplicacion().await);
+
+        let sin_empresa = error_de(
+            comandos
+                .registrar_contratista(&sesion(), &formulario(""))
+                .await,
+        );
+        assert_eq!(sin_empresa.codigo, "empresa_requerida");
+        assert_eq!(sin_empresa.campo, Some(campos::EMPRESA));
+
+        let empresa = comandos.registrar_empresa(&sesion(), "acme").await.unwrap();
+        let mut sin_fecha = formulario(&empresa);
+        sin_fecha.fecha_vencimiento_praind = " ".into();
+        let sin_fecha = error_de(comandos.registrar_contratista(&sesion(), &sin_fecha).await);
+        assert_eq!(sin_fecha.codigo, "praind_requerido");
+        assert_eq!(sin_fecha.campo, Some(campos::FECHA_VENCIMIENTO_PRAIND));
+    }
+
+    #[test]
+    fn los_nombres_se_ven_en_mayusculas_mientras_se_escriben() {
+        assert_eq!(nombre_persona_al_escribir("josé peña "), "JOSE PEÑA ");
+        assert_eq!(nombre_empresa_al_escribir("acme s.a. "), "ACME S.A. ");
+        assert_eq!(placa_al_escribir("abc-123 "), "ABC-123 ");
     }
 
     #[tokio::test]
@@ -490,7 +784,7 @@ mod tests {
             (
                 error_de(
                     comandos
-                        .registrar_salida_por_gafete(&sesion, "OTRA", 1)
+                        .registrar_salida_por_gafete(&sesion, Some("OTRA"), 1)
                         .await,
                 ),
                 "via_invalida",

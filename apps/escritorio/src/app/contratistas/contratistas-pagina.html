@@ -14,4 +14,31 @@
   [filas]="filas()"
   [cargando]="cargando()"
   [idFila]="idFila"
-/>
+  (filaDobleClic)="abrirFormulario($event)"
+  [reglas]="reglas"
+>
+  <button
+    acciones
+    mat-flat-button
+    type="button"
+    class="ingreso"
+    appAtajo="F2"
+    matTooltip="Registrar ingreso (F2)"
+    (click)="registrarIngreso()"
+  >
+    <mat-icon aria-hidden="true">login</mat-icon>
+    Registrar ingreso
+  </button>
+  <button
+    acciones
+    mat-stroked-button
+    type="button"
+    class="nuevo"
+    appAtajo="Ctrl+N"
+    matTooltip="Nuevo contratista (Ctrl+N)"
+    (click)="abrirFormulario()"
+  >
+    <mat-icon aria-hidden="true">add</mat-icon>
+    Nuevo contratista
+  </button>
+</app-tabla>

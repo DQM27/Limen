@@ -17,7 +17,7 @@ mod tests {
     use limen_dominio::personal_kof::{CodigoEmpleado, ErrorPersonalKof, PersonalKofId};
     use limen_dominio::presencia::{Identidad, Via};
     use limen_dominio::prestamo_kof::{ErrorDevolucionKof, ErrorPrestamoKof, PrestamoKofId};
-    use limen_infra_memoria::{AlmacenMemoria, IdsSecuenciales, RelojFijo};
+    use limen_infra_memoria::{AlmacenMemoria, IdsSecuenciales, RelojFijo, origen_de_pruebas};
     use uuid::Uuid;
 
     const ENTREGA: &str = "2026-10-09T08:00:00Z";
@@ -35,7 +35,10 @@ mod tests {
     }
 
     fn sesion() -> Sesion {
-        Sesion::nueva(OperadorId::desde_uuid(Uuid::from_u128(900)))
+        Sesion::nueva(
+            OperadorId::desde_uuid(Uuid::from_u128(900)),
+            origen_de_pruebas(),
+        )
     }
 
     fn numero(n: u32) -> NumeroGafete {
@@ -326,7 +329,7 @@ mod tests {
             .ejecutar(&sesion(), ana, 3)
             .await
             .unwrap();
-        let adentro = QuienesEstanAdentro::new(almacen.clone())
+        let adentro = QuienesEstanAdentro::new(almacen.clone(), reloj_a(ENTREGA))
             .ejecutar()
             .await
             .unwrap();
@@ -338,7 +341,7 @@ mod tests {
 
         devolver(&almacen).ejecutar(&sesion(), id).await.unwrap();
         assert!(
-            QuienesEstanAdentro::new(almacen.clone())
+            QuienesEstanAdentro::new(almacen.clone(), reloj_a(ENTREGA))
                 .ejecutar()
                 .await
                 .unwrap()
@@ -487,6 +490,11 @@ mod tests {
             assert_eq!(hecho.via(), via, "la vía del hecho");
             assert_eq!(hecho.registro(), registro, "el registro del hecho");
             assert_eq!(hecho.marca().operador, sesion().operador(), "quién");
+            assert_eq!(
+                hecho.origen(),
+                sesion().origen(),
+                "dónde: la unidad y el equipo de la sesión"
+            );
         }
         assert!(entro.es_entrada(), "primero la entrada");
         assert!(!salio.es_entrada(), "después la salida");

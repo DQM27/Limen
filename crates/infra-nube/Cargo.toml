@@ -1,0 +1,34 @@
+[package]
+name = "limen-infra-nube"
+description = "Conexión de Limen con la nube (SurrealDB Cloud): conectar y aplicar el esquema"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+limen-infra-surreal.workspace = true
+# Sólo para leer la identidad del equipo (`equipo.txt`) al subir su base.
+limen-infra-plataforma.workspace = true
+# La nube se alcanza por WebSocket seguro (`wss://`): sólo este crate activa
+# el protocolo y TLS (rustls, escrito en Rust).
+surrealdb = { workspace = true, features = ["protocol-ws", "rustls"] }
+# Con `ring` y `aws-lc-rs` a la vez en el árbol, rustls no elige solo: se
+# instala `ring` al arrancar (`instalar_cifrado`).
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+thiserror.workspace = true
+log.workspace = true
+tokio = { workspace = true, features = ["time", "sync"] }
+# Para leer los avisos en vivo de la nube (`LIVE SELECT`).
+futures = "0.3"
+# Espera aleatoria (*jitter*) de los reintentos (`espera.rs`, docs/nube.md sección 11). No es para claves ni nonces.
+rand = "0.9"
+
+[dev-dependencies]
+limen-aplicacion.workspace = true
+limen-dominio.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,63 @@
+:host {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.error {
+  margin: 0;
+  color: var(--mat-sys-error);
+}
+
+.aviso {
+  margin: 0;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.rango {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.atajo {
+  --mat-button-outlined-container-height: 36px;
+}
+
+// Las fechas se ven como el buscador de la tabla: misma altura y mismo borde.
+.fecha {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+  background: var(--mat-sys-surface-container-low);
+  font-size: 13px;
+
+  &:focus-within {
+    border-color: var(--mat-sys-primary);
+    outline: 1px solid var(--mat-sys-primary);
+  }
+
+  span {
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  input {
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--mat-sys-on-surface);
+    font: inherit;
+    color-scheme: light dark;
+
+    &[aria-invalid='true'] {
+      color: var(--mat-sys-error);
+    }
+  }
+}

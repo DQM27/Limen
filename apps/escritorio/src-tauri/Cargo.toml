@@ -27,8 +27,6 @@ tauri-build.workspace = true
 [dependencies]
 limen-composicion.workspace = true
 limen-escritorio-comandos.workspace = true
-limen-infra-plataforma.workspace = true
-limen-infra-surreal.workspace = true
 tauri.workspace = true
 tauri-plugin-log.workspace = true
 

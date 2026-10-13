@@ -23,7 +23,7 @@ use crate::gafete::{ErrorPrestamoGafete, NumeroGafete, SituacionGafete, verifica
 use crate::medio::{ErrorMedio, Medio, TipoMedio};
 use crate::movimiento::{ErrorSalida, Marca, cerrar};
 use crate::presencia::{Via, YaEstaAdentro, verificar_afuera};
-use crate::visitante::{ErrorVisitante, PersonaVetada, Visitante, verificar_veto};
+use crate::visitante::{self, ErrorVisitante, PersonaVetada, Visitante, verificar_veto};
 
 /// Largo máximo del motivo de una visita.
 pub const LARGO_MAXIMO_MOTIVO: usize = 200;
@@ -146,6 +146,54 @@ impl ErrorIngresoCorreo {
             Self::Gafete(error) => error.codigo(),
         }
     }
+}
+
+/// El formulario de ingreso tal como está mientras se llena: puede faltar el
+/// gafete.
+#[derive(Debug, Clone, Copy)]
+pub struct BorradorEntradaCorreo<'a> {
+    pub cedula: &'a str,
+    pub nombre: &'a str,
+    pub motivo: &'a str,
+    pub medio: TipoMedio,
+    pub placa: Option<&'a str>,
+    pub gafete: Option<NumeroGafete>,
+}
+
+/// Todo lo que impide registrar este ingreso, en el orden en que se revisa
+/// al registrarlo (vacío si se puede): la persona, el motivo, el medio, si ya
+/// está adentro, el veto y el gafete. Es para marcar cada campo a la vez; al
+/// registrar, el primero es el que se informa.
+pub fn problemas(
+    borrador: &BorradorEntradaCorreo<'_>,
+    hechos: HechosEntradaCorreo,
+) -> Vec<ErrorIngresoCorreo> {
+    let mut problemas: Vec<ErrorIngresoCorreo> =
+        visitante::problemas(borrador.cedula, borrador.nombre)
+            .into_iter()
+            .map(ErrorIngresoCorreo::Visitante)
+            .collect();
+    if let Err(error) = Motivo::nuevo(borrador.motivo) {
+        problemas.push(ErrorIngresoCorreo::Motivo(error));
+    }
+    if let Err(error) = Medio::desde_formulario(borrador.medio, borrador.placa) {
+        problemas.push(ErrorIngresoCorreo::Medio(error));
+    }
+    if let Err(error) = verificar_afuera(hechos.adentro_por) {
+        problemas.push(ErrorIngresoCorreo::YaEstaAdentro(error));
+    }
+    if let Err(error) = verificar_veto(hechos.vetada) {
+        problemas.push(ErrorIngresoCorreo::AccesoDenegado(error));
+    }
+    let gafete = match borrador.gafete {
+        // Sin número no hay gafete que revisar: no existe en ningún catálogo.
+        None => Err(ErrorPrestamoGafete::NoRegistrado),
+        Some(_) => verificar_prestamo(hechos.situacion_gafete),
+    };
+    if let Err(error) = gafete {
+        problemas.push(ErrorIngresoCorreo::Gafete(error));
+    }
+    problemas
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -296,6 +344,78 @@ mod tests {
             hechos,
             marca(ENTRADA),
         )
+    }
+
+    fn borrador() -> BorradorEntradaCorreo<'static> {
+        BorradorEntradaCorreo {
+            cedula: "111111111",
+            nombre: "ANA",
+            motivo: "Entrevista con Recursos Humanos",
+            medio: TipoMedio::APie,
+            placa: None,
+            gafete: Some(NumeroGafete::nuevo(2).unwrap()),
+        }
+    }
+
+    #[test]
+    fn un_formulario_correcto_no_tiene_problemas() {
+        assert_eq!(problemas(&borrador(), hechos()).len(), 0, "sin problemas");
+    }
+
+    #[test]
+    fn un_formulario_vacio_marca_todo_lo_que_falta_a_la_vez() {
+        let vacio = BorradorEntradaCorreo {
+            cedula: "",
+            nombre: "",
+            motivo: "",
+            medio: TipoMedio::Vehiculo,
+            placa: None,
+            gafete: None,
+        };
+
+        assert_eq!(
+            problemas(&vacio, hechos()),
+            [
+                ErrorIngresoCorreo::Visitante(ErrorVisitante::CedulaVacia),
+                ErrorIngresoCorreo::Visitante(ErrorVisitante::NombreVacio),
+                ErrorIngresoCorreo::Motivo(ErrorMotivo::Vacio),
+                ErrorIngresoCorreo::Medio(ErrorMedio::PlacaRequerida),
+                ErrorIngresoCorreo::Gafete(ErrorPrestamoGafete::NoRegistrado),
+            ]
+        );
+    }
+
+    #[test]
+    fn los_problemas_incluyen_lo_que_depende_de_la_base() {
+        let mal = HechosEntradaCorreo {
+            adentro_por: Some(Via::Proveedor),
+            vetada: true,
+            situacion_gafete: SituacionGafete::Registrado {
+                estado: EstadoGafete::Disponible,
+                prestado: true,
+            },
+        };
+
+        assert_eq!(
+            problemas(&borrador(), mal),
+            [
+                ErrorIngresoCorreo::YaEstaAdentro(YaEstaAdentro(Via::Proveedor)),
+                ErrorIngresoCorreo::AccesoDenegado(PersonaVetada),
+                ErrorIngresoCorreo::Gafete(ErrorPrestamoGafete::Prestado),
+            ]
+        );
+    }
+
+    #[test]
+    fn el_primer_problema_de_lo_que_depende_de_la_base_es_el_que_informa_el_registro() {
+        let mut mal = hechos();
+        mal.vetada = true;
+        mal.adentro_por = Some(Via::Correo);
+
+        assert_eq!(
+            problemas(&borrador(), mal).first().copied(),
+            entrar(datos(), mal).err()
+        );
     }
 
     #[test]

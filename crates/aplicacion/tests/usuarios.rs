@@ -12,7 +12,9 @@ mod tests {
     use limen_dominio::cedula::Cedula;
     use limen_dominio::nombre::NombrePersona;
     use limen_dominio::usuario::{ErrorInicioSesion, ErrorUsuario, Usuario, UsuarioGuardado};
-    use limen_infra_memoria::{AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo};
+    use limen_infra_memoria::{
+        AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo, origen_de_pruebas,
+    };
     use uuid::Uuid;
 
     const AHORA: &str = "2026-10-10T08:00:00Z";
@@ -37,7 +39,12 @@ mod tests {
         almacen: &AlmacenMemoria,
         ahora: DateTime<Utc>,
     ) -> IniciarSesion<AlmacenMemoria, RelojFijo, ClavesFalsas> {
-        IniciarSesion::new(almacen.clone(), reloj_en(ahora), ClavesFalsas)
+        IniciarSesion::new(
+            almacen.clone(),
+            reloj_en(ahora),
+            ClavesFalsas,
+            origen_de_pruebas(),
+        )
     }
 
     fn cambiar(
@@ -103,7 +110,7 @@ mod tests {
         assert_eq!(
             iniciada,
             SesionIniciada {
-                sesion: Sesion::nueva(ANA),
+                sesion: Sesion::nueva(ANA, origen_de_pruebas()),
                 cedula: "111111111".to_owned(),
                 nombre: "ANA MORA".to_owned(),
                 debe_cambiar_clave: false,
@@ -179,7 +186,11 @@ mod tests {
     async fn cambiar_la_clave_pide_la_actual() {
         let almacen = equipo();
         let cambio = cambiar(&almacen)
-            .ejecutar(&Sesion::nueva(ANA), "no es la actual", "otra clave larga")
+            .ejecutar(
+                &Sesion::nueva(ANA, origen_de_pruebas()),
+                "no es la actual",
+                "otra clave larga",
+            )
             .await;
         assert_eq!(
             cambio,
@@ -254,7 +265,7 @@ mod tests {
     #[tokio::test]
     async fn la_clave_nueva_cumple_l3_y_se_guarda_cifrada() {
         let almacen = equipo();
-        let sesion = Sesion::nueva(ANA);
+        let sesion = Sesion::nueva(ANA, origen_de_pruebas());
         assert_eq!(
             cambiar(&almacen)
                 .ejecutar(&sesion, CLAVE_ANA, "corta")

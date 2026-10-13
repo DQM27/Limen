@@ -132,3 +132,12 @@
     height: 100%;
   }
 }
+
+// Lo que coincide con el buscador (regla N1). Las celdas las dibuja AG Grid,
+// fuera de los estilos de este componente, de ahí el ::ng-deep.
+.rejilla ::ng-deep mark {
+  padding: 0 1px;
+  border-radius: 3px;
+  background: var(--mat-sys-primary-container);
+  color: var(--mat-sys-on-primary-container);
+}

@@ -112,6 +112,14 @@ export interface Gafete {
   portador_contratista_id: string | null;
   portador_cedula: string | null;
   portador_personal_id: string | null;
+  /**
+   * A quién está asignado: quien lo tiene prestado ahora o, si está perdido,
+   * quien lo tenía. `null` si está disponible o de baja. El nombre falta
+   * cuando sólo se conoce la cédula (un proveedor o una visita).
+   */
+  asignado_nombre: string | null;
+  /** La cédula o el código de empleado de quien está asignado. */
+  asignado_identidad: string | null;
 }
 
 /**
@@ -185,6 +193,8 @@ export interface PersonaAdentro {
   entrada: string;
   /** Quién registró la entrada. */
   entrada_por: Operador;
+  /** Lleva más de 12 horas adentro: probablemente falta registrar su salida. Lo decide el núcleo. */
+  demasiado_tiempo: boolean;
 }
 
 /** Quién registró una marca (entrada o salida). */
@@ -253,4 +263,36 @@ export interface AtajoFecha {
   hasta: string | null;
   /** El que abre el historial. */
   por_omision: boolean;
+}
+
+/**
+ * Qué clase de texto se resalta; el núcleo elige la regla de comparación
+ * según esto (regla N1).
+ */
+export type CampoResaltable = 'NOMBRE' | 'IDENTIFICACION' | 'EMPRESA';
+
+/** Un texto de una fila de la tabla y de qué clase es (regla N2). */
+export interface CampoDeTexto {
+  campo: CampoResaltable;
+  texto: string;
+}
+
+/** Los filtros de texto de una columna que el núcleo sabe decidir (regla N2). */
+export type OperacionDeFiltro =
+  'CONTIENE' | 'NO_CONTIENE' | 'IGUAL' | 'DISTINTO' | 'EMPIEZA_CON' | 'TERMINA_CON';
+
+/** Una celda y el filtro de columna que se le aplica. */
+export interface PedidoDeFiltro {
+  operacion: OperacionDeFiltro;
+  celda: string;
+  filtro: string;
+}
+
+/**
+ * Un tramo de un texto. La pantalla pinta los `resaltado`; los segmentos de
+ * un texto, en orden, lo reconstruyen exacto.
+ */
+export interface Segmento {
+  texto: string;
+  resaltado: boolean;
 }

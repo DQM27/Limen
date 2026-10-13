@@ -142,6 +142,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarEntrada<F, R
         uow.ingresos().guardar(&ingreso);
         uow.hechos().anotar(Hecho::entrada_contratista(
             HechoId::desde_uuid(self.ids.nuevo()),
+            sesion.origen(),
             &ingreso,
             hora.into(),
         ));
@@ -221,9 +222,12 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> RegistrarSalida<F, R,
             .map_err(ErrorCaso::Negocio)?;
 
         uow.ingresos().guardar(&ingreso);
-        if let Some(hecho) =
-            Hecho::salida_contratista(HechoId::desde_uuid(self.ids.nuevo()), &ingreso, hora.into())
-        {
+        if let Some(hecho) = Hecho::salida_contratista(
+            HechoId::desde_uuid(self.ids.nuevo()),
+            sesion.origen(),
+            &ingreso,
+            hora.into(),
+        ) {
             uow.hechos().anotar(hecho);
         }
         uow.presencias()

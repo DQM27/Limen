@@ -6,8 +6,11 @@
 
 use limen_aplicacion::puertos::{ErrorPersistencia, FabricaUnidadDeTrabajo, UnidadDeTrabajo};
 
+use surrealdb::types::{RecordId, Value};
+
 use crate::almacen::AlmacenSurreal;
 use crate::error::{al_confirmar, tecnica};
+use crate::registros::TABLAS_DE_LA_UNIDAD;
 use crate::repositorios::{
     AuditoriaSurreal, ContratistasSurreal, EmpresasProveedorasSurreal, EmpresasSurreal, Escritura,
     GafetesSurreal, HechosSurreal, IngresosCorreoSurreal, IngresosProveedorSurreal,
@@ -25,7 +28,7 @@ impl FabricaUnidadDeTrabajo for AlmacenSurreal {
             contratistas: ContratistasSurreal::new(db.clone()),
             empresas: EmpresasSurreal::new(db.clone()),
             presencias: PresenciasSurreal::new(db.clone()),
-            gafetes: GafetesSurreal::new(db.clone()),
+            gafetes: GafetesSurreal::new(db.clone(), self.unidad().clone()),
             ingresos: IngresosSurreal::new(db.clone()),
             empresas_proveedoras: EmpresasProveedorasSurreal::new(db.clone()),
             ingresos_proveedor: IngresosProveedorSurreal::new(db.clone()),
@@ -179,12 +182,16 @@ impl UnidadDeTrabajo for UowSurreal {
         );
         sentencias.push("COMMIT TRANSACTION;".to_owned());
 
+        let unidad = self.almacen.unidad().to_string();
         let mut consulta = self.almacen.db().query(sentencias.join("\n"));
         for (i, escritura) in escrituras.into_iter().enumerate() {
             consulta = match escritura {
-                Escritura::Crear(id, datos) | Escritura::Guardar(id, datos) => consulta
-                    .bind((format!("id_{i}"), id))
-                    .bind((format!("datos_{i}"), datos)),
+                Escritura::Crear(id, datos) | Escritura::Guardar(id, datos) => {
+                    let datos = con_unidad(&id, datos, &unidad);
+                    consulta
+                        .bind((format!("id_{i}"), id))
+                        .bind((format!("datos_{i}"), datos))
+                }
                 Escritura::Borrar(id) => consulta.bind((format!("id_{i}"), id)),
             };
         }
@@ -192,6 +199,7 @@ impl UnidadDeTrabajo for UowSurreal {
         let mut respuesta = consulta.await.map_err(tecnica)?;
         let errores = respuesta.take_errors();
         if errores.is_empty() {
+            self.almacen.avisar_confirmacion();
             return Ok(());
         }
         // En una transacción fallida todas las sentencias informan error,
@@ -205,5 +213,17 @@ impl UnidadDeTrabajo for UowSurreal {
                 let detalle: Vec<String> = traducidos.iter().map(ToString::to_string).collect();
                 ErrorPersistencia::Tecnica(detalle.join("; "))
             }))
+    }
+}
+
+/// Un registro de una tabla de la unidad lleva el campo `unidad` (M4): se
+/// pone aquí, en un solo lugar, para que ninguna escritura lo olvide.
+fn con_unidad(id: &RecordId, datos: Value, unidad: &str) -> Value {
+    match datos {
+        Value::Object(mut campos) if TABLAS_DE_LA_UNIDAD.contains(&id.table.as_str()) => {
+            campos.insert("unidad", unidad.to_owned());
+            Value::Object(campos)
+        }
+        otro => otro,
     }
 }

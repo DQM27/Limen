@@ -82,6 +82,10 @@ pub enum ErrorEntrada {
     PortadorInvalido,
     #[error("Indique el número de gafete o «Sin gafete», no los dos")]
     GafeteYSinGafete,
+    #[error("El campo a resaltar no es válido")]
+    CampoInvalido,
+    #[error("La operación del filtro no es válida")]
+    OperacionInvalida,
 }
 
 impl ErrorEntrada {
@@ -97,6 +101,8 @@ impl ErrorEntrada {
             Self::CambioGafeteInvalido => "cambio_gafete_invalido",
             Self::PortadorInvalido => "portador_invalido",
             Self::GafeteYSinGafete => "gafete_y_sin_gafete",
+            Self::CampoInvalido => "campo_invalido",
+            Self::OperacionInvalida => "operacion_invalida",
         }
     }
 }

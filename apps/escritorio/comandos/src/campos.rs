@@ -12,6 +12,7 @@ use limen_aplicacion::errores::{ErrorCaso, ErrorDeNegocio};
 use limen_dominio::contratista::ErrorContratista;
 use limen_dominio::empresa::ErrorEmpresa;
 use limen_dominio::gafete::{ErrorGafete, ErrorPrestamoGafete};
+use limen_dominio::gafete_prestado::ErrorDevolucionGafete;
 use limen_dominio::ingreso_contratista::ErrorIngreso;
 use limen_dominio::ingreso_correo::{ErrorIngresoCorreo, ErrorMotivo};
 use limen_dominio::ingreso_proveedor::ErrorIngresoProveedor;
@@ -66,8 +67,8 @@ impl CampoDelError for ErrorContratista {
             | Self::CedulaRepetida
             | Self::CedulaNoEditableAdentro => CEDULA,
             Self::NombreVacio | Self::NombreInvalido => NOMBRE,
-            Self::EmpresaNoExiste => EMPRESA,
-            Self::PraindVencido => FECHA_VENCIMIENTO_PRAIND,
+            Self::EmpresaRequerida | Self::EmpresaNoExiste => EMPRESA,
+            Self::PraindRequerido | Self::PraindVencido => FECHA_VENCIMIENTO_PRAIND,
         })
     }
 }
@@ -160,7 +161,7 @@ impl CampoDelError for ErrorIngresoProveedor {
             Self::Visitante(error) => error.campo(),
             Self::Medio(error) => error.campo(),
             Self::Gafete(error) => error.campo(),
-            Self::EmpresaNoExiste => Some(EMPRESA),
+            Self::EmpresaRequerida | Self::EmpresaNoExiste => Some(EMPRESA),
             Self::YaEstaAdentro(_) | Self::AccesoDenegado(_) => None,
         }
     }
@@ -182,7 +183,7 @@ impl CampoDelError for ErrorPrestamoKof {
     fn campo(&self) -> Option<&'static str> {
         match self {
             Self::Gafete(error) => error.campo(),
-            Self::PersonalInactivo => Some(PERSONA),
+            Self::PersonaRequerida | Self::PersonalInactivo => Some(PERSONA),
             Self::YaTienePrestamo => None,
         }
     }
@@ -191,6 +192,12 @@ impl CampoDelError for ErrorPrestamoKof {
 /// Los gafetes se crean por rango (`desde`, `hasta`) y se cambian de estado
 /// uno por uno: lo que falla en un cambio de estado es del gafete entero,
 /// salvo el último portador de uno perdido.
+impl CampoDelError for ErrorDevolucionGafete {
+    fn campo(&self) -> Option<&'static str> {
+        Some(GAFETE)
+    }
+}
+
 impl CampoDelError for ErrorGafete {
     fn campo(&self) -> Option<&'static str> {
         match self {

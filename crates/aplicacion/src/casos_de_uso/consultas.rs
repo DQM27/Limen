@@ -1,20 +1,27 @@
 //! Casos de uso de sólo lectura: lo que muestran las pantallas.
 
+use std::collections::HashMap;
+
 use chrono::{Days, NaiveDate};
 use limen_dominio::acceso::{ResultadoAcceso, verificar_acceso};
 use limen_dominio::busqueda::Criterio;
 use limen_dominio::contratista::Contratista;
 use limen_dominio::empresa::Empresa;
 use limen_dominio::empresa_proveedora::EmpresaProveedora;
-use limen_dominio::gafete::TipoGafete;
+use limen_dominio::gafete::{NumeroGafete, Portador, TipoGafete};
+use limen_dominio::gafete_prestado::{ErrorDevolucionGafete, quien_devuelve, quienes_llevan};
+use limen_dominio::nombre::NombrePersona;
+use limen_dominio::permanencia::lleva_demasiado_adentro;
 use limen_dominio::personal_kof::PersonalKof;
 use limen_dominio::praind::DIAS_ADVERTENCIA_PRAIND;
+use limen_dominio::presencia::Via;
 use limen_dominio::rango_fechas::{Atajo, ErrorRango, RangoFechas};
 
 use crate::errores::ErrorCaso;
 use crate::puertos::{
-    Consultas, EntradaHistorial, FilaContratista, MovimientoHistorial, PersonaAdentro,
-    RegistroAuditado, Reloj, ResumenGafete,
+    Consultas, EntradaHistorial, FabricaUnidadDeTrabajo, FilaContratista, MovimientoHistorial,
+    PersonaAdentro, RegistroAuditado, Reloj, RepositorioContratistas, RepositorioPersonalKof,
+    ResumenGafete, UnidadDeTrabajo,
 };
 
 /// Cuántos resultados devuelve un buscador como máximo: una lista más larga
@@ -29,18 +36,62 @@ pub(crate) fn limitar(pedido: usize) -> usize {
     pedido.clamp(1, MAXIMO_RESULTADOS)
 }
 
-#[derive(Debug)]
-pub struct QuienesEstanAdentro<C> {
-    consultas: C,
+/// Una persona que está adentro y lo que el dominio decide sobre su
+/// permanencia: la pantalla sólo lo muestra, no lo calcula.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PersonaAdentroVista {
+    pub persona: PersonaAdentro,
+    /// Lleva más de 12 horas adentro (E13): probablemente falta registrar su
+    /// salida.
+    pub demasiado_tiempo: bool,
 }
 
-impl<C: Consultas> QuienesEstanAdentro<C> {
-    pub const fn new(consultas: C) -> Self {
-        Self { consultas }
+#[derive(Debug)]
+pub struct QuienesEstanAdentro<C, R> {
+    consultas: C,
+    reloj: R,
+}
+
+impl<C: Consultas, R: Reloj> QuienesEstanAdentro<C, R> {
+    pub const fn new(consultas: C, reloj: R) -> Self {
+        Self { consultas, reloj }
     }
 
     pub async fn ejecutar(&self) -> Result<Vec<PersonaAdentro>, ErrorConsulta> {
         Ok(self.consultas.quienes_estan_adentro().await?)
+    }
+
+    /// Lo mismo, con la marca de quien lleva demasiado tiempo adentro.
+    pub async fn con_permanencia(&self) -> Result<Vec<PersonaAdentroVista>, ErrorConsulta> {
+        let ahora = self.reloj.ahora();
+        Ok(self
+            .consultas
+            .quienes_estan_adentro()
+            .await?
+            .into_iter()
+            .map(|persona| PersonaAdentroVista {
+                demasiado_tiempo: lleva_demasiado_adentro(persona.entrada.en, ahora),
+                persona,
+            })
+            .collect())
+    }
+
+    /// Quién devuelve el gafete con este número (F8): entre todos los que
+    /// están adentro o, con `via`, sólo entre los de esa vía. Si nadie lo
+    /// tiene, o el número está en uso en varias vías, lo dice el dominio.
+    pub async fn quien_devuelve(
+        &self,
+        numero: NumeroGafete,
+        via: Option<Via>,
+    ) -> Result<PersonaAdentro, ErrorCaso<ErrorDevolucionGafete>> {
+        let adentro = self.consultas.quienes_estan_adentro().await?;
+        let candidatos = adentro
+            .into_iter()
+            .filter(|persona| via.is_none_or(|via| persona.ingreso.via() == via))
+            .map(|persona| (persona.ingreso.via(), persona.gafete, persona));
+        quien_devuelve(numero, candidatos)
+            .map(|(_, persona)| persona)
+            .map_err(ErrorCaso::Negocio)
     }
 }
 
@@ -297,19 +348,98 @@ impl<C: Consultas> HistorialDeCambios<C> {
     }
 }
 
-/// Los gafetes de un tipo con su estado y si están prestados.
-#[derive(Debug)]
-pub struct ListarGafetes<C> {
-    consultas: C,
+/// A quién está asignado un gafete: quien lo tiene prestado ahora o, si está
+/// perdido, quien lo tenía.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AsignadoGafete {
+    /// `None` cuando sólo se conoce la cédula: un proveedor o una visita que
+    /// perdió el gafete no están en ningún catálogo (F5).
+    pub nombre: Option<NombrePersona>,
+    /// La cédula o, para el personal KOF, el código de empleado.
+    pub identidad: String,
 }
 
-impl<C: Consultas> ListarGafetes<C> {
-    pub const fn new(consultas: C) -> Self {
-        Self { consultas }
+/// Un gafete del catálogo, con su estado, si está prestado y a quién.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GafeteListado {
+    pub resumen: ResumenGafete,
+    pub asignado: Option<AsignadoGafete>,
+}
+
+/// Los gafetes de un tipo con su estado, si están prestados y a quién
+/// pertenecen ahora (prestado, o perdido con su último portador).
+#[derive(Debug)]
+pub struct ListarGafetes<F> {
+    fabrica: F,
+}
+
+impl<F: FabricaUnidadDeTrabajo + Consultas> ListarGafetes<F> {
+    pub const fn new(fabrica: F) -> Self {
+        Self { fabrica }
     }
 
-    pub async fn ejecutar(&self, tipo: TipoGafete) -> Result<Vec<ResumenGafete>, ErrorConsulta> {
-        Ok(self.consultas.listar_gafetes(tipo).await?)
+    pub async fn ejecutar(&self, tipo: TipoGafete) -> Result<Vec<GafeteListado>, ErrorConsulta> {
+        let resumenes = self.fabrica.listar_gafetes(tipo).await?;
+        // Quién tiene cada gafete prestado lo decide el dominio (F7) a partir
+        // de quién está adentro.
+        let prestados: HashMap<NumeroGafete, AsignadoGafete> =
+            if resumenes.iter().any(|r| r.prestado) {
+                let adentro = self.fabrica.quienes_estan_adentro().await?;
+                quienes_llevan(
+                    tipo,
+                    adentro.into_iter().map(|persona| {
+                        (
+                            persona.ingreso.via(),
+                            persona.gafete,
+                            AsignadoGafete {
+                                nombre: Some(persona.nombre),
+                                identidad: persona.identidad.to_string(),
+                            },
+                        )
+                    }),
+                )
+            } else {
+                HashMap::new()
+            };
+        let mut listado = Vec::with_capacity(resumenes.len());
+        for resumen in resumenes {
+            let asignado = if resumen.prestado {
+                prestados.get(&resumen.gafete.numero()).cloned()
+            } else {
+                match resumen.gafete.portador() {
+                    Some(portador) => Some(self.ultimo_portador(portador).await?),
+                    None => None,
+                }
+            };
+            listado.push(GafeteListado { resumen, asignado });
+        }
+        Ok(listado)
+    }
+
+    /// El último portador de un gafete perdido, con su nombre si está en un
+    /// catálogo. Si ya no se encuentra, queda sólo su identificación.
+    async fn ultimo_portador(&self, portador: &Portador) -> Result<AsignadoGafete, ErrorConsulta> {
+        let mut uow = self.fabrica.nueva();
+        Ok(match portador {
+            Portador::Persona(cedula) => AsignadoGafete {
+                nombre: None,
+                identidad: cedula.to_string(),
+            },
+            Portador::Contratista(id) => {
+                let contratista = uow.contratistas().obtener(*id).await?;
+                AsignadoGafete {
+                    nombre: contratista.as_ref().map(|c| c.nombre().clone()),
+                    identidad: contratista.map_or_else(String::new, |c| c.cedula().to_string()),
+                }
+            }
+            Portador::PersonalKof(id) => {
+                let persona = uow.personal_kof().obtener(*id).await?;
+                AsignadoGafete {
+                    nombre: persona.as_ref().map(|p| p.nombre().clone()),
+                    identidad: persona.map_or_else(String::new, |p| p.codigo().to_string()),
+                }
+            }
+        })
     }
 }
 

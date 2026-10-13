@@ -1,6 +1,8 @@
 @use '@angular/material' as mat;
+@use 'tokyo-night';
 
-// Tema de Angular Material 3, claro u oscuro según el sistema. Sin fuentes
+// Tema de Angular Material 3 con la paleta Tokyo Night, clara (Day) u oscura
+// (Night) según el sistema. Sin fuentes
 // externas (la CSP sólo permite las del propio paquete): se usa la del sistema.
 html {
   color-scheme: light dark;
@@ -14,6 +16,7 @@ html {
       density: 0,
     )
   );
+  @include tokyo-night.paleta;
 }
 
 html,
@@ -74,4 +77,40 @@ body {
 h1 {
   margin: 0 0 8px;
   font: var(--mat-sys-headline-small);
+}
+
+// Las filas y celdas de la grilla viven fuera de los componentes, así que su
+// estilo tiene que ser global.
+
+// Una fila que pide revisión (por ejemplo, quien lleva demasiado tiempo adentro).
+.ag-row.fila-demasiado-tiempo {
+  background-color: var(--mat-sys-error-container);
+}
+
+// La lista flotante del buscador de ingreso (la capa flotante está fuera del
+// componente): del ancho del campo y con alto máximo, para que desplace.
+.panel-ingreso.mat-mdc-autocomplete-panel {
+  max-height: 320px;
+  border-radius: 12px;
+}
+
+// El botón de una celda de acción ("Salida" en Dentro, "Ingreso" en Contratistas).
+.boton-celda {
+  height: 26px;
+  padding: 0 12px;
+  border: 1px solid var(--mat-sys-outline);
+  border-radius: 13px;
+  background: transparent;
+  color: var(--mat-sys-primary);
+  font: var(--mat-sys-label-medium);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--mat-sys-secondary-container);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 1px;
+  }
 }

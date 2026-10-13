@@ -71,6 +71,13 @@ impl fmt::Display for NombreEmpresa {
     }
 }
 
+/// Lo que la interfaz muestra mientras se escribe el nombre de una empresa:
+/// las mismas mayúsculas que al guardar, pero sin tocar los espacios (si no,
+/// no se podría escribir el espacio entre palabras).
+pub fn nombre_empresa_mientras_se_escribe(texto: &str) -> String {
+    texto.to_uppercase()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum ErrorEmpresa {
     #[error("El nombre de la empresa es obligatorio")]
@@ -168,6 +175,15 @@ mod tests {
 
     fn id() -> EmpresaId {
         EmpresaId::desde_uuid(Uuid::nil())
+    }
+
+    #[test]
+    fn mientras_se_escribe_pasa_a_mayusculas_y_conserva_los_espacios() {
+        assert_eq!(
+            nombre_empresa_mientras_se_escribe("acme s.a. "),
+            "ACME S.A. "
+        );
+        assert_eq!(nombre_empresa_mientras_se_escribe("Ñandú 3m"), "ÑANDÚ 3M");
     }
 
     #[test]

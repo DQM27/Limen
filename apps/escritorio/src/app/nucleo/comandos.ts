@@ -2,6 +2,8 @@ import type {
   AtajoFecha,
   Cambio,
   CambioGafete,
+  CampoDeTexto,
+  CampoResaltable,
   CandidatoIngreso,
   ContratistaEntrada,
   Empresa,
@@ -13,13 +15,15 @@ import type {
   FilaContratista,
   Gafete,
   Historial,
+  PedidoDeFiltro,
   PersonaAdentro,
   PersonalKof,
+  Segmento,
   TipoGafete,
   UsuarioActual,
   Via,
 } from './tipos';
-import { invocar } from './tauri';
+import { invocar, type ErrorApp } from './tauri';
 
 /**
  * Los comandos del núcleo con su forma tipada: un método por comando de
@@ -29,6 +33,35 @@ import { invocar } from './tauri';
 
 export function listarContratistas(): Promise<FilaContratista[]> {
   return invocar<FilaContratista[]>('listar_contratistas');
+}
+
+/**
+ * Cada texto partido en segmentos, con lo que coincide con lo buscado
+ * resaltado (regla N1). Devuelve un arreglo de segmentos por cada texto, en el
+ * mismo orden. No toca datos: sólo aplica la regla del núcleo.
+ */
+export function resaltarCoincidencias(
+  buscado: string,
+  campo: CampoResaltable,
+  textos: string[],
+): Promise<Segmento[][]> {
+  return invocar<Segmento[][]>('resaltar_coincidencias', { buscado, campo, textos });
+}
+
+/**
+ * De cada fila de una tabla, si coincide con lo escrito en el buscador
+ * (regla N2). Una respuesta por fila, en el mismo orden.
+ */
+export function filasQueCoinciden(buscado: string, filas: CampoDeTexto[][]): Promise<boolean[]> {
+  return invocar<boolean[]>('filas_que_coinciden', { buscado, filas });
+}
+
+/**
+ * De cada celda, si cumple el filtro de columna que se le pide (regla N2).
+ * Una respuesta por pedido, en el mismo orden.
+ */
+export function celdasQueCumplen(pedidos: PedidoDeFiltro[]): Promise<boolean[]> {
+  return invocar<boolean[]>('celdas_que_cumplen', { pedidos });
 }
 
 /** Empresas de contratistas cuyo nombre coincide, de la mejor a la peor. */
@@ -47,6 +80,36 @@ export function registrarEmpresa(nombre: string): Promise<string> {
  */
 export function registrarContratista(contratista: ContratistaEntrada): Promise<string> {
   return invocar<string>('registrar_contratista', { contratista });
+}
+
+/**
+ * Todo lo que impide guardar el formulario, de una vez y cada problema con su
+ * `campo` (lista vacía si se puede guardar). `id` es el contratista que se
+ * edita, o `null` si es uno nuevo. No guarda nada.
+ */
+export function validarContratista(
+  id: string | null,
+  contratista: ContratistaEntrada,
+): Promise<ErrorApp[]> {
+  return invocar<ErrorApp[]>('validar_contratista', { id, contratista });
+}
+
+/**
+ * El nombre de una persona como quedará al guardarse (mayúsculas, sin
+ * tildes), para mostrarlo mientras se escribe. Lo decide el dominio.
+ */
+export function nombrePersonaAlEscribir(texto: string): Promise<string> {
+  return invocar<string>('nombre_persona_al_escribir', { texto });
+}
+
+/** La placa de un vehículo como quedará al guardarse (mayúsculas). */
+export function placaAlEscribir(texto: string): Promise<string> {
+  return invocar<string>('placa_al_escribir', { texto });
+}
+
+/** Lo mismo para el nombre de una empresa (mayúsculas). */
+export function nombreEmpresaAlEscribir(texto: string): Promise<string> {
+  return invocar<string>('nombre_empresa_al_escribir', { texto });
 }
 
 /**
@@ -79,12 +142,28 @@ export function renombrarEmpresaProveedora(id: string, nombre: string): Promise<
   return invocar<Cambio[]>('renombrar_empresa_proveedora', { id, nombre });
 }
 
+/**
+ * Todo lo que impide registrar el ingreso de un proveedor, de una vez y cada
+ * problema con su `campo` (lista vacía si se puede). No registra nada.
+ */
+export function validarEntradaProveedor(entrada: EntradaProveedor): Promise<ErrorApp[]> {
+  return invocar<ErrorApp[]>('validar_entrada_proveedor', { entrada });
+}
+
 /** Registra la entrada de un proveedor y devuelve el ingreso. */
 export function registrarEntradaProveedor(entrada: EntradaProveedor): Promise<string> {
   return invocar<string>('registrar_entrada_proveedor', { entrada });
 }
 
 // --- Ingreso por correo ---
+
+/**
+ * Todo lo que impide registrar el ingreso por correo, de una vez y cada
+ * problema con su `campo` (lista vacía si se puede). No registra nada.
+ */
+export function validarEntradaCorreo(entrada: EntradaCorreo): Promise<ErrorApp[]> {
+  return invocar<ErrorApp[]>('validar_entrada_correo', { entrada });
+}
 
 /** Registra la entrada de una visita por correo y devuelve el ingreso. */
 export function registrarEntradaCorreo(entrada: EntradaCorreo): Promise<string> {
@@ -97,6 +176,14 @@ export function buscarPersonalKof(texto: string, limite: number): Promise<Person
   return invocar<PersonalKof[]>('buscar_personal_kof', { texto, limite });
 }
 
+/**
+ * Todo lo que impide dar de alta a esta persona, de una vez y cada problema
+ * con su `campo` (lista vacía si se puede). No registra nada.
+ */
+export function validarPersonalKof(codigoEmpleado: string, nombre: string): Promise<ErrorApp[]> {
+  return invocar<ErrorApp[]>('validar_personal_kof', { codigoEmpleado, nombre });
+}
+
 export function registrarPersonalKof(codigoEmpleado: string, nombre: string): Promise<string> {
   return invocar<string>('registrar_personal_kof', { codigoEmpleado, nombre });
 }
@@ -104,6 +191,15 @@ export function registrarPersonalKof(codigoEmpleado: string, nombre: string): Pr
 /** Edita el nombre y si está activa (se desactiva, no se borra). */
 export function editarPersonalKof(id: string, nombre: string, activo: boolean): Promise<Cambio[]> {
   return invocar<Cambio[]>('editar_personal_kof', { id, nombre, activo });
+}
+
+/**
+ * Todo lo que impide entregar el gafete provisional, de una vez y cada
+ * problema con su `campo` (lista vacía si se puede). `personalId` vacío es
+ * «todavía no eligió a la persona». No entrega nada.
+ */
+export function validarEntregaGafeteKof(personalId: string, gafete: number): Promise<ErrorApp[]> {
+  return invocar<ErrorApp[]>('validar_entrega_gafete_kof', { personalId, gafete });
 }
 
 /** Entrega el gafete provisional (es su entrada) y devuelve el préstamo. */
@@ -162,9 +258,12 @@ export function registrarSalida(via: Via, ingresoId: string): Promise<void> {
   return invocar<void>('registrar_salida', { via, ingresoId });
 }
 
-/** Registra la salida por el número del gafete que devuelve la persona. */
-export function registrarSalidaPorGafete(via: Via, numero: number): Promise<void> {
-  return invocar<void>('registrar_salida_por_gafete', { via, numero });
+/**
+ * Registra la salida de quien devuelve el gafete con este número y devuelve
+ * su nombre. Sin vía (`null`) lo busca en las cuatro.
+ */
+export function registrarSalidaPorGafete(via: Via | null, numero: number): Promise<string> {
+  return invocar<string>('registrar_salida_por_gafete', { via, numero });
 }
 
 // --- Sesión (bloque L) ---

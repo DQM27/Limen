@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { App } from './app';
+import { DURACION_MINIMA_SPLASH_MS } from './entrada/duracion-splash';
 import { routes } from './app.routes';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -18,7 +19,10 @@ async function crear(dentroDeLaApp: boolean) {
         : [],
     ),
   );
-  TestBed.configureTestingModule({ imports: [App], providers: [provideRouter(routes)] });
+  TestBed.configureTestingModule({
+    imports: [App],
+    providers: [provideRouter(routes), { provide: DURACION_MINIMA_SPLASH_MS, useValue: 0 }],
+  });
   const fixture = TestBed.createComponent(App);
   await fixture.whenStable();
   const raiz = fixture.nativeElement as HTMLElement;
@@ -39,7 +43,7 @@ describe('carcasa de la app', () => {
     expect(raiz.querySelector('main#contenido')).not.toBeNull();
   });
 
-  it('la navegación tiene nombre y sólo Contratistas es un enlace activo', async () => {
+  it('la navegación tiene nombre y sólo las pantallas que existen son enlaces activos', async () => {
     const { raiz } = await crear(true);
 
     expect(raiz.querySelector('nav')?.getAttribute('aria-label')).toBe('Secciones');
@@ -48,16 +52,18 @@ describe('carcasa de la app', () => {
     const proximamente = enlaces.filter((a) => a.getAttribute('aria-disabled') === 'true');
 
     expect(disponibles.map((a) => a.textContent?.trim())).toEqual([
+      expect.stringContaining('Dentro'),
       expect.stringContaining('Contratistas'),
+      expect.stringContaining('Proveedores'),
+      expect.stringContaining('Correo'),
+      expect.stringContaining('KOF'),
+      expect.stringContaining('Gafetes'),
+      expect.stringContaining('Historial'),
     ]);
     expect(disponibles.every((a) => a.hasAttribute('href'))).toBe(true);
-    expect(proximamente).toHaveLength(6);
-    // Lo que no existe aún se anuncia como tal y no recibe el foco del teclado
-    // (un enlace sin `href` no entra en el orden de tabulación).
-    expect(proximamente.every((a) => a.getAttribute('aria-label')?.endsWith('próximamente'))).toBe(
-      true,
-    );
-    expect(proximamente.some((a) => a.hasAttribute('href'))).toBe(false);
+    // Hoy todas las secciones existen. Lo que no existiera se anunciaría como
+    // tal y no recibiría el foco del teclado (un enlace sin `href` no se tabula).
+    expect(proximamente).toHaveLength(0);
   });
 
   it('marca la página actual para los lectores de pantalla', async () => {
@@ -99,7 +105,50 @@ describe('carcasa de la app', () => {
     expect(raiz.querySelector('.carcasa > .barra + main#contenido')).not.toBeNull();
     // Reducida, el enlace conserva su nombre accesible aunque no se vea el texto.
     expect(raiz.querySelector('nav a[routerLink], nav a[href]')?.getAttribute('aria-label')).toBe(
-      'Contratistas',
+      'Dentro',
     );
+  });
+
+  it('sin sesión muestra la entrada y no la carcasa, con la ventana en modo entrada', async () => {
+    vi.mocked(isTauri).mockReturnValue(true);
+    vi.mocked(invoke).mockImplementation((comando: string) =>
+      Promise.resolve(comando === 'usuario_actual' ? null : undefined),
+    );
+    TestBed.configureTestingModule({
+      imports: [App],
+      providers: [provideRouter(routes), { provide: DURACION_MINIMA_SPLASH_MS, useValue: 0 }],
+    });
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const raiz = fixture.nativeElement as HTMLElement;
+
+    expect(raiz.querySelector('app-pantalla-entrada')).not.toBeNull();
+    expect(raiz.querySelector('.carcasa')).toBeNull();
+    expect(raiz.querySelector('a.saltar')).toBeNull();
+    expect(invoke).toHaveBeenCalledWith('modo_ventana', { modo: 'entrada' });
+  });
+
+  it('mientras el núcleo no responde muestra el splash', async () => {
+    vi.mocked(isTauri).mockReturnValue(true);
+    vi.mocked(invoke).mockImplementation(() => new Promise(() => {}));
+    TestBed.configureTestingModule({
+      imports: [App],
+      providers: [provideRouter(routes), { provide: DURACION_MINIMA_SPLASH_MS, useValue: 0 }],
+    });
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+
+    expect((fixture.nativeElement as HTMLElement).querySelector('app-splash')).not.toBeNull();
+  });
+
+  it('con sesión la ventana pasa a modo aplicación y se puede cerrar la sesión', async () => {
+    const { fixture, raiz } = await crear(true);
+
+    expect(invoke).toHaveBeenCalledWith('modo_ventana', { modo: 'aplicacion' });
+    raiz.querySelector<HTMLButtonElement>('button[aria-label="Cerrar sesión"]')?.click();
+    await fixture.whenStable();
+
+    expect(invoke).toHaveBeenCalledWith('cerrar_sesion', undefined);
+    expect(raiz.querySelector('app-pantalla-entrada')).not.toBeNull();
   });
 });

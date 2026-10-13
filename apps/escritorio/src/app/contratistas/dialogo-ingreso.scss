@@ -1,0 +1,124 @@
+@use '../compartido/dialogo';
+
+@include dialogo.compacto;
+
+.buscador {
+  width: 100%;
+  margin-top: 8px;
+}
+
+// La persona elegida: su nombre, sus datos y, a un lado, volver a buscar.
+.ficha {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0;
+}
+
+.quien {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nombre {
+  font: var(--mat-sys-title-medium);
+}
+
+.detalle {
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+}
+
+// Lo que dijo el núcleo sobre la persona: puede entrar o no, y por qué.
+.caja {
+  --color: var(--mat-sys-primary);
+
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--color);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color) 14%, transparent);
+  font: var(--mat-sys-body-small);
+
+  &.error {
+    --color: var(--mat-sys-error);
+  }
+
+  &.advertencia {
+    --color: var(--aviso-advertencia);
+  }
+}
+
+.campos {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.medio {
+  align-self: flex-start;
+  --mat-button-toggle-height: 34px;
+  --mat-button-toggle-label-text-size: 13px;
+}
+
+.gafete {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+
+  mat-form-field {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+// El botón S/G, del alto del campo de al lado.
+.sin-gafete {
+  --mat-button-toggle-height: 40px;
+  --mat-button-toggle-label-text-size: 14px;
+  --mat-button-toggle-label-text-weight: 600;
+  flex: none;
+}
+
+// Cada coincidencia de la lista flotante: nombre y datos a la izquierda, lo
+// que dijo el núcleo sobre su acceso a la derecha.
+.opcion {
+  --mat-option-label-text-line-height: 1.2;
+
+  min-height: 56px;
+
+  ::ng-deep .mdc-list-item__primary-text {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0 12px;
+    align-items: center;
+    width: 100%;
+  }
+
+  .nombre {
+    grid-column: 1;
+    font: var(--mat-sys-label-large);
+    font-weight: 600;
+  }
+
+  .detalle {
+    grid-column: 1;
+  }
+
+  .estado {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    max-width: 180px;
+    color: var(--aviso-exito);
+    font: var(--mat-sys-label-small);
+    text-align: right;
+
+    &.malo {
+      color: var(--mat-sys-error);
+    }
+  }
+}

@@ -15,6 +15,7 @@ use std::fmt;
 use limen_dominio::contratista::ErrorContratista;
 use limen_dominio::empresa::ErrorEmpresa;
 use limen_dominio::gafete::ErrorGafete;
+use limen_dominio::gafete_prestado::ErrorDevolucionGafete;
 use limen_dominio::ingreso_contratista::ErrorIngreso;
 use limen_dominio::ingreso_correo::ErrorIngresoCorreo;
 use limen_dominio::ingreso_proveedor::ErrorIngresoProveedor;
@@ -56,6 +57,12 @@ impl ErrorDeNegocio for ErrorIngreso {
 impl ErrorDeNegocio for ErrorSalida {
     fn codigo(&self) -> &'static str {
         Self::codigo(*self)
+    }
+}
+
+impl ErrorDeNegocio for ErrorDevolucionGafete {
+    fn codigo(&self) -> &'static str {
+        Self::codigo(self)
     }
 }
 

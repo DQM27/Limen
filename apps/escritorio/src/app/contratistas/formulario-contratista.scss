@@ -1,0 +1,14 @@
+@use '../compartido/dialogo';
+
+@include dialogo.compacto;
+
+.campos {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+mat-slide-toggle {
+  align-self: flex-start;
+}

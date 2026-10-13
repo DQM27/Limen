@@ -33,6 +33,31 @@ impl ErrorVisitante {
     }
 }
 
+/// La cédula de quien entra, normalizada: sólo nacional o de extranjero (A3).
+pub fn cedula_de(texto: &str) -> Result<Cedula, ErrorVisitante> {
+    match Cedula::normalizar(texto) {
+        Ok(cedula) if cedula.es_nacional_o_de_extranjero() => Ok(cedula),
+        Err(CedulaInvalida::Vacia) => Err(ErrorVisitante::CedulaVacia),
+        Ok(_) | Err(_) => Err(ErrorVisitante::CedulaInvalida),
+    }
+}
+
+fn nombre_de(texto: &str) -> Result<NombrePersona, ErrorVisitante> {
+    NombrePersona::nuevo(texto).map_err(|error| match error {
+        NombreInvalido::Vacio => ErrorVisitante::NombreVacio,
+        NombreInvalido::CaracteresNoPermitidos => ErrorVisitante::NombreInvalido,
+    })
+}
+
+/// Todo lo que está mal en la cédula y el nombre, en ese orden (vacío si
+/// valen): para marcar cada campo a la vez en el formulario.
+pub fn problemas(cedula: &str, nombre: &str) -> Vec<ErrorVisitante> {
+    [cedula_de(cedula).err(), nombre_de(nombre).err()]
+        .into_iter()
+        .flatten()
+        .collect()
+}
+
 /// Cédula y nombre de quien entra, ya normalizados.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Visitante {
@@ -44,16 +69,10 @@ impl Visitante {
     /// Valida y normaliza lo escrito (o leído de la cédula). Sólo cédula
     /// nacional o de extranjero (A3).
     pub fn nuevo(cedula: &str, nombre: &str) -> Result<Self, ErrorVisitante> {
-        let cedula = match Cedula::normalizar(cedula) {
-            Ok(cedula) if cedula.es_nacional_o_de_extranjero() => cedula,
-            Err(CedulaInvalida::Vacia) => return Err(ErrorVisitante::CedulaVacia),
-            Ok(_) | Err(_) => return Err(ErrorVisitante::CedulaInvalida),
-        };
-        let nombre = NombrePersona::nuevo(nombre).map_err(|error| match error {
-            NombreInvalido::Vacio => ErrorVisitante::NombreVacio,
-            NombreInvalido::CaracteresNoPermitidos => ErrorVisitante::NombreInvalido,
-        })?;
-        Ok(Self { cedula, nombre })
+        Ok(Self {
+            cedula: cedula_de(cedula)?,
+            nombre: nombre_de(nombre)?,
+        })
     }
 
     /// Reconstruye un visitante guardado. Los tipos garantizan que cédula y
@@ -133,6 +152,20 @@ mod tests {
     #[test]
     fn la_cedula_se_valida_antes_que_el_nombre() {
         assert_eq!(Visitante::nuevo("", ""), Err(ErrorVisitante::CedulaVacia));
+    }
+
+    #[test]
+    fn los_problemas_traen_la_cedula_y_el_nombre_a_la_vez() {
+        assert_eq!(
+            problemas("", ""),
+            [ErrorVisitante::CedulaVacia, ErrorVisitante::NombreVacio]
+        );
+        assert_eq!(problemas("1234", "ANA"), [ErrorVisitante::CedulaInvalida]);
+        assert_eq!(
+            problemas("111111111", "O'BRIEN"),
+            [ErrorVisitante::NombreInvalido]
+        );
+        assert_eq!(problemas("111111111", "ANA").len(), 0, "sin problemas");
     }
 
     #[test]

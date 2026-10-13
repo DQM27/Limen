@@ -27,9 +27,11 @@ use limen_aplicacion::casos_de_uso::consultas::{
     PraindPorVencer, QuienesEstanAdentro,
 };
 use limen_aplicacion::casos_de_uso::contratistas::{
-    ConsultarContratista, EditarContratista, RegistrarContratista,
+    ConsultarContratista, EditarContratista, RegistrarContratista, ValidarContratista,
 };
-use limen_aplicacion::casos_de_uso::correo::{RegistrarEntradaCorreo, RegistrarSalidaCorreo};
+use limen_aplicacion::casos_de_uso::correo::{
+    RegistrarEntradaCorreo, RegistrarSalidaCorreo, ValidarEntradaCorreo,
+};
 use limen_aplicacion::casos_de_uso::empresas::{RegistrarEmpresa, RenombrarEmpresa};
 use limen_aplicacion::casos_de_uso::gafetes::{CambiarGafete, RegistrarGafetes};
 use limen_aplicacion::casos_de_uso::ingresos::{
@@ -37,16 +39,21 @@ use limen_aplicacion::casos_de_uso::ingresos::{
 };
 use limen_aplicacion::casos_de_uso::kof::{
     DevolverGafeteKof, EditarPersonalKof, EntregarGafeteKof, RegistrarPersonalKof,
+    ValidarEntregaKof, ValidarPersonalKof,
 };
 use limen_aplicacion::casos_de_uso::proveedores::{
     RegistrarEmpresaProveedora, RegistrarEntradaProveedor, RegistrarSalidaProveedor,
-    RenombrarEmpresaProveedora,
+    RenombrarEmpresaProveedora, ValidarEntradaProveedor,
 };
 use limen_aplicacion::casos_de_uso::usuarios::{CambiarClave, IniciarSesion};
 use limen_aplicacion::puertos::{
     Claves, Consultas, ErrorPersistencia, FabricaUnidadDeTrabajo, GeneradorIds, Reloj,
 };
-use limen_infra_plataforma::{ClavesArgon2, IdsV7, RelojConfiable};
+use limen_aplicacion::sesion::Origen;
+use limen_infra_nube::{ConfigNube, instalar_cifrado, sincronizar};
+use limen_infra_plataforma::{
+    ClavesArgon2, IdsV7, RelojConfiable, SERVIDORES_NTP, leer_desfase, origen_del_equipo,
+};
 use limen_infra_surreal::AlmacenSurreal;
 
 /// Con qué se abre la aplicación.
@@ -54,7 +61,17 @@ use limen_infra_surreal::AlmacenSurreal;
 pub struct Config {
     /// Carpeta de la base de datos de este equipo.
     pub ruta_base: PathBuf,
+    /// Archivo con el último desfase medido del reloj del equipo (E5), para
+    /// arrancar ya corregido.
+    pub ruta_desfase_reloj: PathBuf,
+    /// Archivo con la identidad del equipo: su unidad operativa y su ID
+    /// (M4). Si no existe, se crea con [`UNIDAD_POR_OMISION`].
+    pub ruta_equipo: PathBuf,
 }
+
+/// La unidad operativa de un equipo que arranca por primera vez. Por ahora
+/// hay una sola; con el bloque M la unidad llegará al vincular el equipo.
+pub const UNIDAD_POR_OMISION: &str = "BRISAS";
 
 /// No se pudo arrancar la aplicación.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -63,6 +80,8 @@ pub enum ErrorArranque {
     Base(#[from] ErrorPersistencia),
     #[error("No se pudo preparar el cifrado de claves: {0}")]
     Claves(String),
+    #[error("No se pudo leer la identidad del equipo: {0}")]
+    Equipo(String),
     /// Sólo al desarrollar (ver [`semilla`]).
     #[error("No se pudo sembrar la base de desarrollo: {0}")]
     Semilla(String),
@@ -97,6 +116,7 @@ grupo! {
     Contratistas {
         registrar: RegistrarContratista<F, R, G>,
         editar: EditarContratista<F, R, G>,
+        validar: ValidarContratista<F, R>,
         consultar: ConsultarContratista<F, R>,
         buscar: BuscarContratistas<F>,
         praind_por_vencer: PraindPorVencer<F, R>,
@@ -129,6 +149,7 @@ grupo! {
         registrar_empresa: RegistrarEmpresaProveedora<F, R, G>,
         renombrar_empresa: RenombrarEmpresaProveedora<F, R, G>,
         buscar_empresas: BuscarEmpresasProveedoras<F>,
+        validar_entrada: ValidarEntradaProveedor<F>,
         entrada: RegistrarEntradaProveedor<F, R, G>,
         salida: RegistrarSalidaProveedor<F, R, G>,
     }
@@ -137,6 +158,7 @@ grupo! {
 grupo! {
     /// Ingreso por correo.
     Correo {
+        validar_entrada: ValidarEntradaCorreo<F>,
         entrada: RegistrarEntradaCorreo<F, R, G>,
         salida: RegistrarSalidaCorreo<F, R, G>,
     }
@@ -145,9 +167,11 @@ grupo! {
 grupo! {
     /// Personal KOF y su gafete provisional.
     Kof {
+        validar_personal: ValidarPersonalKof<F>,
         registrar: RegistrarPersonalKof<F, R, G>,
         editar: EditarPersonalKof<F, R, G>,
         buscar: BuscarPersonalKof<F>,
+        validar_entrega: ValidarEntregaKof<F>,
         entregar_gafete: EntregarGafeteKof<F, R, G>,
         devolver_gafete: DevolverGafeteKof<F, R, G>,
     }
@@ -181,7 +205,7 @@ pub struct Aplicacion<F, R, G, C = ClavesArgon2> {
     pub kof: Kof<F, R, G>,
     pub usuarios: Usuarios<F, R, G, C>,
     /// Quién está adentro ahora.
-    pub quienes_estan_adentro: QuienesEstanAdentro<F>,
+    pub quienes_estan_adentro: QuienesEstanAdentro<F, R>,
     /// Qué cambió en un registro, quién y cuándo.
     pub historial: HistorialDeCambios<F>,
     /// Los ingresos y salidas de las cuatro vías en un rango de fechas.
@@ -204,7 +228,9 @@ where
     C: Claves + Clone,
 {
     /// Conecta todos los casos de uso con las piezas dadas.
-    pub fn nueva(almacen: &F, reloj: &R, ids: &G, claves: &C) -> Self {
+    /// `origen` es dónde está este equipo: la unidad operativa y su ID. Va
+    /// en cada sesión que se abre aquí y, con ella, en cada hecho (M4).
+    pub fn nueva(almacen: &F, reloj: &R, ids: &G, claves: &C, origen: &Origen) -> Self {
         let a = || almacen.clone();
         let r = || reloj.clone();
         let i = || ids.clone();
@@ -218,6 +244,7 @@ where
             contratistas: Contratistas {
                 registrar: RegistrarContratista::new(a(), r(), i()),
                 editar: EditarContratista::new(a(), r(), i()),
+                validar: ValidarContratista::new(a(), r()),
                 consultar: ConsultarContratista::new(a(), r()),
                 buscar: BuscarContratistas::new(a()),
                 praind_por_vencer: PraindPorVencer::new(a(), r()),
@@ -237,25 +264,29 @@ where
                 registrar_empresa: RegistrarEmpresaProveedora::new(a(), r(), i()),
                 renombrar_empresa: RenombrarEmpresaProveedora::new(a(), r(), i()),
                 buscar_empresas: BuscarEmpresasProveedoras::new(a()),
+                validar_entrada: ValidarEntradaProveedor::new(a()),
                 entrada: RegistrarEntradaProveedor::new(a(), r(), i()),
                 salida: RegistrarSalidaProveedor::new(a(), r(), i()),
             },
             correo: Correo {
+                validar_entrada: ValidarEntradaCorreo::new(a()),
                 entrada: RegistrarEntradaCorreo::new(a(), r(), i()),
                 salida: RegistrarSalidaCorreo::new(a(), r(), i()),
             },
             kof: Kof {
+                validar_personal: ValidarPersonalKof::new(a()),
                 registrar: RegistrarPersonalKof::new(a(), r(), i()),
                 editar: EditarPersonalKof::new(a(), r(), i()),
                 buscar: BuscarPersonalKof::new(a()),
+                validar_entrega: ValidarEntregaKof::new(a()),
                 entregar_gafete: EntregarGafeteKof::new(a(), r(), i()),
                 devolver_gafete: DevolverGafeteKof::new(a(), r(), i()),
             },
             usuarios: Usuarios {
-                iniciar_sesion: IniciarSesion::new(a(), r(), c()),
+                iniciar_sesion: IniciarSesion::new(a(), r(), c(), origen.clone()),
                 cambiar_clave: CambiarClave::new(a(), r(), i(), c()),
             },
-            quienes_estan_adentro: QuienesEstanAdentro::new(a()),
+            quienes_estan_adentro: QuienesEstanAdentro::new(a(), r()),
             historial: HistorialDeCambios::new(a()),
             historial_de_ingresos: ListarHistorial::new(a(), r()),
             atajos_de_fecha: AtajosDeFecha::new(r()),
@@ -264,20 +295,66 @@ where
 }
 
 /// La aplicación con los adaptadores reales.
-pub type AplicacionLimen = Aplicacion<AlmacenSurreal, RelojConfiable, IdsV7, ClavesArgon2>;
+/// Los adaptadores reales, con nombre propio: así una app nombra sus tipos
+/// (por ejemplo, el estado de Tauri) sin depender de la infraestructura.
+pub type Almacen = AlmacenSurreal;
+pub type RelojLimen = RelojConfiable;
+pub type IdsLimen = IdsV7;
+pub type ClavesLimen = ClavesArgon2;
+
+pub type AplicacionLimen = Aplicacion<Almacen, RelojLimen, IdsLimen, ClavesLimen>;
 
 impl AplicacionLimen {
-    /// Abre (o crea) la base de este equipo y arma la aplicación. El reloj
-    /// lo crea quien arranca la app, que también lo sincroniza (ver
-    /// [`RelojConfiable::sincronizar_en_segundo_plano`]).
+    /// Arranca la aplicación de este equipo: crea el reloj confiable con el
+    /// último desfase guardado, lo corrige contra NTP en segundo plano (E5:
+    /// hasta la primera medición la hora sale sin comprobar y queda marcada)
+    /// y abre la base.
+    ///
+    /// Si el equipo tiene configurada la nube (variables `LIMEN_NUBE_*`, ver
+    /// `docs/nube.md`), lanza además la sincronización en segundo plano: lo
+    /// que se registra sube a la nube a los pocos segundos, y sin conexión se
+    /// acumula y sube al volver. También baja lo que registran los demás
+    /// equipos, y entonces llama a `al_llegar` (la app refresca sus
+    /// pantallas). Sin esa configuración la app trabaja igual, sólo en el
+    /// equipo. Hay que llamarlo dentro del runtime de `tokio`.
+    pub async fn arrancar<F>(config: &Config, al_llegar: F) -> Result<Self, ErrorArranque>
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        let reloj = RelojConfiable::new(leer_desfase(&config.ruta_desfase_reloj));
+        reloj.sincronizar_en_segundo_plano(&SERVIDORES_NTP, config.ruta_desfase_reloj.clone());
+        let (aplicacion, almacen) = Self::abrir_con_almacen(config, &reloj).await?;
+        match ConfigNube::desde_entorno(|nombre| std::env::var(nombre).ok()) {
+            Ok(nube) => {
+                instalar_cifrado();
+                tokio::spawn(sincronizar(almacen, nube, al_llegar));
+            }
+            Err(motivo) => log::info!("sin sincronización con la nube: {motivo}"),
+        }
+        Ok(aplicacion)
+    }
+
+    /// Abre (o crea) la base de este equipo y arma la aplicación con este
+    /// reloj, sin sincronizarlo (las pruebas no salen a la red). La identidad
+    /// del equipo (unidad operativa e ID) sale de `config.ruta_equipo`.
     pub async fn abrir(config: &Config, reloj: &RelojConfiable) -> Result<Self, ErrorArranque> {
-        let almacen = AlmacenSurreal::en_disco(&config.ruta_base).await?;
+        Ok(Self::abrir_con_almacen(config, reloj).await?.0)
+    }
+
+    async fn abrir_con_almacen(
+        config: &Config,
+        reloj: &RelojConfiable,
+    ) -> Result<(Self, AlmacenSurreal), ErrorArranque> {
+        let origen = origen_del_equipo(&config.ruta_equipo, UNIDAD_POR_OMISION)
+            .map_err(ErrorArranque::Equipo)?;
+        let almacen = AlmacenSurreal::en_disco(&config.ruta_base, origen.clone()).await?;
         let claves = ClavesArgon2::new().map_err(ErrorArranque::Claves)?;
         // Sólo al desarrollar: la versión para producción no trae la semilla.
         #[cfg(debug_assertions)]
         semilla::sembrar_usuarios(&almacen, &claves)
             .await
             .map_err(ErrorArranque::Semilla)?;
-        Ok(Self::nueva(&almacen, reloj, &IdsV7, &claves))
+        let aplicacion = Self::nueva(&almacen, reloj, &IdsV7, &claves, &origen);
+        Ok((aplicacion, almacen))
     }
 }

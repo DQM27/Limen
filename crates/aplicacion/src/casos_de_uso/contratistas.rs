@@ -4,8 +4,8 @@ use chrono::NaiveDate;
 use limen_dominio::acceso::{ResultadoAcceso, verificar_acceso};
 use limen_dominio::auditoria::CambioCampo;
 use limen_dominio::contratista::{
-    Contratista, ContratistaId, DatosContratista, ErrorContratista, HechosContratista,
-    cedula_de_contratista,
+    BorradorContratista, Contratista, ContratistaId, DatosContratista, ErrorContratista,
+    HechosContratista, cedula_de_contratista, problemas,
 };
 use limen_dominio::empresa::EmpresaId;
 use limen_dominio::presencia::Identidad;
@@ -47,6 +47,82 @@ impl ComandoContratista {
             fecha_vencimiento_praind: self.fecha_vencimiento_praind,
             tiene_acceso: self.tiene_acceso,
         }
+    }
+}
+
+/// El formulario del contratista tal cual está mientras se llena: puede
+/// faltar la empresa o la fecha del PRAIND.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComandoValidarContratista {
+    pub cedula: String,
+    pub nombre: String,
+    pub empresa: Option<EmpresaId>,
+    pub fecha_vencimiento_praind: Option<NaiveDate>,
+}
+
+/// Dice de una vez todo lo que impide guardar el formulario de un
+/// contratista (nuevo, o `id` si se edita), para marcar cada campo a la vez.
+/// Sólo lee: no confirma nada. Averigua los datos que hacen falta (cédula en
+/// uso, empresa existente, si está adentro) y el dominio decide.
+#[derive(Debug)]
+pub struct ValidarContratista<F, R> {
+    fabrica: F,
+    reloj: R,
+}
+
+impl<F: FabricaUnidadDeTrabajo, R: Reloj> ValidarContratista<F, R> {
+    pub const fn new(fabrica: F, reloj: R) -> Self {
+        Self { fabrica, reloj }
+    }
+
+    pub async fn ejecutar(
+        &self,
+        id: Option<ContratistaId>,
+        comando: &ComandoValidarContratista,
+    ) -> Result<Vec<ErrorContratista>, ErrorContratistas> {
+        let mut uow = self.fabrica.nueva();
+        let anterior = match id {
+            Some(id) => Some(
+                uow.contratistas()
+                    .obtener(id)
+                    .await?
+                    .ok_or(ErrorCaso::NoEncontrado)?,
+            ),
+            None => None,
+        };
+        let cedula_en_uso = match cedula_de_contratista(&comando.cedula) {
+            Ok(cedula) => uow.contratistas().cedula_en_uso(&cedula, id).await?,
+            Err(_) => false,
+        };
+        let empresa_existe = match comando.empresa {
+            Some(empresa) => uow.empresas().existe(empresa).await?,
+            None => false,
+        };
+        let esta_adentro = match &anterior {
+            Some(contratista) => uow
+                .presencias()
+                .via_adentro(&Identidad::from(contratista.cedula()))
+                .await?
+                .is_some(),
+            None => false,
+        };
+        let hechos = HechosContratista {
+            cedula_en_uso,
+            empresa_existe,
+            esta_adentro,
+        };
+        let borrador = BorradorContratista {
+            cedula: &comando.cedula,
+            nombre: &comando.nombre,
+            empresa: comando.empresa,
+            fecha_vencimiento_praind: comando.fecha_vencimiento_praind,
+        };
+        Ok(problemas(
+            &borrador,
+            hechos,
+            self.reloj.hoy(),
+            anterior.as_ref(),
+        ))
     }
 }
 

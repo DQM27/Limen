@@ -1,4 +1,4 @@
-import { fechaCorta, fechaYHora } from './formato';
+import { fechaCorta, fechaYHora, soloFecha, soloHora } from './formato';
 
 describe('formatos para mostrar', () => {
   it('fechaCorta pone el día primero y tolera lo vacío', () => {
@@ -19,5 +19,16 @@ describe('formatos para mostrar', () => {
 
   it('un texto que no es una fecha se muestra tal cual en vez de fallar', () => {
     expect(fechaYHora('no es fecha')).toBe('no es fecha');
+  });
+
+  it('soloFecha y soloHora separan el día y la hora de Costa Rica', () => {
+    expect(soloFecha('2026-10-09T14:30:00Z')).toBe('09/10/2026');
+    expect(soloHora('2026-10-09T14:30:00Z')).toBe('08:30');
+    // Pasada la medianoche en UTC todavía es el día anterior en Costa Rica.
+    expect(soloFecha('2026-10-10T03:05:00Z')).toBe('09/10/2026');
+    expect(soloHora('2026-10-10T03:05:00Z')).toBe('21:05');
+    expect(soloFecha(null)).toBe('—');
+    expect(soloHora(undefined)).toBe('—');
+    expect(soloHora('no es fecha')).toBe('no es fecha');
   });
 });

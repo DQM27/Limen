@@ -13,28 +13,33 @@ use chrono::{NaiveDate, SecondsFormat};
 use limen_aplicacion::casos_de_uso::consultas::{
     AtajoConRango, ContratistaEnLista, Historial, MAXIMO_MOVIMIENTOS,
 };
-use limen_aplicacion::casos_de_uso::contratistas::ComandoContratista;
-use limen_aplicacion::casos_de_uso::correo::ComandoEntradaCorreo;
+use limen_aplicacion::casos_de_uso::consultas::{GafeteListado, PersonaAdentroVista};
+use limen_aplicacion::casos_de_uso::contratistas::{ComandoContratista, ComandoValidarContratista};
+use limen_aplicacion::casos_de_uso::correo::{ComandoEntradaCorreo, ComandoValidarEntradaCorreo};
 use limen_aplicacion::casos_de_uso::gafetes::CambioGafete;
 use limen_aplicacion::casos_de_uso::ingresos::{
     CandidatoIngreso, ComandoEntrada, EntradaContratista, GafeteElegido,
 };
-use limen_aplicacion::casos_de_uso::proveedores::ComandoEntradaProveedor;
-use limen_aplicacion::puertos::{
-    IngresoAbierto, MarcaVista, MovimientoHistorial, PersonaAdentro, ResumenGafete,
+use limen_aplicacion::casos_de_uso::proveedores::{
+    ComandoEntradaProveedor, ComandoValidarEntradaProveedor,
 };
+use limen_aplicacion::errores::ErrorCaso;
+use limen_aplicacion::puertos::{IngresoAbierto, MarcaVista, MovimientoHistorial};
 use limen_dominio::acceso::ResultadoAcceso;
 use limen_dominio::auditoria::CambioCampo;
 use limen_dominio::cedula::Cedula;
-use limen_dominio::contratista::{Contratista, ContratistaId};
+use limen_dominio::contratista::{Contratista, ContratistaId, ErrorContratista};
 use limen_dominio::empresa::{Empresa, EmpresaId};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
+use limen_dominio::filtro_de_tabla::Operacion;
 use limen_dominio::gafete::{NumeroGafete, Portador, Resolucion, TipoGafete};
 use limen_dominio::ingreso_contratista::ErrorIngreso;
+use limen_dominio::ingreso_proveedor::ErrorIngresoProveedor;
 use limen_dominio::medio::{Medio, TipoMedio};
 use limen_dominio::personal_kof::{PersonalKof, PersonalKofId};
 use limen_dominio::presencia::{Via, YaEstaAdentro};
 use limen_dominio::rango_fechas::Atajo;
+use limen_dominio::resaltado::{Campo, Segmento};
 use limen_dominio::tipo_ingreso::TipoIngreso;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -49,8 +54,28 @@ pub fn leer_uuid(texto: &str) -> Result<Uuid, ErrorEntrada> {
     Uuid::parse_str(texto.trim()).map_err(|_| ErrorEntrada::IdInvalido)
 }
 
+/// La persona del personal KOF elegida en el formulario: vacío es "todavía
+/// no la eligió" (`None`; que falte lo dice el dominio) y un identificador
+/// mal formado es un error de entrada en su campo.
+pub fn leer_persona_kof(texto: &str) -> Result<Option<PersonalKofId>, ErrorJson> {
+    if texto.trim().is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(PersonalKofId::desde_uuid(
+        leer_uuid(texto).map_err(en(campos::PERSONA))?,
+    )))
+}
+
 pub fn leer_via(codigo: &str) -> Result<Via, ErrorEntrada> {
     Via::desde_codigo(codigo).ok_or(ErrorEntrada::ViaInvalida)
+}
+
+pub fn leer_campo_resaltable(codigo: &str) -> Result<Campo, ErrorEntrada> {
+    Campo::desde_codigo(codigo).ok_or(ErrorEntrada::CampoInvalido)
+}
+
+pub fn leer_operacion_de_filtro(codigo: &str) -> Result<Operacion, ErrorEntrada> {
+    Operacion::desde_codigo(codigo).ok_or(ErrorEntrada::OperacionInvalida)
 }
 
 fn leer_medio(codigo: &str) -> Result<TipoMedio, ErrorEntrada> {
@@ -62,6 +87,23 @@ fn leer_medio(codigo: &str) -> Result<TipoMedio, ErrorEntrada> {
 }
 
 // --- Salida: lo que la interfaz muestra ---
+
+/// Un tramo de un texto: la pantalla pinta los que vienen `resaltado`
+/// (regla N1). Los segmentos de un texto, en orden, lo reconstruyen exacto.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SegmentoDto {
+    pub texto: String,
+    pub resaltado: bool,
+}
+
+impl From<&Segmento> for SegmentoDto {
+    fn from(segmento: &Segmento) -> Self {
+        Self {
+            texto: segmento.texto.clone(),
+            resaltado: segmento.resaltado,
+        }
+    }
+}
 
 /// Una persona que está adentro, por cualquiera de las cuatro vías.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -86,6 +128,9 @@ pub struct PersonaAdentroDto {
     pub entrada: String,
     /// Quién registró la entrada.
     pub entrada_por: OperadorDto,
+    /// Lleva más de 12 horas adentro (E13): probablemente falta registrar su
+    /// salida. Lo decide el dominio.
+    pub demasiado_tiempo: bool,
 }
 
 /// Quién registró una marca (entrada o salida).
@@ -132,8 +177,9 @@ fn instante(en: chrono::DateTime<chrono::Utc>) -> String {
     en.to_rfc3339_opts(SecondsFormat::Secs, true)
 }
 
-impl From<&PersonaAdentro> for PersonaAdentroDto {
-    fn from(persona: &PersonaAdentro) -> Self {
+impl From<&PersonaAdentroVista> for PersonaAdentroDto {
+    fn from(vista: &PersonaAdentroVista) -> Self {
+        let persona = &vista.persona;
         let (medio, placa) = medio_y_placa(persona.medio.as_ref());
         Self {
             via: persona.ingreso.via().codigo(),
@@ -147,6 +193,7 @@ impl From<&PersonaAdentro> for PersonaAdentroDto {
             sin_gafete: persona.sin_gafete,
             entrada: instante(persona.entrada.en),
             entrada_por: OperadorDto::from(&persona.entrada),
+            demasiado_tiempo: vista.demasiado_tiempo,
         }
     }
 }
@@ -269,6 +316,24 @@ impl From<EntradaContratista> for EntradaRegistradaDto {
 
 // --- Entrada: lo que llena el operador ---
 
+/// Un texto de una fila de la tabla y de qué clase es (`NOMBRE`,
+/// `IDENTIFICACION` o `EMPRESA`): con eso el núcleo decide con qué regla lo
+/// compara (regla N2).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct CampoDeTextoEntrada {
+    pub campo: String,
+    pub texto: String,
+}
+
+/// Una celda y el filtro de columna que se le aplica: `CONTIENE`,
+/// `NO_CONTIENE`, `IGUAL`, `DISTINTO`, `EMPIEZA_CON` o `TERMINA_CON`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct PedidoDeFiltroEntrada {
+    pub operacion: String,
+    pub celda: String,
+    pub filtro: String,
+}
+
 /// El formulario de un contratista, tal cual se escribió. Las reglas (cédula,
 /// nombre, PRAIND) las aplica el dominio; aquí sólo se lee el formato.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -285,28 +350,61 @@ pub struct ContratistaEntrada {
 
 impl ContratistaEntrada {
     /// Lee el formato de cada campo; si uno no se puede leer, el error dice
-    /// cuál es.
+    /// cuál es. Una empresa o una fecha vacías no son "ilegibles", son datos
+    /// que faltan: eso lo dice el dominio (`empresa_requerida`,
+    /// `praind_requerido`), con su mensaje y su campo.
     pub fn a_comando(&self) -> Result<ComandoContratista, ErrorJson> {
-        let en = |campo: &'static str| {
-            move |error: ErrorEntrada| ErrorJson::from(error).en_campo(Some(campo))
-        };
+        let borrador = self.a_borrador()?;
+        let falta = |error: ErrorContratista| campos::con_campo(ErrorCaso::Negocio(error));
+        let empresa = borrador
+            .empresa
+            .ok_or_else(|| falta(ErrorContratista::EmpresaRequerida))?;
+        let fecha_vencimiento_praind = borrador
+            .fecha_vencimiento_praind
+            .ok_or_else(|| falta(ErrorContratista::PraindRequerido))?;
         Ok(ComandoContratista {
             cedula: self.cedula.clone(),
             nombre: self.nombre.clone(),
-            empresa: EmpresaId::desde_uuid(
-                leer_uuid(&self.empresa_id).map_err(en(campos::EMPRESA))?,
-            ),
-            tipo_ingreso: TipoIngreso::desde_codigo(&self.tipo_ingreso)
-                .map_err(|_| ErrorEntrada::TipoIngresoInvalido)
-                .map_err(en(campos::TIPO_INGRESO))?,
-            fecha_vencimiento_praind: NaiveDate::parse_from_str(
-                self.fecha_vencimiento_praind.trim(),
-                "%Y-%m-%d",
-            )
-            .map_err(|_| ErrorEntrada::FechaInvalida)
-            .map_err(en(campos::FECHA_VENCIMIENTO_PRAIND))?,
+            empresa,
+            tipo_ingreso: self.leer_tipo_ingreso()?,
+            fecha_vencimiento_praind,
             tiene_acceso: self.tiene_acceso,
         })
+    }
+
+    /// El formulario tal cual está mientras se llena: sin empresa o sin fecha
+    /// todavía. Sólo un identificador o una fecha escritos pero que no se
+    /// pueden leer son error de entrada.
+    pub fn a_borrador(&self) -> Result<ComandoValidarContratista, ErrorJson> {
+        let en = |campo: &'static str| {
+            move |error: ErrorEntrada| ErrorJson::from(error).en_campo(Some(campo))
+        };
+        let empresa = match self.empresa_id.trim() {
+            "" => None,
+            texto => Some(EmpresaId::desde_uuid(
+                leer_uuid(texto).map_err(en(campos::EMPRESA))?,
+            )),
+        };
+        let fecha_vencimiento_praind = match self.fecha_vencimiento_praind.trim() {
+            "" => None,
+            texto => Some(
+                NaiveDate::parse_from_str(texto, "%Y-%m-%d")
+                    .map_err(|_| ErrorEntrada::FechaInvalida)
+                    .map_err(en(campos::FECHA_VENCIMIENTO_PRAIND))?,
+            ),
+        };
+        Ok(ComandoValidarContratista {
+            cedula: self.cedula.clone(),
+            nombre: self.nombre.clone(),
+            empresa,
+            fecha_vencimiento_praind,
+        })
+    }
+
+    fn leer_tipo_ingreso(&self) -> Result<TipoIngreso, ErrorJson> {
+        TipoIngreso::desde_codigo(&self.tipo_ingreso)
+            .map_err(|_| ErrorEntrada::TipoIngresoInvalido)
+            .map_err(|error| ErrorJson::from(error).en_campo(Some(campos::TIPO_INGRESO)))
     }
 }
 
@@ -395,16 +493,40 @@ pub struct EntradaProveedorEntrada {
 }
 
 impl EntradaProveedorEntrada {
-    pub fn a_comando(&self) -> Result<ComandoEntradaProveedor, ErrorJson> {
-        Ok(ComandoEntradaProveedor {
+    /// El formulario tal cual está mientras se llena: sin empresa elegida
+    /// (vacía) es `None`, y lo marca el núcleo.
+    pub fn a_borrador(&self) -> Result<ComandoValidarEntradaProveedor, ErrorJson> {
+        let empresa = if self.empresa_id.trim().is_empty() {
+            None
+        } else {
+            Some(EmpresaProveedoraId::desde_uuid(
+                leer_uuid(&self.empresa_id).map_err(en(campos::EMPRESA))?,
+            ))
+        };
+        Ok(ComandoValidarEntradaProveedor {
             cedula: self.cedula.clone(),
             nombre: self.nombre.clone(),
-            empresa: EmpresaProveedoraId::desde_uuid(
-                leer_uuid(&self.empresa_id).map_err(en(campos::EMPRESA))?,
-            ),
+            empresa,
             medio: leer_medio(&self.medio).map_err(en(campos::MEDIO))?,
             placa: self.placa.clone(),
             gafete: self.gafete,
+        })
+    }
+
+    /// Sin empresa elegida no es un identificador ilegible: falta, y eso lo
+    /// dice el dominio (`empresa_proveedora_requerida`).
+    pub fn a_comando(&self) -> Result<ComandoEntradaProveedor, ErrorJson> {
+        let borrador = self.a_borrador()?;
+        let empresa = borrador.empresa.ok_or_else(|| {
+            campos::con_campo(ErrorCaso::Negocio(ErrorIngresoProveedor::EmpresaRequerida))
+        })?;
+        Ok(ComandoEntradaProveedor {
+            cedula: borrador.cedula,
+            nombre: borrador.nombre,
+            empresa,
+            medio: borrador.medio,
+            placa: borrador.placa,
+            gafete: borrador.gafete,
         })
     }
 }
@@ -423,6 +545,18 @@ pub struct EntradaCorreoEntrada {
 }
 
 impl EntradaCorreoEntrada {
+    /// El formulario tal cual está mientras se llena.
+    pub fn a_borrador(&self) -> Result<ComandoValidarEntradaCorreo, ErrorJson> {
+        Ok(ComandoValidarEntradaCorreo {
+            cedula: self.cedula.clone(),
+            nombre: self.nombre.clone(),
+            motivo: self.motivo.clone(),
+            medio: leer_medio(&self.medio).map_err(en(campos::MEDIO))?,
+            placa: self.placa.clone(),
+            gafete: self.gafete,
+        })
+    }
+
     pub fn a_comando(&self) -> Result<ComandoEntradaCorreo, ErrorJson> {
         Ok(ComandoEntradaCorreo {
             cedula: self.cedula.clone(),
@@ -485,6 +619,11 @@ pub struct GafeteDto {
     /// tipo trae valor y los otros, `null`.
     #[serde(flatten)]
     pub portador: PortadorDto,
+    /// A quién está asignado: quien lo tiene prestado ahora o, si está
+    /// perdido, quien lo tenía. `null` si está disponible o de baja.
+    pub asignado_nombre: Option<String>,
+    /// La cédula o el código de empleado de quien está asignado.
+    pub asignado_identidad: Option<String>,
 }
 
 /// El último portador de un gafete perdido, en el campo de su clase: un
@@ -519,8 +658,9 @@ impl From<Option<&Portador>> for PortadorDto {
     }
 }
 
-impl From<&ResumenGafete> for GafeteDto {
-    fn from(resumen: &ResumenGafete) -> Self {
+impl From<&GafeteListado> for GafeteDto {
+    fn from(listado: &GafeteListado) -> Self {
+        let resumen = &listado.resumen;
         let gafete = &resumen.gafete;
         Self {
             tipo: gafete.tipo().codigo(),
@@ -528,6 +668,15 @@ impl From<&ResumenGafete> for GafeteDto {
             estado: gafete.estado().codigo(),
             prestado: resumen.prestado,
             portador: gafete.portador().into(),
+            asignado_nombre: listado
+                .asignado
+                .as_ref()
+                .and_then(|a| a.nombre.as_ref().map(ToString::to_string)),
+            asignado_identidad: listado
+                .asignado
+                .as_ref()
+                .map(|a| a.identidad.clone())
+                .filter(|identidad| !identidad.is_empty()),
         }
     }
 }

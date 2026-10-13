@@ -1,0 +1,48 @@
+@use '../compartido/dialogo';
+
+@include dialogo.compacto;
+
+.campos {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+// Cada coincidencia de la lista flotante: nombre y código a la izquierda y, si
+// la persona está inactiva, su estado a la derecha.
+.opcion {
+  --mat-option-label-text-line-height: 1.2;
+
+  min-height: 52px;
+
+  ::ng-deep .mdc-list-item__primary-text {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0 12px;
+    align-items: center;
+    width: 100%;
+  }
+
+  .nombre {
+    grid-column: 1;
+    font: var(--mat-sys-label-large);
+    font-weight: 600;
+  }
+
+  .detalle {
+    grid-column: 1;
+    color: var(--mat-sys-on-surface-variant);
+    font: var(--mat-sys-body-small);
+  }
+
+  .estado {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    font: var(--mat-sys-label-small);
+
+    &.malo {
+      color: var(--mat-sys-error);
+    }
+  }
+}

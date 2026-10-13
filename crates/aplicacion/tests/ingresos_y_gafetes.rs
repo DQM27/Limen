@@ -4,6 +4,7 @@
 #[cfg(test)]
 mod tests {
     use chrono::{DateTime, NaiveDate, Utc};
+    use limen_aplicacion::casos_de_uso::consultas::{ListarGafetes, QuienesEstanAdentro};
     use limen_aplicacion::casos_de_uso::contratistas::{ComandoContratista, RegistrarContratista};
     use limen_aplicacion::casos_de_uso::gafetes::{CambiarGafete, CambioGafete, RegistrarGafetes};
     use limen_aplicacion::casos_de_uso::ingresos::{
@@ -28,7 +29,7 @@ mod tests {
     use limen_dominio::movimiento::ErrorSalida;
     use limen_dominio::presencia::{Via, YaEstaAdentro};
     use limen_dominio::tipo_ingreso::TipoIngreso;
-    use limen_infra_memoria::{AlmacenMemoria, IdsSecuenciales, RelojFijo};
+    use limen_infra_memoria::{AlmacenMemoria, IdsSecuenciales, RelojFijo, origen_de_pruebas};
     use uuid::Uuid;
 
     // --- Preparación ---
@@ -49,7 +50,10 @@ mod tests {
     }
 
     fn sesion() -> Sesion {
-        Sesion::nueva(OperadorId::desde_uuid(Uuid::from_u128(900)))
+        Sesion::nueva(
+            OperadorId::desde_uuid(Uuid::from_u128(900)),
+            origen_de_pruebas(),
+        )
     }
 
     fn numero(n: u32) -> NumeroGafete {
@@ -732,6 +736,11 @@ mod tests {
             assert_eq!(hecho.via(), via, "la vía del hecho");
             assert_eq!(hecho.registro(), registro, "el registro del hecho");
             assert_eq!(hecho.marca().operador, sesion().operador(), "quién");
+            assert_eq!(
+                hecho.origen(),
+                sesion().origen(),
+                "dónde: la unidad y el equipo de la sesión"
+            );
         }
         assert!(entro.es_entrada(), "primero la entrada");
         assert!(!salio.es_entrada(), "después la salida");
@@ -942,5 +951,122 @@ mod tests {
                 .await,
             Err(ErrorCaso::NoEncontrado)
         );
+    }
+
+    // --- Listado de gafetes: a quién está asignado cada uno ---
+
+    fn listar(almacen: &AlmacenMemoria) -> ListarGafetes<AlmacenMemoria> {
+        ListarGafetes::new(almacen.clone())
+    }
+
+    #[tokio::test]
+    async fn el_listado_dice_quien_tiene_prestado_cada_gafete() {
+        let almacen = preparado().await;
+        let ana = llamado(&almacen, "111111111", "ana solano", true).await;
+        entrada(&almacen)
+            .ejecutar(&sesion(), &a_pie(ana, Some(25)))
+            .await
+            .unwrap();
+
+        let listado = listar(&almacen)
+            .ejecutar(TipoGafete::Contratista)
+            .await
+            .unwrap();
+
+        let prestado = listado
+            .iter()
+            .find(|g| g.resumen.gafete.numero() == numero(25))
+            .unwrap();
+        assert!(prestado.resumen.prestado);
+        let asignado = prestado.asignado.as_ref().unwrap();
+        assert_eq!(asignado.nombre.as_ref().unwrap().as_str(), "ANA SOLANO");
+        assert_eq!(asignado.identidad, "111111111");
+        assert_eq!(
+            listado.iter().filter(|g| g.asignado.is_some()).count(),
+            1,
+            "los demás están disponibles y no tienen a quién"
+        );
+    }
+
+    #[tokio::test]
+    async fn un_gafete_perdido_muestra_a_su_ultimo_portador_con_nombre() {
+        let almacen = preparado().await;
+        let ana = llamado(&almacen, "111111111", "ana solano", true).await;
+        cambiar(&almacen)
+            .ejecutar(
+                &sesion(),
+                TipoGafete::Contratista,
+                4,
+                CambioGafete::MarcarPerdido(Portador::Contratista(ana)),
+            )
+            .await
+            .unwrap();
+
+        let listado = listar(&almacen)
+            .ejecutar(TipoGafete::Contratista)
+            .await
+            .unwrap();
+
+        let perdido = listado
+            .iter()
+            .find(|g| g.resumen.gafete.numero() == numero(4))
+            .unwrap();
+        let asignado = perdido.asignado.as_ref().unwrap();
+        assert_eq!(asignado.nombre.as_ref().unwrap().as_str(), "ANA SOLANO");
+        assert_eq!(asignado.identidad, "111111111");
+    }
+
+    #[tokio::test]
+    async fn de_una_visita_que_perdio_el_gafete_solo_se_conoce_la_cedula() {
+        let almacen = preparado().await;
+        gafetes(&almacen)
+            .ejecutar(&sesion(), TipoGafete::Visita, 1, 3)
+            .await
+            .unwrap();
+        cambiar(&almacen)
+            .ejecutar(
+                &sesion(),
+                TipoGafete::Visita,
+                1,
+                CambioGafete::MarcarPerdido(Portador::Persona(cedula("333333333"))),
+            )
+            .await
+            .unwrap();
+
+        let listado = listar(&almacen).ejecutar(TipoGafete::Visita).await.unwrap();
+
+        let asignado = listado[0].asignado.as_ref().unwrap();
+        assert_eq!(asignado.nombre, None, "no hay catálogo de visitas");
+        assert_eq!(asignado.identidad, "333333333");
+        assert!(
+            listado[1].asignado.is_none(),
+            "uno disponible no tiene a quién"
+        );
+    }
+
+    // --- Quién lleva demasiado tiempo adentro (E13) ---
+
+    #[tokio::test]
+    async fn marca_a_quien_lleva_mas_de_doce_horas_adentro() {
+        let almacen = preparado().await;
+        let ana = llamado(&almacen, "111111111", "ana solano", true).await;
+        entrada(&almacen)
+            .ejecutar(&sesion(), &a_pie(ana, Some(25)))
+            .await
+            .unwrap();
+
+        // Entró a las 14:00 UTC: 11 horas después todavía no, 13 horas sí.
+        let a_las_11_horas =
+            QuienesEstanAdentro::new(almacen.clone(), reloj_a("2026-10-10T01:00:00Z"));
+        let a_las_13_horas =
+            QuienesEstanAdentro::new(almacen.clone(), reloj_a("2026-10-10T03:00:00Z"));
+
+        let temprano = a_las_11_horas.con_permanencia().await.unwrap();
+        let tarde = a_las_13_horas.con_permanencia().await.unwrap();
+
+        assert_eq!(temprano.len(), 1);
+        assert!(!temprano[0].demasiado_tiempo, "11 horas todavía no");
+        assert!(tarde[0].demasiado_tiempo, "13 horas sí");
+        assert_eq!(tarde[0].persona.nombre.as_str(), "ANA SOLANO");
     }
 }

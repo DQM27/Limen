@@ -14,10 +14,14 @@
       {
         "label": "main",
         "title": "Limen",
-        "width": 1280,
-        "height": 800,
-        "resizable": true,
-        "maximized": true
+        "width": 380,
+        "height": 480,
+        "center": true,
+        "visible": false,
+        "decorations": false,
+        "shadow": false,
+        "resizable": false,
+        "maximized": false
       }
     ],
     "security": {

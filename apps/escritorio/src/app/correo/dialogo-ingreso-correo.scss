@@ -1,0 +1,15 @@
+@use '../compartido/dialogo';
+
+@include dialogo.compacto;
+
+.campos {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+// El motivo es un texto corto, de una o dos líneas.
+textarea {
+  resize: none;
+}

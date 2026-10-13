@@ -34,7 +34,8 @@ use crate::registros::clave_gafete;
 use crate::registros::{
     ContratistaLeido, EmpresaLeida, EmpresaProveedoraLeida, GafeteDatos, HechoLeido,
     PersonalKofLeido, TABLA_AUDITORIA, TABLA_INGRESO_CONTRATISTA, TABLA_INGRESO_CORREO,
-    TABLA_INGRESO_PROVEEDOR, TABLA_PRESTAMO_KOF, TABLA_USUARIO, medio_de, numero_de, uuid_de,
+    TABLA_INGRESO_PROVEEDOR, TABLA_PRESTAMO_KOF, TABLA_USUARIO, hecho_desde, medio_de, numero_de,
+    uuid_de,
 };
 
 /// Sólo el nombre plegado de una fila: lo que necesita la búsqueda
@@ -571,7 +572,10 @@ impl Consultas for AlmacenSurreal {
             .await
             .map_err(tecnica)?;
         let filas: Vec<HechoLeido> = respuesta.take(0).map_err(tecnica)?;
-        filas.into_iter().map(Hecho::try_from).collect()
+        filas
+            .into_iter()
+            .map(|fila| hecho_desde(fila, self.origen()))
+            .collect()
     }
 
     async fn historial_de(
@@ -621,7 +625,7 @@ impl Consultas for AlmacenSurreal {
             .map_err(tecnica)?;
         let gafetes: Vec<GafeteDatos> = respuesta.take(0).map_err(tecnica)?;
         let ids_prestados: Vec<RecordId> = respuesta.take(1).map_err(tecnica)?;
-        // La clave de cada préstamo es `TIPO-NÚMERO`.
+        // La clave de cada préstamo es `UNIDAD-TIPO-NÚMERO`.
         let en_prestamo: HashSet<String> = ids_prestados
             .into_iter()
             .filter_map(|id| match id.key {
@@ -633,7 +637,7 @@ impl Consultas for AlmacenSurreal {
             .into_iter()
             .map(|datos| {
                 let gafete = Gafete::try_from(datos)?;
-                let clave = clave_gafete(gafete.tipo(), gafete.numero());
+                let clave = clave_gafete(self.unidad(), gafete.tipo(), gafete.numero());
                 Ok(ResumenGafete {
                     prestado: en_prestamo.contains(&clave),
                     gafete,

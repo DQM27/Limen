@@ -16,16 +16,64 @@
 )]
 
 use limen_escritorio_comandos::{
-    AtajoFechaDto, CambioDto, CambioGafeteEntrada, CandidatoIngresoDto, ContratistaDto,
-    ContratistaEntrada, EmpresaDto, EmpresaProveedoraDto, EntradaContratistaEntrada,
-    EntradaCorreoEntrada, EntradaProveedorEntrada, EntradaRegistradaDto, ErrorJson,
-    FilaContratistaDto, GafeteDto, HistorialDto, PersonaAdentroDto, PersonalKofDto, UsuarioActual,
+    AtajoFechaDto, CambioDto, CambioGafeteEntrada, CampoDeTextoEntrada, CandidatoIngresoDto,
+    ContratistaDto, ContratistaEntrada, EmpresaDto, EmpresaProveedoraDto,
+    EntradaContratistaEntrada, EntradaCorreoEntrada, EntradaProveedorEntrada, EntradaRegistradaDto,
+    ErrorJson, FilaContratistaDto, GafeteDto, HistorialDto, PedidoDeFiltroEntrada,
+    PersonaAdentroDto, PersonalKofDto, SegmentoDto, UsuarioActual,
 };
-use tauri::State;
+use tauri::window::Color;
+use tauri::{LogicalSize, State, WebviewWindow};
 
 use crate::estado::Estado;
 
 type Resultado<T> = Result<T, ErrorJson>;
+
+// --- Ventana ---
+
+/// Tamaño de la ventana de entrada (splash e inicio de sesión), sin marco.
+const ENTRADA: LogicalSize<f64> = LogicalSize::new(380.0, 480.0);
+
+/// Pone la ventana en su forma de "entrada" (pequeña, sin marco, centrada: el
+/// splash y el inicio de sesión) y la muestra, o de "aplicacion" (con marco y
+/// maximizada).
+/// No decide nada de negocio: sólo da forma a la ventana.
+#[tauri::command]
+pub fn modo_ventana(ventana: WebviewWindow, modo: String) -> Result<(), String> {
+    let error = |e: tauri::Error| e.to_string();
+    match modo.as_str() {
+        "entrada" => {
+            ventana.unmaximize().map_err(error)?;
+            ventana.set_resizable(false).map_err(error)?;
+            ventana.set_decorations(false).map_err(error)?;
+            ventana.set_size(ENTRADA).map_err(error)?;
+            // El fondo de la ventana, del color de la tarjeta según el tema
+            // del sistema: si algún borde queda sin cubrir, no se ve blanco.
+            let fondo = match ventana.theme().map_err(error)? {
+                tauri::Theme::Dark => Color(0x1f, 0x23, 0x35, 0xff),
+                _ => Color(0xe1, 0xe2, 0xe7, 0xff),
+            };
+            ventana.set_background_color(Some(fondo)).map_err(error)?;
+            ventana.center().map_err(error)?;
+            // La ventana nace oculta: se muestra cuando la interfaz ya pintó
+            // el splash, para que nunca se vea un rectángulo en blanco.
+            ventana.show().map_err(error)
+        }
+        "aplicacion" => {
+            ventana.set_decorations(true).map_err(error)?;
+            ventana.set_resizable(true).map_err(error)?;
+            ventana.maximize().map_err(error)
+        }
+        otro => Err(format!("modo de ventana desconocido: {otro}")),
+    }
+}
+
+/// Cierra la app (el botón "Cancelar" de la ventana de entrada, que no tiene
+/// marco con su propio botón de cerrar).
+#[tauri::command]
+pub fn salir(app: tauri::AppHandle) {
+    app.exit(0);
+}
 
 // --- Sesión (bloque L) ---
 
@@ -105,6 +153,39 @@ pub async fn buscar_contratistas(
     estado.comandos().buscar_contratistas(&texto, limite).await
 }
 
+/// De cada fila de la tabla, si coincide con el buscador (regla N2).
+#[tauri::command]
+pub fn filas_que_coinciden(
+    estado: State<'_, Estado>,
+    buscado: String,
+    filas: Vec<Vec<CampoDeTextoEntrada>>,
+) -> Resultado<Vec<bool>> {
+    estado.comandos().sesion()?;
+    estado.comandos().filas_que_coinciden(&buscado, &filas)
+}
+
+/// De cada celda, si cumple el filtro de columna que se le pide (regla N2).
+#[tauri::command]
+pub fn celdas_que_cumplen(
+    estado: State<'_, Estado>,
+    pedidos: Vec<PedidoDeFiltroEntrada>,
+) -> Resultado<Vec<bool>> {
+    estado.comandos().sesion()?;
+    estado.comandos().celdas_que_cumplen(&pedidos)
+}
+
+/// Parte cada texto en segmentos con lo buscado resaltado (regla N1).
+#[tauri::command]
+pub fn resaltar_coincidencias(
+    estado: State<'_, Estado>,
+    buscado: String,
+    campo: String,
+    textos: Vec<String>,
+) -> Resultado<Vec<Vec<SegmentoDto>>> {
+    estado.comandos().sesion()?;
+    estado.comandos().resaltar(&buscado, &campo, &textos)
+}
+
 #[tauri::command]
 pub async fn buscar_empresas(
     estado: State<'_, Estado>,
@@ -133,13 +214,13 @@ pub async fn registrar_salida(
 #[tauri::command]
 pub async fn registrar_salida_por_gafete(
     estado: State<'_, Estado>,
-    via: String,
+    via: Option<String>,
     numero: u32,
-) -> Resultado<()> {
+) -> Resultado<String> {
     let sesion = estado.comandos().sesion()?;
     estado
         .comandos()
-        .registrar_salida_por_gafete(&sesion, &via, numero)
+        .registrar_salida_por_gafete(&sesion, via.as_deref(), numero)
         .await
 }
 
@@ -159,6 +240,40 @@ pub async fn registrar_contratista(
         .comandos()
         .registrar_contratista(&sesion, &contratista)
         .await
+}
+
+/// Todo lo que impide guardar el formulario, de una vez y cada problema con
+/// su campo. No guarda nada.
+#[tauri::command]
+pub async fn validar_contratista(
+    estado: State<'_, Estado>,
+    id: Option<String>,
+    contratista: ContratistaEntrada,
+) -> Resultado<Vec<ErrorJson>> {
+    estado.comandos().sesion()?;
+    estado
+        .comandos()
+        .validar_contratista(id.as_deref(), &contratista)
+        .await
+}
+
+/// El nombre de una persona en mayúsculas y sin tildes, como quedará al
+/// guardarse; lo usa el formulario mientras se escribe.
+#[tauri::command]
+pub fn nombre_persona_al_escribir(texto: &str) -> String {
+    limen_escritorio_comandos::nombre_persona_al_escribir(texto)
+}
+
+/// La placa de un vehículo en mayúsculas, como quedará al guardarse.
+#[tauri::command]
+pub fn placa_al_escribir(texto: &str) -> String {
+    limen_escritorio_comandos::placa_al_escribir(texto)
+}
+
+/// El nombre de una empresa en mayúsculas, como quedará al guardarse.
+#[tauri::command]
+pub fn nombre_empresa_al_escribir(texto: &str) -> String {
+    limen_escritorio_comandos::nombre_empresa_al_escribir(texto)
 }
 
 #[tauri::command]
@@ -239,6 +354,17 @@ pub async fn renombrar_empresa_proveedora(
         .await
 }
 
+/// Todo lo que impide registrar el ingreso de un proveedor, de una vez. No
+/// registra nada.
+#[tauri::command]
+pub async fn validar_entrada_proveedor(
+    estado: State<'_, Estado>,
+    entrada: EntradaProveedorEntrada,
+) -> Resultado<Vec<ErrorJson>> {
+    estado.comandos().sesion()?;
+    estado.comandos().validar_entrada_proveedor(&entrada).await
+}
+
 #[tauri::command]
 pub async fn registrar_entrada_proveedor(
     estado: State<'_, Estado>,
@@ -249,6 +375,17 @@ pub async fn registrar_entrada_proveedor(
         .comandos()
         .registrar_entrada_proveedor(&sesion, &entrada)
         .await
+}
+
+/// Todo lo que impide registrar el ingreso por correo, de una vez. No
+/// registra nada.
+#[tauri::command]
+pub async fn validar_entrada_correo(
+    estado: State<'_, Estado>,
+    entrada: EntradaCorreoEntrada,
+) -> Resultado<Vec<ErrorJson>> {
+    estado.comandos().sesion()?;
+    estado.comandos().validar_entrada_correo(&entrada).await
 }
 
 #[tauri::command]
@@ -271,6 +408,20 @@ pub async fn buscar_personal_kof(
 ) -> Resultado<Vec<PersonalKofDto>> {
     estado.comandos().sesion()?;
     estado.comandos().buscar_personal_kof(&texto, limite).await
+}
+
+/// Todo lo que impide dar de alta a esta persona, de una vez. No registra nada.
+#[tauri::command]
+pub async fn validar_personal_kof(
+    estado: State<'_, Estado>,
+    codigo_empleado: String,
+    nombre: String,
+) -> Resultado<Vec<ErrorJson>> {
+    estado.comandos().sesion()?;
+    estado
+        .comandos()
+        .validar_personal_kof(&codigo_empleado, &nombre)
+        .await
 }
 
 #[tauri::command]
@@ -297,6 +448,21 @@ pub async fn editar_personal_kof(
     estado
         .comandos()
         .editar_personal_kof(&sesion, &id, &nombre, activo)
+        .await
+}
+
+/// Todo lo que impide entregar el gafete provisional, de una vez. No entrega
+/// nada.
+#[tauri::command]
+pub async fn validar_entrega_gafete_kof(
+    estado: State<'_, Estado>,
+    personal_id: String,
+    gafete: u32,
+) -> Resultado<Vec<ErrorJson>> {
+    estado.comandos().sesion()?;
+    estado
+        .comandos()
+        .validar_entrega_gafete_kof(&personal_id, gafete)
         .await
 }
 

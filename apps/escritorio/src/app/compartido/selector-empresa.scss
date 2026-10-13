@@ -1,0 +1,15 @@
+// El selector y, al lado, el botón para crear una empresa nueva.
+:host {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+mat-form-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.nueva {
+  flex: none;
+}

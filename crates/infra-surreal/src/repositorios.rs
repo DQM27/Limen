@@ -19,6 +19,7 @@ use limen_dominio::ingreso_contratista::{IngresoContratista, IngresoId};
 use limen_dominio::ingreso_correo::{IngresoCorreo, IngresoCorreoId};
 use limen_dominio::ingreso_proveedor::{IngresoProveedor, IngresoProveedorId};
 use limen_dominio::operador::OperadorId;
+use limen_dominio::origen::UnidadOperativaId;
 use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
 use limen_dominio::presencia::{Identidad, Via};
 use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofId};
@@ -247,13 +248,16 @@ impl RepositorioPresencias for PresenciasSurreal {
 #[derive(Debug)]
 pub struct GafetesSurreal {
     db: Surreal<Db>,
+    /// Los gafetes son de la unidad: va en su clave.
+    unidad: UnidadOperativaId,
     pub(crate) pendientes: Vec<Escritura>,
 }
 
 impl GafetesSurreal {
-    pub(crate) const fn new(db: Surreal<Db>) -> Self {
+    pub(crate) const fn new(db: Surreal<Db>, unidad: UnidadOperativaId) -> Self {
         Self {
             db,
+            unidad,
             pendientes: Vec::new(),
         }
     }
@@ -268,7 +272,7 @@ impl RepositorioGafetes for GafetesSurreal {
         let mut respuesta = self
             .db
             .query("SELECT * OMIT id FROM ONLY $id")
-            .bind(("id", id_gafete(tipo, numero)))
+            .bind(("id", id_gafete(&self.unidad, tipo, numero)))
             .await
             .map_err(tecnica)?;
         let datos: Option<GafeteDatos> = respuesta.take(0).map_err(tecnica)?;
@@ -311,37 +315,37 @@ impl RepositorioGafetes for GafetesSurreal {
         tipo: TipoGafete,
         numero: NumeroGafete,
     ) -> Result<bool, ErrorPersistencia> {
-        existe_registro(&self.db, id_prestamo(tipo, numero)).await
+        existe_registro(&self.db, id_prestamo(&self.unidad, tipo, numero)).await
     }
 
-    /// Crea `gafete:⟨TIPO-NÚMERO⟩`: un número repetido hace fallar la
+    /// Crea `gafete:⟨UNIDAD-TIPO-NÚMERO⟩`: un número repetido hace fallar la
     /// transacción.
     fn agregar(&mut self, gafete: &Gafete) {
         self.pendientes.push(Escritura::crear(
-            id_gafete(gafete.tipo(), gafete.numero()),
+            id_gafete(&self.unidad, gafete.tipo(), gafete.numero()),
             GafeteDatos::from(gafete),
         ));
     }
 
     fn actualizar(&mut self, gafete: &Gafete) {
         self.pendientes.push(Escritura::guardar(
-            id_gafete(gafete.tipo(), gafete.numero()),
+            id_gafete(&self.unidad, gafete.tipo(), gafete.numero()),
             GafeteDatos::from(gafete),
         ));
     }
 
-    /// Crea `prestamo_gafete:⟨TIPO-NÚMERO⟩`: si otro equipo ya lo prestó,
+    /// Crea `prestamo_gafete:⟨UNIDAD-TIPO-NÚMERO⟩`: si otro equipo ya lo prestó,
     /// la transacción falla.
     fn anotar_prestamo(&mut self, tipo: TipoGafete, numero: NumeroGafete, desde: DateTime<Utc>) {
         self.pendientes.push(Escritura::crear(
-            id_prestamo(tipo, numero),
+            id_prestamo(&self.unidad, tipo, numero),
             PrestamoDatos { desde },
         ));
     }
 
     fn anotar_devolucion(&mut self, tipo: TipoGafete, numero: NumeroGafete) {
         self.pendientes
-            .push(Escritura::Borrar(id_prestamo(tipo, numero)));
+            .push(Escritura::Borrar(id_prestamo(&self.unidad, tipo, numero)));
     }
 }
 
@@ -836,11 +840,6 @@ impl RepositorioUsuarios for UsuariosSurreal {
             .map_err(tecnica)?;
         let encontrados: Vec<RecordId> = respuesta.take(0).map_err(tecnica)?;
         Ok(!encontrados.is_empty())
-    }
-
-    async fn todos(&self) -> Result<Vec<Usuario>, ErrorPersistencia> {
-        self.varios("SELECT * FROM usuario ORDER BY nombre, cedula", None)
-            .await
     }
 
     fn guardar(&mut self, usuario: &Usuario) {

@@ -1,0 +1,11 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.medio {
+  align-self: flex-start;
+  --mat-button-toggle-height: 34px;
+  --mat-button-toggle-label-text-size: 13px;
+}

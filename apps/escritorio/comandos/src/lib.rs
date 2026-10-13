@@ -22,25 +22,49 @@ use limen_composicion::Aplicacion;
 use limen_dominio::contratista::ContratistaId;
 use limen_dominio::empresa::EmpresaId;
 use limen_dominio::empresa_proveedora::EmpresaProveedoraId;
+use limen_dominio::filtro_de_tabla::{CampoDeFila, cumple_filtro_de_columna, fila_coincide};
+use limen_dominio::gafete::NumeroGafete;
 use limen_dominio::ingreso_contratista::IngresoId;
 use limen_dominio::ingreso_correo::IngresoCorreoId;
 use limen_dominio::ingreso_proveedor::IngresoProveedorId;
 use limen_dominio::personal_kof::PersonalKofId;
 use limen_dominio::presencia::Via;
-use limen_dominio::prestamo_kof::PrestamoKofId;
+use limen_dominio::prestamo_kof::{ErrorPrestamoKof, PrestamoKofId};
 
 pub use dto::{
     AccesoDto, CambioDto, CambioGafeteEntrada, CandidatoIngresoDto, ContratistaDto,
     ContratistaEntrada, EmpresaDto, EmpresaProveedoraDto, EntradaContratistaEntrada,
     EntradaCorreoEntrada, EntradaProveedorEntrada, EntradaRegistradaDto, FilaContratistaDto,
-    GafeteDto, MotivoDto, PersonaAdentroDto, PersonalKofDto,
+    GafeteDto, MotivoDto, PersonaAdentroDto, PersonalKofDto, SegmentoDto,
 };
 pub use dto::{AtajoFechaDto, HistorialDto, MovimientoDto, OperadorDto};
+pub use dto::{CampoDeTextoEntrada, PedidoDeFiltroEntrada};
 pub use error::{ErrorEntrada, ErrorJson, TipoErrorJson};
 pub use sesion::{SesionDelEquipo, UsuarioActual};
 
 use campos::con_campo;
-use dto::{leer_fecha_opcional, leer_tipo_gafete, leer_uuid, leer_via};
+use dto::{
+    leer_campo_resaltable, leer_fecha_opcional, leer_operacion_de_filtro, leer_persona_kof,
+    leer_tipo_gafete, leer_uuid, leer_via,
+};
+use limen_aplicacion::errores::ErrorCaso;
+
+/// El nombre de una persona como se ve mientras se escribe: en mayúsculas y
+/// sin tildes, igual que al guardar (regla del dominio), sin tocar los
+/// espacios. Sólo da forma al texto: no necesita sesión ni base.
+pub fn nombre_persona_al_escribir(texto: &str) -> String {
+    limen_dominio::nombre::nombre_mientras_se_escribe(texto)
+}
+
+/// La placa de un vehículo en mayúsculas, como quedará al guardarse.
+pub fn placa_al_escribir(texto: &str) -> String {
+    limen_dominio::medio::placa_mientras_se_escribe(texto)
+}
+
+/// Lo mismo para el nombre de una empresa: en mayúsculas.
+pub fn nombre_empresa_al_escribir(texto: &str) -> String {
+    limen_dominio::empresa::nombre_empresa_mientras_se_escribe(texto)
+}
 
 /// Los comandos de la interfaz, sobre una aplicación ya armada, y la
 /// sesión abierta en el equipo.
@@ -82,7 +106,7 @@ where
 
     /// Quién está adentro ahora, por las cuatro vías juntas.
     pub async fn dentro(&self) -> Result<Vec<PersonaAdentroDto>, ErrorJson> {
-        let adentro = self.app.quienes_estan_adentro.ejecutar().await?;
+        let adentro = self.app.quienes_estan_adentro.con_permanencia().await?;
         Ok(adentro.iter().map(PersonaAdentroDto::from).collect())
     }
 
@@ -148,14 +172,26 @@ where
         Ok(())
     }
 
-    /// Registra la salida por el número del gafete que devuelve la persona.
+    /// Registra la salida de quien devuelve el gafete con este número y
+    /// devuelve su nombre. Sin `via` busca en las cuatro; quién lo tiene (o
+    /// por qué no se sabe) lo decide el dominio (F8).
     pub async fn registrar_salida_por_gafete(
         &self,
         sesion: &Sesion,
-        via: &str,
+        via: Option<&str>,
         numero: u32,
-    ) -> Result<(), ErrorJson> {
-        match leer_via(via)? {
+    ) -> Result<String, ErrorJson> {
+        let via = via.map(leer_via).transpose()?;
+        let numero =
+            NumeroGafete::nuevo(numero).map_err(|error| con_campo(ErrorCaso::Negocio(error)))?;
+        let persona = self
+            .app
+            .quienes_estan_adentro
+            .quien_devuelve(numero, via)
+            .await
+            .map_err(con_campo)?;
+        let numero = numero.valor();
+        match persona.ingreso.via() {
             Via::Contratista => self.app.ingresos.salida.por_gafete(sesion, numero).await?,
             Via::Proveedor => {
                 self.app
@@ -173,7 +209,7 @@ where
                     .await?;
             }
         }
-        Ok(())
+        Ok(persona.nombre.to_string())
     }
 
     /// Todos los contratistas con el nombre de su empresa, para la grilla.
@@ -190,6 +226,69 @@ where
     ) -> Result<Vec<ContratistaDto>, ErrorJson> {
         let encontrados = self.app.contratistas.buscar.ejecutar(texto, limite).await?;
         Ok(encontrados.iter().map(ContratistaDto::from).collect())
+    }
+
+    /// Parte cada texto en segmentos, resaltando lo que coincide con lo que
+    /// se buscó (regla N1). `campo` es `NOMBRE`, `IDENTIFICACION` o `EMPRESA`.
+    /// No toca datos: es sólo el dominio sobre los textos que ya están en
+    /// pantalla.
+    pub fn resaltar(
+        &self,
+        buscado: &str,
+        campo: &str,
+        textos: &[String],
+    ) -> Result<Vec<Vec<SegmentoDto>>, ErrorJson> {
+        let campo = leer_campo_resaltable(campo)?;
+        Ok(limen_dominio::resaltado::resaltar(buscado, campo, textos)
+            .iter()
+            .map(|segmentos| segmentos.iter().map(SegmentoDto::from).collect())
+            .collect())
+    }
+
+    /// De cada fila de la tabla, si coincide con lo escrito en el buscador
+    /// (regla N2): una respuesta por fila, en el mismo orden. Como el
+    /// resaltado, sólo aplica el dominio a los textos que ya están en pantalla.
+    pub fn filas_que_coinciden(
+        &self,
+        buscado: &str,
+        filas: &[Vec<CampoDeTextoEntrada>],
+    ) -> Result<Vec<bool>, ErrorJson> {
+        filas
+            .iter()
+            .map(|fila| {
+                let campos = fila
+                    .iter()
+                    .map(|c| {
+                        Ok(CampoDeFila {
+                            campo: leer_campo_resaltable(&c.campo)?,
+                            texto: c.texto.as_str(),
+                        })
+                    })
+                    .collect::<Result<Vec<_>, ErrorEntrada>>()?;
+                Ok(fila_coincide(buscado, &campos))
+            })
+            .collect::<Result<Vec<_>, ErrorEntrada>>()
+            .map_err(ErrorJson::from)
+    }
+
+    /// De cada celda, si cumple el filtro de columna que se le pide (regla
+    /// N2): una respuesta por pedido, en el mismo orden.
+    pub fn celdas_que_cumplen(
+        &self,
+        pedidos: &[PedidoDeFiltroEntrada],
+    ) -> Result<Vec<bool>, ErrorJson> {
+        pedidos
+            .iter()
+            .map(|pedido| {
+                let operacion = leer_operacion_de_filtro(&pedido.operacion)?;
+                Ok(cumple_filtro_de_columna(
+                    operacion,
+                    &pedido.celda,
+                    &pedido.filtro,
+                ))
+            })
+            .collect::<Result<Vec<_>, ErrorEntrada>>()
+            .map_err(ErrorJson::from)
     }
 
     /// Busca empresas de contratistas por nombre.
@@ -234,6 +333,31 @@ where
             .await
             .map_err(con_campo)?;
         Ok(id.uuid().to_string())
+    }
+
+    /// Todo lo que impide guardar el formulario, de una vez y cada problema
+    /// con su campo (lista vacía si se puede guardar). `id` es el contratista
+    /// que se edita, o `None` si es uno nuevo. No guarda nada.
+    pub async fn validar_contratista(
+        &self,
+        id: Option<&str>,
+        entrada: &ContratistaEntrada,
+    ) -> Result<Vec<ErrorJson>, ErrorJson> {
+        let id = id
+            .map(|id| leer_uuid(id).map(ContratistaId::desde_uuid))
+            .transpose()?;
+        let borrador = entrada.a_borrador()?;
+        let problemas = self
+            .app
+            .contratistas
+            .validar
+            .ejecutar(id, &borrador)
+            .await
+            .map_err(con_campo)?;
+        Ok(problemas
+            .into_iter()
+            .map(|problema| con_campo(ErrorCaso::Negocio(problema)))
+            .collect())
     }
 
     /// Edita un contratista con el formulario completo y devuelve lo que
@@ -370,6 +494,26 @@ where
         Ok(cambios.iter().map(CambioDto::from).collect())
     }
 
+    /// Todo lo que impide registrar el ingreso de un proveedor, de una vez y
+    /// cada problema con su campo (lista vacía si se puede). No registra nada.
+    pub async fn validar_entrada_proveedor(
+        &self,
+        entrada: &EntradaProveedorEntrada,
+    ) -> Result<Vec<ErrorJson>, ErrorJson> {
+        let borrador = entrada.a_borrador()?;
+        let problemas = self
+            .app
+            .proveedores
+            .validar_entrada
+            .ejecutar(&borrador)
+            .await
+            .map_err(con_campo)?;
+        Ok(problemas
+            .into_iter()
+            .map(|problema| con_campo(ErrorCaso::Negocio(problema)))
+            .collect())
+    }
+
     /// Registra la entrada de un proveedor y devuelve el ingreso.
     pub async fn registrar_entrada_proveedor(
         &self,
@@ -388,6 +532,26 @@ where
     }
 
     // --- Ingreso por correo ---
+
+    /// Todo lo que impide registrar el ingreso por correo, de una vez y cada
+    /// problema con su campo (lista vacía si se puede). No registra nada.
+    pub async fn validar_entrada_correo(
+        &self,
+        entrada: &EntradaCorreoEntrada,
+    ) -> Result<Vec<ErrorJson>, ErrorJson> {
+        let borrador = entrada.a_borrador()?;
+        let problemas = self
+            .app
+            .correo
+            .validar_entrada
+            .ejecutar(&borrador)
+            .await
+            .map_err(con_campo)?;
+        Ok(problemas
+            .into_iter()
+            .map(|problema| con_campo(ErrorCaso::Negocio(problema)))
+            .collect())
+    }
 
     /// Registra la entrada de una visita autorizada por correo y devuelve el
     /// ingreso.
@@ -417,6 +581,48 @@ where
     ) -> Result<Vec<PersonalKofDto>, ErrorJson> {
         let encontrados = self.app.kof.buscar.ejecutar(texto, limite).await?;
         Ok(encontrados.iter().map(PersonalKofDto::from).collect())
+    }
+
+    /// Todo lo que impide dar de alta a esta persona, de una vez y cada
+    /// problema con su campo (lista vacía si se puede). No registra nada.
+    pub async fn validar_personal_kof(
+        &self,
+        codigo_empleado: &str,
+        nombre: &str,
+    ) -> Result<Vec<ErrorJson>, ErrorJson> {
+        let problemas = self
+            .app
+            .kof
+            .validar_personal
+            .ejecutar(codigo_empleado, nombre)
+            .await
+            .map_err(con_campo)?;
+        Ok(problemas
+            .into_iter()
+            .map(|problema| con_campo(ErrorCaso::Negocio(problema)))
+            .collect())
+    }
+
+    /// Todo lo que impide entregar el gafete provisional, de una vez y cada
+    /// problema con su campo (lista vacía si se puede). `personal_id` vacío es
+    /// "todavía no eligió a la persona". No entrega nada.
+    pub async fn validar_entrega_gafete_kof(
+        &self,
+        personal_id: &str,
+        gafete: u32,
+    ) -> Result<Vec<ErrorJson>, ErrorJson> {
+        let persona = leer_persona_kof(personal_id)?;
+        let problemas = self
+            .app
+            .kof
+            .validar_entrega
+            .ejecutar(persona, gafete)
+            .await
+            .map_err(con_campo)?;
+        Ok(problemas
+            .into_iter()
+            .map(|problema| con_campo(ErrorCaso::Negocio(problema)))
+            .collect())
     }
 
     /// Registra a una persona del personal KOF y devuelve su identificador.
@@ -464,10 +670,10 @@ where
         personal_id: &str,
         gafete: u32,
     ) -> Result<String, ErrorJson> {
-        let persona = PersonalKofId::desde_uuid(
-            leer_uuid(personal_id)
-                .map_err(|e| ErrorJson::from(e).en_campo(Some(campos::PERSONA)))?,
-        );
+        // Sin persona elegida no es un identificador ilegible: falta elegirla,
+        // y eso lo dice el dominio.
+        let persona = leer_persona_kof(personal_id)?
+            .ok_or_else(|| con_campo(ErrorCaso::Negocio(ErrorPrestamoKof::PersonaRequerida)))?;
         let id = self
             .app
             .kof

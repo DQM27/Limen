@@ -35,3 +35,27 @@ export function fechaYHora(instante: string | null | undefined): string {
     .format(fecha)
     .replace(',', '');
 }
+
+/** Un instante UTC → `09/10/2026`: el día de Costa Rica, no el del equipo. */
+export function soloFecha(instante: string | null | undefined): string {
+  return formatear(instante, { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+/** Un instante UTC → `08:30`: la hora de Costa Rica, en 24 horas. */
+export function soloHora(instante: string | null | undefined): string {
+  return formatear(instante, { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function formatear(
+  instante: string | null | undefined,
+  opciones: Intl.DateTimeFormatOptions,
+): string {
+  if (!instante) {
+    return '—';
+  }
+  const fecha = new Date(instante);
+  if (Number.isNaN(fecha.getTime())) {
+    return instante;
+  }
+  return new Intl.DateTimeFormat('es-CR', { timeZone: ZONA, ...opciones }).format(fecha);
+}

@@ -1,0 +1,65 @@
+<form (submit)="$event.preventDefault(); entregar()" novalidate>
+  <div class="cabecera">
+    <h2 mat-dialog-title>Entregar gafete provisional</h2>
+    <button mat-icon-button type="button" class="cerrar" aria-label="Cerrar" (click)="cancelar()">
+      <mat-icon aria-hidden="true">close</mat-icon>
+    </button>
+  </div>
+
+  <mat-dialog-content>
+    <div class="campos">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-label>Código o nombre</mat-label>
+        <input matInput autocomplete="off" [formControl]="persona" [matAutocomplete]="lista" />
+        <!-- Las coincidencias flotan bajo el campo: el modal no cambia de tamaño al buscar. -->
+        <mat-autocomplete
+          #lista="matAutocomplete"
+          autoActiveFirstOption
+          class="panel-ingreso"
+          [displayWith]="nombreDePersona"
+          (optionSelected)="alElegir($event.option.value)"
+        >
+          @for (persona of opciones(); track persona.id) {
+            <mat-option class="opcion" [value]="persona">
+              <span class="nombre">{{ persona.nombre }}</span>
+              <span class="detalle">{{ persona.codigo_empleado }}</span>
+              @if (!persona.activo) {
+                <span class="estado malo">Inactivo</span>
+              }
+            </mat-option>
+          }
+          @if (sinResultados()) {
+            <mat-option disabled class="opcion">
+              No se encontró a nadie. Si es nuevo, créalo antes con «Nuevo personal».
+            </mat-option>
+          }
+        </mat-autocomplete>
+        @if (persona.errors?.['nucleo']; as mensaje) {
+          <mat-error>{{ mensaje }}</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-label>Número de gafete provisional</mat-label>
+        <input
+          matInput
+          inputmode="numeric"
+          autocomplete="off"
+          [formControl]="gafete"
+          (input)="escribirGafete($event)"
+        />
+        @if (gafete.errors?.['nucleo']; as mensaje) {
+          <mat-error>{{ mensaje }}</mat-error>
+        }
+      </mat-form-field>
+    </div>
+
+    <p class="ayuda">Entregar el gafete es su entrada; devolverlo, su salida.</p>
+    <p class="error" role="alert">{{ errorGeneral() }}</p>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" (click)="cancelar()">Cancelar</button>
+    <button mat-flat-button type="submit" [disabled]="enviando()">Entregar gafete</button>
+  </mat-dialog-actions>
+</form>

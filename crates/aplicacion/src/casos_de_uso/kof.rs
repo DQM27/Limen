@@ -2,15 +2,17 @@
 //! provisional.
 
 use limen_dominio::auditoria::CambioCampo;
-use limen_dominio::gafete::{ErrorPrestamoGafete, NumeroGafete, TipoGafete};
+use limen_dominio::gafete::{ErrorPrestamoGafete, NumeroGafete, SituacionGafete, TipoGafete};
 use limen_dominio::hecho::{Hecho, HechoId};
 use limen_dominio::movimiento::Marca;
 use limen_dominio::personal_kof::{
     CodigoEmpleado, ErrorPersonalKof, HechosPersonalKof, PersonalKof, PersonalKofId,
+    problemas as problemas_de_alta,
 };
 use limen_dominio::presencia::Via;
 use limen_dominio::prestamo_kof::{
     ErrorDevolucionKof, ErrorPrestamoKof, HechosEntregaKof, PrestamoKof, PrestamoKofId,
+    problemas_de_entrega,
 };
 
 use super::gafetes::situacion_para_prestar;
@@ -211,6 +213,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> EntregarGafeteKof<F, 
         uow.prestamos_kof().anotar_entrega(&prestamo);
         uow.hechos().anotar(Hecho::entrega_kof(
             HechoId::desde_uuid(self.ids.nuevo()),
+            sesion.origen(),
             &prestamo,
             hora.into(),
         ));
@@ -223,6 +226,84 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> EntregarGafeteKof<F, 
             .await
             .map_err(|error| ErrorCaso::al_confirmar(error, conflicto_de_entrega))?;
         Ok(prestamo.id())
+    }
+}
+
+/// Dice de una vez todo lo que impide dar de alta a esta persona, para marcar
+/// cada campo a la vez. Sólo lee: no registra nada.
+#[derive(Debug)]
+pub struct ValidarPersonalKof<F> {
+    fabrica: F,
+}
+
+impl<F: FabricaUnidadDeTrabajo> ValidarPersonalKof<F> {
+    pub const fn new(fabrica: F) -> Self {
+        Self { fabrica }
+    }
+
+    pub async fn ejecutar(
+        &self,
+        codigo: &str,
+        nombre: &str,
+    ) -> Result<Vec<ErrorPersonalKof>, ErrorPersonal> {
+        let mut uow = self.fabrica.nueva();
+        // Un código que no vale no se busca: ya se marca por sí solo.
+        let codigo_en_uso = match CodigoEmpleado::nuevo(codigo) {
+            Ok(codigo) => uow.personal_kof().codigo_en_uso(&codigo, None).await?,
+            Err(_) => false,
+        };
+        Ok(problemas_de_alta(
+            codigo,
+            nombre,
+            HechosPersonalKof { codigo_en_uso },
+        ))
+    }
+}
+
+/// Dice de una vez todo lo que impide entregar el gafete, para marcar cada
+/// campo a la vez. `personal` es `None` mientras no se haya elegido a la
+/// persona; un gafete 0 es "todavía no lo escribió". Sólo lee: no entrega nada.
+#[derive(Debug)]
+pub struct ValidarEntregaKof<F> {
+    fabrica: F,
+}
+
+impl<F: FabricaUnidadDeTrabajo> ValidarEntregaKof<F> {
+    pub const fn new(fabrica: F) -> Self {
+        Self { fabrica }
+    }
+
+    pub async fn ejecutar(
+        &self,
+        personal: Option<PersonalKofId>,
+        gafete: u32,
+    ) -> Result<Vec<ErrorPrestamoKof>, ErrorEntregaKof> {
+        let mut uow = self.fabrica.nueva();
+        let persona = match personal {
+            Some(id) => Some(
+                uow.personal_kof()
+                    .obtener(id)
+                    .await?
+                    .ok_or(ErrorCaso::NoEncontrado)?,
+            ),
+            None => None,
+        };
+        let ya_tiene_prestamo = match personal {
+            Some(id) => uow.prestamos_kof().tiene_abierto(id).await?,
+            None => false,
+        };
+        let gafete = NumeroGafete::nuevo(gafete).ok();
+        let situacion_gafete = match gafete {
+            Some(numero) => {
+                situacion_para_prestar(uow.gafetes(), TipoGafete::ProvisionalKof, numero).await?
+            }
+            None => SituacionGafete::NoRegistrado,
+        };
+        let hechos = HechosEntregaKof {
+            ya_tiene_prestamo,
+            situacion_gafete,
+        };
+        Ok(problemas_de_entrega(persona.as_ref(), gafete, hechos))
     }
 }
 
@@ -287,6 +368,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj, G: GeneradorIds> DevolverGafeteKof<F, 
         uow.prestamos_kof().anotar_devolucion(&prestamo);
         if let Some(hecho) = Hecho::devolucion_kof(
             HechoId::desde_uuid(self.ids.nuevo()),
+            sesion.origen(),
             &prestamo,
             hora.into(),
         ) {

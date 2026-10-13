@@ -22,6 +22,7 @@ use limen_dominio::medio::{Medio, Placa};
 use limen_dominio::movimiento::Marca;
 use limen_dominio::nombre::NombrePersona;
 use limen_dominio::operador::OperadorId;
+use limen_dominio::origen::{EquipoId, Origen, UnidadOperativaId};
 use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKofId};
 use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofGuardado, PrestamoKofId};
 use limen_dominio::visitante::Visitante;
@@ -30,6 +31,23 @@ use uuid::Uuid;
 use crate::id_contratista;
 
 // --- Datos de ejemplo ---
+
+/// Dónde se registraron las entradas de ejemplo.
+fn origen() -> Origen {
+    Origen {
+        unidad: UnidadOperativaId::nueva("BRISAS").unwrap(),
+        equipo: EquipoId::desde_uuid(Uuid::from_u128(71)),
+    }
+}
+
+/// Las salidas de ejemplo, desde otro equipo de la misma unidad: el origen
+/// es de cada hecho, no del registro.
+fn otro_equipo() -> Origen {
+    Origen {
+        equipo: EquipoId::desde_uuid(Uuid::from_u128(72)),
+        ..origen()
+    }
+}
 
 /// Hora comprobada al sellar (las entradas de ejemplo).
 fn confiable() -> CalidadHora {
@@ -127,30 +145,58 @@ fn hechos_de_las_cuatro_vias() -> Vec<(Uuid, Vec<Hecho>)> {
         (
             Uuid::from_u128(5001),
             vec![
-                Hecho::entrada_contratista(id_hecho(1), &ingreso_contratista(None), confiable()),
-                Hecho::salida_contratista(id_hecho(2), &ingreso_contratista(salida), dudosa())
-                    .unwrap(),
+                Hecho::entrada_contratista(
+                    id_hecho(1),
+                    &origen(),
+                    &ingreso_contratista(None),
+                    confiable(),
+                ),
+                Hecho::salida_contratista(
+                    id_hecho(2),
+                    &otro_equipo(),
+                    &ingreso_contratista(salida),
+                    dudosa(),
+                )
+                .unwrap(),
             ],
         ),
         (
             Uuid::from_u128(6001),
             vec![
-                Hecho::entrada_proveedor(id_hecho(3), &ingreso_proveedor(None), confiable()),
-                Hecho::salida_proveedor(id_hecho(4), &ingreso_proveedor(salida), dudosa()).unwrap(),
+                Hecho::entrada_proveedor(
+                    id_hecho(3),
+                    &origen(),
+                    &ingreso_proveedor(None),
+                    confiable(),
+                ),
+                Hecho::salida_proveedor(
+                    id_hecho(4),
+                    &otro_equipo(),
+                    &ingreso_proveedor(salida),
+                    dudosa(),
+                )
+                .unwrap(),
             ],
         ),
         (
             Uuid::from_u128(7001),
             vec![
-                Hecho::entrada_correo(id_hecho(5), &ingreso_correo(None), confiable()),
-                Hecho::salida_correo(id_hecho(6), &ingreso_correo(salida), dudosa()).unwrap(),
+                Hecho::entrada_correo(id_hecho(5), &origen(), &ingreso_correo(None), confiable()),
+                Hecho::salida_correo(
+                    id_hecho(6),
+                    &otro_equipo(),
+                    &ingreso_correo(salida),
+                    dudosa(),
+                )
+                .unwrap(),
             ],
         ),
         (
             Uuid::from_u128(8001),
             vec![
-                Hecho::entrega_kof(id_hecho(7), &prestamo_kof(None), confiable()),
-                Hecho::devolucion_kof(id_hecho(8), &prestamo_kof(salida), dudosa()).unwrap(),
+                Hecho::entrega_kof(id_hecho(7), &origen(), &prestamo_kof(None), confiable()),
+                Hecho::devolucion_kof(id_hecho(8), &otro_equipo(), &prestamo_kof(salida), dudosa())
+                    .unwrap(),
             ],
         ),
     ]
@@ -191,6 +237,7 @@ pub async fn un_hecho_sin_confirmar_no_queda<F: FabricaUnidadDeTrabajo + Consult
     let mut uow = fabrica.nueva();
     uow.hechos().anotar(Hecho::entrada_contratista(
         id_hecho(1),
+        &origen(),
         &ingreso_contratista(None),
         confiable(),
     ));
@@ -207,7 +254,12 @@ pub async fn un_hecho_nunca_se_reemplaza_y_el_intento_no_aplica_nada<
 >(
     fabrica: F,
 ) {
-    let original = Hecho::entrada_contratista(id_hecho(1), &ingreso_contratista(None), confiable());
+    let original = Hecho::entrada_contratista(
+        id_hecho(1),
+        &origen(),
+        &ingreso_contratista(None),
+        confiable(),
+    );
     let mut uow = fabrica.nueva();
     uow.hechos().anotar(original.clone());
     uow.confirmar().await.unwrap();
@@ -217,11 +269,13 @@ pub async fn un_hecho_nunca_se_reemplaza_y_el_intento_no_aplica_nada<
     let mut uow = fabrica.nueva();
     uow.hechos().anotar(Hecho::entrada_correo(
         id_hecho(2),
+        &origen(),
         &ingreso_correo(None),
         confiable(),
     ));
     uow.hechos().anotar(Hecho::entrada_proveedor(
         id_hecho(1),
+        &origen(),
         &ingreso_proveedor(None),
         confiable(),
     ));

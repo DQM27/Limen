@@ -1,0 +1,37 @@
+<!-- El título no se ve (la barra lateral ya dice dónde está la persona) pero
+     queda para los lectores de pantalla. -->
+<h1 class="solo-lectores">Gafetes</h1>
+
+@if (error(); as mensaje) {
+  <p class="error" role="alert">{{ mensaje }}</p>
+}
+
+<app-tabla
+  id="gafetes"
+  etiqueta="Gafetes"
+  marcador="Número o nombre…"
+  mensajeVacio="No hay gafetes de este tipo"
+  [columnas]="columnas"
+  [filas]="filas()"
+  [cargando]="cargando()"
+  [idFila]="idFila"
+  [reglas]="reglas"
+  (filaDobleClic)="gestionar($event)"
+>
+  <mat-button-toggle-group
+    controles
+    class="tipos"
+    aria-label="Tipo de gafete"
+    hideSingleSelectionIndicator
+    [value]="tipo()"
+    (change)="cambiarTipo($event.value)"
+  >
+    @for (t of tipos; track t.tipo) {
+      <mat-button-toggle [value]="t.tipo">{{ t.etiqueta }}</mat-button-toggle>
+    }
+  </mat-button-toggle-group>
+  <button acciones mat-flat-button type="button" class="nuevo" (click)="crear()">
+    <mat-icon aria-hidden="true">add</mat-icon>
+    Nuevos gafetes
+  </button>
+</app-tabla>

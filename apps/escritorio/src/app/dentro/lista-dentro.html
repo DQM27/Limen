@@ -1,0 +1,60 @@
+<!-- El título no se ve (la barra lateral ya dice dónde está la persona) pero
+     queda para los lectores de pantalla. -->
+<h1 class="solo-lectores">{{ titulo() }}</h1>
+
+@if (error(); as mensaje) {
+  <p class="error" role="alert">{{ mensaje }}</p>
+}
+
+<app-tabla
+  [id]="idTabla()"
+  [etiqueta]="titulo()"
+  marcador="Cédula, nombre, empresa…"
+  [mensajeVacio]="mensajeVacio()"
+  [columnas]="columnas()"
+  [filas]="visibles()"
+  [cargando]="cargando()"
+  [idFila]="idFila"
+  [reglas]="reglas"
+  [claseFila]="claseFila"
+  [seleccionMultiple]="true"
+  (seleccionCambia)="seleccionadas.set($event)"
+>
+  <mat-button-toggle-group
+    controles
+    class="filtro"
+    aria-label="Filtrar por gafete"
+    hideSingleSelectionIndicator
+    [value]="filtro()"
+    (change)="cambiarFiltro($event.value)"
+  >
+    <mat-button-toggle value="todos">Todos</mat-button-toggle>
+    <mat-button-toggle value="con">Con gafete</mat-button-toggle>
+    <mat-button-toggle value="sin">Sin gafete</mat-button-toggle>
+  </mat-button-toggle-group>
+
+  <!-- La salida de quien devuelve su gafete: el número y Enter. -->
+  <label controles class="gafete" matTooltip="Salida por gafete (F4)">
+    <mat-icon aria-hidden="true">badge</mat-icon>
+    <input
+      type="text"
+      inputmode="numeric"
+      autocomplete="off"
+      appAtajo="F4"
+      placeholder="N.º de gafete + Enter"
+      aria-label="Número de gafete para registrar la salida"
+      [value]="gafete()"
+      (input)="escribirGafete($event)"
+      (keydown.enter)="salidaPorGafete()"
+    />
+  </label>
+
+  <!-- Lo que la pantalla que usa esta lista quiera agregar (por ejemplo, el botón de ingreso). -->
+  <span acciones class="botones"><ng-content select="[botones]" /></span>
+
+  @if (seleccionadas().length > 0) {
+    <button acciones mat-flat-button type="button" class="salida-masiva" (click)="salidaMasiva()">
+      Registrar salida ({{ seleccionadas().length }})
+    </button>
+  }
+</app-tabla>

@@ -1,0 +1,89 @@
+<div class="cabecera">
+  <h2 mat-dialog-title>Personal KOF</h2>
+  <button mat-icon-button type="button" class="cerrar" aria-label="Cerrar" (click)="cerrar()">
+    <mat-icon aria-hidden="true">close</mat-icon>
+  </button>
+</div>
+
+<mat-dialog-content>
+  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+    <mat-label>Código o nombre</mat-label>
+    <input matInput autocomplete="off" [formControl]="busqueda" />
+  </mat-form-field>
+
+  <!-- Alto fijo: el modal no cambia de tamaño según cuántas personas coincidan. -->
+  <ul class="personas" aria-label="Personas encontradas">
+    @for (persona of personas(); track persona.id) {
+      <li class="persona" [class.inactiva]="!persona.activo">
+        @if (editando() === persona.id) {
+          <form
+            class="correccion"
+            (submit)="$event.preventDefault(); guardarNombre(persona)"
+            novalidate
+          >
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-label>Nombre</mat-label>
+              <input
+                matInput
+                autocomplete="off"
+                [formControl]="nombre"
+                (input)="escribirNombre($event)"
+              />
+              @if (nombre.errors?.['nucleo']; as mensaje) {
+                <mat-error>{{ mensaje }}</mat-error>
+              }
+            </mat-form-field>
+            <button mat-flat-button type="submit" class="guardar" [disabled]="enviando()">
+              Guardar
+            </button>
+            <button mat-button type="button" class="cancelar" (click)="cancelarEdicion()">
+              Cancelar
+            </button>
+          </form>
+        } @else {
+          <span class="datos">
+            <span class="nombre">{{ persona.nombre }}</span>
+            <span class="detalle">
+              {{ persona.codigo_empleado }}
+              @if (!persona.activo) {
+                · <span class="estado">Inactivo</span>
+              }
+            </span>
+          </span>
+          <button
+            mat-button
+            type="button"
+            class="corregir"
+            [attr.aria-label]="'Corregir el nombre de ' + persona.nombre"
+            (click)="corregir(persona)"
+          >
+            Corregir nombre
+          </button>
+          <button
+            mat-button
+            type="button"
+            class="activo"
+            [disabled]="enviando()"
+            (click)="alternarActivo(persona)"
+          >
+            {{ persona.activo ? 'Desactivar' : 'Activar' }}
+          </button>
+        }
+      </li>
+    } @empty {
+      <li class="vacio">
+        {{
+          buscado()
+            ? 'No se encontró a nadie con ese código o nombre.'
+            : 'Escribe un código o un nombre para buscar.'
+        }}
+      </li>
+    }
+  </ul>
+
+  <p class="error" role="alert">{{ errorGeneral() }}</p>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="cerrar()">Cerrar</button>
+</mat-dialog-actions>

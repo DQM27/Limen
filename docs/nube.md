@@ -1,0 +1,254 @@
+# La nube de Limen
+
+Cómo se reparten los datos entre la nube y los equipos, y en qué orden se construye la
+sincronización. Complementa la sección 9 de [`arquitectura.md`](arquitectura.md) y
+[`operacion-sin-conexion.md`](operacion-sin-conexion.md).
+
+**Estado:** modelo acordado con el dueño. La instancia existe, tiene el esquema y la
+sincronización (subida, bajada y tiempo real) ya funciona, con reintentos de espera
+aleatoria (sección 11); falta lo que marca la sección 6 (incidentes y usuarios desde la
+nube).
+
+---
+
+## 1. La instancia
+
+| Dato | Valor |
+|---|---|
+| Servicio | SurrealDB Cloud, organización "Individual", plan Start |
+| Instancia | `limen`, tipo `free` (0,25 CPU, 512 MB, 1 GB), región `aws-use1` |
+| Versión | SurrealDB 3.3.2, la misma que usan los equipos |
+| Namespace y base | `limen` / `principal`, iguales que en los equipos |
+| Esquema | el de los equipos (`infra-surreal/src/esquema/esquema.surql`), aplicado tal cual |
+
+La dirección (`wss://…surreal.cloud`) y las credenciales **no van en el repositorio**,
+que es público: se leen de variables de entorno (`LIMEN_NUBE_URL`, `LIMEN_NUBE_USUARIO`,
+`LIMEN_NUBE_CLAVE`, `LIMEN_NUBE_NIVEL`). Para volver a aplicar el esquema después de
+cambiarlo: `cargo run -p limen-infra-nube --bin limen-nube -- esquema` (es declarativo:
+aplicarlo otra vez no toca los datos).
+
+Para **subir la base de un equipo** (con la app cerrada, porque la base queda tomada
+mientras está abierta):
+
+```text
+cargo run -p limen-infra-nube --bin limen-nube -- subir "%APPDATA%\com.dqm27.limen.escritorio"
+```
+
+Abre la base (y la convierte si es de antes de las unidades operativas), deja el esquema
+de la nube al día y copia, con los mismos IDs, los catálogos, lo de la unidad, los
+hechos y la auditoría. Se puede repetir: no duplica nada, y lo que en el equipo ya
+terminó (una presencia, un préstamo) deja de estar en la nube. No sube los usuarios (los
+de un equipo de desarrollo son de prueba; los reales vienen de la nube), los intentos de
+inicio de sesión ni el reloj del equipo.
+
+## 2. El modelo: la nube manda, el equipo es desechable
+
+- **La nube es la fuente de verdad** de los catálogos, los registros y el historial.
+- **El equipo es desechable.** Uno nuevo se vincula, baja lo que le corresponde y queda
+  trabajando. Si se pierde o se daña, no se pierde nada que ya haya subido.
+- **El equipo guarda una copia local y trabaja sin conexión.** La portería nunca se
+  bloquea por la red (`operacion-sin-conexion.md`): sin internet se registra igual, con
+  las reglas locales, y lo pendiente se sube al volver la conexión.
+- **Tiempo real.** Con conexión, cada equipo escucha los cambios de su unidad operativa
+  y su pantalla se actualiza sola.
+
+## 3. Qué es global y qué es de cada unidad operativa
+
+"Unidad operativa" es lo que Lattis llamaba "sitio" (Brisas, Cartago, Belén…). Cada
+equipo pertenece a una.
+
+| Dato | Alcance | Por qué |
+|---|---|---|
+| Contratistas y empresas | **Global**: igual en todas las unidades | Es la misma persona en todos lados: un acceso negado en una unidad queda negado en todas |
+| Empresas proveedoras y personal KOF | **Global** | Catálogos, igual que los anteriores |
+| Usuarios | **Global**; se administran en la nube | Un operador puede cubrir turno en otra unidad |
+| Gafetes | **De la unidad** | Son el inventario físico de cada lugar |
+| Ingresos, presencia, préstamos e historial (hechos) | **De la unidad** | Un movimiento pasó en un lugar concreto |
+| Equipos | **De la unidad** | Cada equipo trabaja en un solo lugar |
+
+Un equipo baja **los catálogos globales completos** y, de lo que es por unidad, **sólo
+lo de la suya**.
+
+## 4. Cómo viajan los datos
+
+1. **Al registrar** (con o sin red): una sola transacción local guarda el estado, el
+   hecho y la marca de "pendiente de subir".
+2. **Subida:** en segundo plano, lo pendiente se sube en lote. Cada registro tiene un ID
+   fijo (UUID v7): un reintento no duplica nada. Lo que la nube acepta queda confirmado.
+3. **Bajada en vivo:** con conexión, el equipo escucha (`LIVE SELECT`) los catálogos y
+   lo de su unidad. Lo que llega se guarda en la copia local y la pantalla se refresca.
+4. **Al volver la conexión:** el equipo pide lo que pasó desde su último cursor
+   (`SHOW CHANGES … SINCE`) y lo aplica.
+5. **Equipo nuevo:** baja todo lo que le corresponde (sección 3) de una vez y después
+   sigue con el paso 3.
+6. **Choques entre equipos** (la misma persona adentro dos veces, el mismo gafete
+   prestado dos veces): no se borra ni se rechaza nada; el registro queda con el
+   indicador de incidente (`operacion-sin-conexion.md`, 4.3 y 4.4).
+
+## 5. Identidad de los equipos
+
+Mientras no exista el bloque M (vinculación con código de un solo uso y par de claves
+propio, como en Lattis), **cada equipo entra con su propio usuario de base de datos**,
+limitado a lo que le corresponde. Cuando exista el bloque M se reemplaza por la firma del
+equipo sin cambiar el flujo de datos.
+
+## 6. Orden de construcción
+
+1. ✅ Conectar y aplicar el esquema (`crates/infra-nube`, herramienta `limen-nube`).
+2. ✅ **Unidades operativas y equipos** en el dominio y en el esquema (sección 7).
+3. ✅ Subida continua (sección 8). A mano está `limen-nube subir`, que usa el mismo
+   camino.
+4. ✅ Bajada: carga inicial de un equipo nuevo, en tiempo real y al volver la conexión
+   (secciones 9 y 10).
+5. Indicador de incidente al unir lo de varios equipos.
+6. Usuarios desde la nube (L4, L5) y la hora de la nube para los equipos sin NTP.
+7. ✅ Reintentos con espera aleatoria para que miles de equipos no vuelvan a la vez
+   (sección 11).
+
+## 7. Unidad operativa y equipo, como quedaron
+
+- **Dominio** (`dominio/origen.rs`): `UnidadOperativaId` (un código corto y estable,
+  `BRISAS`), `EquipoId` (UUID v7) y `Origen`, que junta los dos. Cada **hecho** lleva su
+  origen.
+- **Sesión:** dice quién, en qué unidad y desde qué equipo. El inicio de sesión le pone
+  el origen del equipo, y los casos de uso se lo pasan a cada hecho.
+- **Identidad del equipo:** el archivo `equipo.txt` en la carpeta de datos de la app
+  (`unidad=BRISAS`, `equipo=<uuid>`). La primera vez que arranca, el equipo lo crea con
+  la unidad por omisión (`BRISAS`, `composicion::UNIDAD_POR_OMISION`) y un ID nuevo.
+  Con el bloque M llegará al vincular el equipo.
+- **Base del equipo:** el almacén conoce su unidad. Las claves de los gafetes y de sus
+  préstamos la llevan (`gafete:⟨BRISAS-CONTRATISTA-25⟩`), y la Unit of Work le pone el
+  campo `unidad` a cada fila de las tablas de la unidad (`TABLAS_DE_LA_UNIDAD`) al
+  confirmar. La presencia sigue siendo una por persona en todas las unidades (A7); su
+  campo `unidad` dice en cuál está.
+- **Pantallas:** sin cambios. La base local sólo tiene lo de su unidad.
+- **Nube:** el esquema nuevo ya está aplicado y existe `unidad_operativa:BRISAS`.
+
+**Bases de antes de este cambio:** no hay que borrarlas. Al abrirse, la base de un
+equipo se convierte sola (`infra-surreal/src/esquema/sin_unidad.surql`, sección 8.4 de
+`arquitectura.md`): los gafetes y sus préstamos pasan a la clave con la unidad, y lo
+demás recibe el campo `unidad`. Sólo toca lo que no tiene unidad, así que en una base
+nueva o ya convertida no hace nada. Los hechos no se editan: los que no traen origen se
+leen como registrados en ese equipo, que es donde se registraron.
+
+**Pendiente para cuando haya una segunda unidad:** el historial de cambios de un gafete
+(auditoría) lo identifica por `TIPO-NÚMERO`, sin la unidad. Con una sola unidad no
+importa; con dos, el historial del 25 de Brisas se mezclaría con el del 25 de la otra.
+
+## 8. Subida continua, como quedó
+
+- Las tablas que se comparten tienen **registro de cambios** (`CHANGEFEED 30d`): cada
+  alta, cambio y borrado queda anotado, en orden, durante 30 días. Es el mismo esquema
+  en el equipo y en la nube.
+- **Al arrancar**, si el equipo tiene la nube configurada (las variables
+  `LIMEN_NUBE_URL`, `LIMEN_NUBE_USUARIO`, `LIMEN_NUBE_CLAVE` y `LIMEN_NUBE_NIVEL` del
+  usuario de Windows), la app lanza la sincronización en segundo plano
+  (`infra_nube::sincronizar`). Sin esa configuración trabaja igual que antes, sólo en el
+  equipo.
+- **Al instante** (ver sección 10) sube lo anotado desde la última vez, tabla por tabla y en orden:
+  lo guardado se crea o se reemplaza en la nube; lo borrado se borra (hechos y
+  auditoría nunca se borran: se agregan los que faltan). Lo que subió queda anotado en
+  `sincronizacion:⟨tabla⟩`, que es del equipo y no se comparte.
+- **La primera vez** cada tabla se copia entera, porque lo que había antes del registro
+  de cambios no está anotado; después sólo sube lo nuevo. Todo se puede repetir sin
+  duplicar nada.
+- **Sin red**, la sincronización sólo lo anota en el registro técnico y reintenta cada 30
+  segundos. Lo registrado mientras tanto sube al volver la conexión. La portería nunca
+  espera.
+- **Límite:** el registro de cambios guarda 30 días. Un equipo que pase más de 30 días
+  sin conexión debe volver a copiarse entero con `limen-nube subir`.
+- **La copia entera nunca borra en la nube**, porque allí también está lo de los demás
+  equipos. Los borrados viajan sólo por el registro de cambios, que dice exactamente qué
+  se borró.
+
+## 9. Bajada, como quedó
+
+- En cada vuelta la app **primero sube y después baja**: si el equipo
+  cambió algo sin conexión, la nube recibe su versión antes de que el equipo repase lo
+  que cambió allá, y el repaso termina en lo más reciente.
+- Baja con el **registro de cambios de la nube**, desde el último que bajó
+  (`sincronizacion:⟨bajada-tabla⟩`). Lo mismo sirve en vivo y al volver la red.
+- Baja los **catálogos completos** y, de lo que es de una unidad, **sólo lo de la suya**
+  (filtra por el campo `unidad`).
+- **Equipo nuevo:** la primera vez baja todo lo que le corresponde y arranca al día.
+- **Sin rebotes:** lo que llega y ya está igual no se escribe
+  (`AlmacenSurreal::aplicar_de_la_nube`), así no se anota en el registro del equipo y no
+  vuelve a subir. Hechos y auditoría sólo se agregan.
+- **Pantallas:** cuando lo que bajó cambió algo, el núcleo manda el evento
+  `nube-cambios` y Dentro (con Proveedores, Correo y KOF), Contratistas, Gafetes e
+  Historial vuelven a cargar.
+- **Choques:** si dos equipos cambian lo mismo, queda el último que llegó a la nube. Los
+  choques de reglas entre equipos (la misma persona adentro dos veces, el mismo gafete
+  prestado dos veces) todavía no se marcan como incidente: es el paso 5.
+
+## 10. Tiempo real, como quedó
+
+La sincronización no espera un reloj: **despierta por lo que pase primero**.
+
+1. **La app guarda algo** en el equipo: la base local avisa al confirmar
+   (`AlmacenSurreal::esperar_confirmacion`) y se sube en el momento.
+2. **La nube avisa en vivo** (`LIVE SELECT`, `infra_nube::Nube::escuchar`) que otro equipo
+   cambió algo: los catálogos completos y, de lo que es de una unidad, sólo lo de la del
+   equipo. Se baja en el momento y las pantallas se recargan.
+3. **Red de seguridad:** si en 10 segundos no llegó ningún aviso, se sincroniza igual. Los
+   avisos en vivo se pierden si se corta la conexión aunque sea un momento; lo que se baja
+   sale siempre del registro de cambios, así que la vuelta periódica recupera exactamente
+   lo que faltó.
+
+Probado con dos equipos y una nube en memoria: lo que registra uno aparece en el otro en
+menos de dos segundos, sin esperar la red de seguridad.
+
+**Choques al escribir a la vez:** si dos equipos escriben al mismo tiempo, la nube puede
+pedir "reintente la transacción". La suscripción en vivo y cada vuelta se reintentan
+enseguida unas veces; si la suscripción no se pudo crear, se vuelve a intentar en cada
+vuelta y, mientras tanto, queda la red de seguridad.
+
+## 11. Escala y reintentos: decisión
+
+Pensando en muchas unidades operativas, y quizá todo el país, se evaluó qué proteger a la
+nube de la saturación. **Decisión: por ahora no se agrega ni Kafka ni Nginx.**
+
+| Opción | Por qué no, por ahora |
+|---|---|
+| **Kafka** | Su valor aquí sería amortiguar picos de escritura, pero ya lo hacen los equipos: cada uno escribe primero en su base local y sube en lotes desde su propia cola (sección 8), con IDs fijos que hacen seguros los reintentos. El `CHANGEFEED` y el `LIVE SELECT` cubren el papel de log ordenado y suscripciones. Un clúster costaría más que toda la nube y sumaría un segundo sistema de verdad que podría desincronizarse. Tampoco resuelve los choques entre equipos: esos son regla de negocio (A7, E1) y se marcan con el indicador de incidente |
+| **Nginx** | Balancea servidores de aplicación sin estado. Aquí los equipos hablan directo con SurrealDB; el cuello de botella sería la base (un solo nodo), y un proxy delante de un solo nodo no le quita carga |
+
+**Lo que sí se hace para escalar, en este orden y medido antes de adelantarse:**
+
+1. **Espera aleatoria (*jitter*) en los reintentos.** Tras una caída de la nube, miles de
+   equipos que reintentan con el mismo intervalo vuelven al mismo instante y la nube, que
+   intenta recuperarse, recibe todo junto (*estampida*). Con espera exponencial y
+   aleatoria (*full jitter*: un valor al azar entre 0 y el techo, con tope de unos 5
+   minutos) las reconexiones se reparten en el tiempo.
+2. **Filtrar los avisos en vivo por unidad** (ya está: `WHERE unidad = …`), para que cada
+   equipo reciba sólo lo suyo.
+3. **Escala vertical** de la instancia y, si hiciera falta, **partir por región**
+   (un namespace o base por zona).
+4. **Prueba de carga** con muchos equipos simulados contra la instancia de desarrollo
+   antes de elegir el tamaño de producción.
+
+**Cómo quedó** (`crates/infra-nube/src/espera.rs` y `sincronizacion.rs`):
+
+| Dónde | Antes | Ahora |
+|---|---|---|
+| Reconexión (`sincronizar`) | 30 s fijos | Retroceso exponencial con *full jitter*: el techo empieza en `REINTENTO` (30 s), se duplica con cada fallo seguido y se detiene en 5 minutos; la espera es un valor al azar entre 1 s y ese techo. Al lograr conectar, el contador vuelve a cero |
+| `RED_DE_SEGURIDAD` | 10 s fijos | 10 s ±15 %, calculado en cada vuelta, para que equipos arrancados juntos no queden sincronizados entre sí |
+| Esquema al reconectar | Se reaplicaba en cada reconexión | Sólo en la primera conexión buena de la sesión (si falla, cuenta como fallo y se reintenta) |
+| `una_vuelta_con_reintentos` y `escuchar` | 200 ms × intento, pocas veces | Igual: es para choques de transacción entre pocos equipos y no justifica el cambio |
+
+- **Piso de 1 s:** con *full jitter* el azar puede dar casi cero; el piso evita reintentar
+  en un ciclo apretado si eso se repite.
+- **Azar inyectable:** el trait `Azar` separa el generador de la lógica. `AzarDelSistema`
+  usa `rand`; las pruebas usan uno fijo y comprueban los extremos, el tope y que no haya
+  desbordes. Una prueba con azar real verifica que 200 equipos se reparten en muchos
+  instantes distintos.
+- **Dónde vive:** es infraestructura, va en `infra-nube`, nunca en el dominio (que no
+  genera números al azar).
+- **Qué falta:** la prueba de carga con muchos equipos simulados (punto 4 de la lista de
+  arriba) para elegir el tamaño de producción.
+
+**Dependencia `rand`** (0.9, la misma que ya traía el árbol de forma indirecta, para no
+duplicarla). Hoy la usa sólo `espera.rs`. **Ojo con el cifrado:** `rand` sirve para el
+jitter, pero claves, sales y nonces deben salir del generador del sistema operativo
+(`getrandom`/`OsRng`) o de los crates de cifrado, nunca de un generador previsible; que
+`rand` esté a mano no es motivo para usarla ahí.

@@ -1,0 +1,35 @@
+<mat-form-field appearance="outline" subscriptSizing="dynamic">
+  <mat-label>{{ etiqueta() }}</mat-label>
+  <input
+    matInput
+    autocomplete="off"
+    [formControl]="control()"
+    [matAutocomplete]="lista"
+    (input)="escribir($event)"
+  />
+  <mat-autocomplete
+    #lista="matAutocomplete"
+    [displayWith]="nombreDeEmpresa"
+    (optionSelected)="alElegir($event.option.value)"
+  >
+    @for (empresa of opciones(); track empresa.id) {
+      <mat-option [value]="empresa">{{ empresa.nombre }}</mat-option>
+    }
+    @if (sinCoincidencias()) {
+      <mat-option disabled>Ninguna coincide. Para crear una nueva, usa el botón +</mat-option>
+    }
+  </mat-autocomplete>
+  @if (control().errors?.['nucleo']; as mensaje) {
+    <mat-error>{{ mensaje }}</mat-error>
+  }
+</mat-form-field>
+<button
+  mat-icon-button
+  type="button"
+  class="nueva"
+  aria-label="Crear una empresa nueva"
+  matTooltip="Crear una empresa nueva"
+  (click)="crear()"
+>
+  <mat-icon aria-hidden="true">add</mat-icon>
+</button>

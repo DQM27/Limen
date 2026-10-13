@@ -44,6 +44,7 @@ use limen_dominio::ingreso_correo::{IngresoCorreo, IngresoCorreoId};
 use limen_dominio::ingreso_proveedor::{IngresoProveedor, IngresoProveedorId};
 use limen_dominio::movimiento::Marca;
 use limen_dominio::operador::OperadorId;
+use limen_dominio::origen::{EquipoId, Origen, UnidadOperativaId};
 use limen_dominio::personal_kof::{CodigoEmpleado, PersonalKof, PersonalKofId};
 use limen_dominio::presencia::{Identidad, Via};
 use limen_dominio::prestamo_kof::{PrestamoKof, PrestamoKofId};
@@ -1332,19 +1333,6 @@ impl RepositorioUsuarios for UsuariosMemoria {
         std::future::ready(self.almacen.leer(|c| !c.usuarios.is_empty()))
     }
 
-    fn todos(&self) -> impl Future<Output = Result<Vec<Usuario>, ErrorPersistencia>> + Send {
-        std::future::ready(self.almacen.leer(|c| {
-            let mut usuarios: Vec<Usuario> = c.usuarios.values().cloned().collect();
-            usuarios.sort_by(|a, b| {
-                a.nombre()
-                    .as_str()
-                    .cmp(b.nombre().as_str())
-                    .then_with(|| a.cedula().as_str().cmp(b.cedula().as_str()))
-            });
-            usuarios
-        }))
-    }
-
     fn guardar(&mut self, usuario: &Usuario) {
         self.pendientes.push(usuario.clone());
     }
@@ -1375,6 +1363,23 @@ impl RepositorioIntentosInicio for IntentosInicioMemoria {
 
     fn borrar(&mut self, cedula: &Cedula) {
         self.pendientes.push((cedula.as_str().to_owned(), None));
+    }
+}
+
+/// El origen de las pruebas: la unidad `PRUEBAS` (la misma de
+/// `AlmacenSurreal::en_memoria`) y un equipo fijo.
+///
+/// # Panics
+///
+/// Nunca: `PRUEBAS` es un código de unidad válido.
+#[expect(
+    clippy::expect_used,
+    reason = "\"PRUEBAS\" es un código de unidad válido; esto sólo se usa en pruebas"
+)]
+pub fn origen_de_pruebas() -> Origen {
+    Origen {
+        unidad: UnidadOperativaId::nueva("PRUEBAS").expect("código de unidad válido"),
+        equipo: EquipoId::desde_uuid(Uuid::from_u128(0x00e9_0000)),
     }
 }
 

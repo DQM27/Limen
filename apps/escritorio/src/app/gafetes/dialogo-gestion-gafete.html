@@ -1,0 +1,111 @@
+<div class="cabecera">
+  <h2 mat-dialog-title>Gafete {{ gafete.numero }}</h2>
+  <button mat-icon-button type="button" class="cerrar" aria-label="Cerrar" (click)="cerrar()">
+    <mat-icon aria-hidden="true">close</mat-icon>
+  </button>
+</div>
+
+<mat-dialog-content>
+  <dl class="datos">
+    <dt>Tipo</dt>
+    <dd>{{ etiquetaTipo }}</dd>
+    <dt>Estado</dt>
+    <dd>{{ etiquetaEstado }}</dd>
+    @if (asignado) {
+      <dt>{{ gafete.prestado ? 'Lo tiene' : 'Lo tenía' }}</dt>
+      <dd class="asignado">{{ asignado }}</dd>
+    }
+  </dl>
+
+  @switch (situacion()) {
+    @case ('prestado') {
+      <p class="ayuda">
+        Está asignado ahora. Se libera al registrar la salida de quien lo tiene, desde «Dentro».
+      </p>
+    }
+    @case ('de_baja') {
+      <p class="ayuda">Dado de baja: ya no se usa.</p>
+    }
+    @case ('perdido') {
+      <p class="ayuda">
+        <strong>Pagado</strong>: quien lo perdió lo repuso. <strong>Apareció</strong>: se encontró.
+        En los dos casos vuelve a estar disponible.
+      </p>
+    }
+    @case ('disponible') {
+      @if (perdiendo()) {
+        <form (submit)="$event.preventDefault(); marcarPerdido()" novalidate>
+          <mat-form-field appearance="outline" subscriptSizing="dynamic" class="portador">
+            <mat-label>
+              {{
+                eligeDeCatalogo
+                  ? gafete.tipo === 'CONTRATISTA'
+                    ? 'Contratista que lo tenía'
+                    : 'Persona de KOF que lo tenía'
+                  : 'Cédula de quien lo tenía'
+              }}
+            </mat-label>
+            @if (eligeDeCatalogo) {
+              <input
+                matInput
+                autocomplete="off"
+                [formControl]="portador"
+                [matAutocomplete]="listaPersonas"
+              />
+              <mat-autocomplete #listaPersonas="matAutocomplete" [displayWith]="nombreDePersona">
+                @for (persona of opciones(); track persona.id) {
+                  <mat-option [value]="persona">{{ persona.etiqueta }}</mat-option>
+                }
+              </mat-autocomplete>
+            } @else {
+              <input matInput inputmode="numeric" autocomplete="off" [formControl]="portador" />
+            }
+            @if (portador.errors?.['nucleo']; as mensaje) {
+              <mat-error>{{ mensaje }}</mat-error>
+            }
+          </mat-form-field>
+          <button mat-flat-button type="submit" class="confirmar" [disabled]="enviando()">
+            Marcar perdido
+          </button>
+        </form>
+      }
+      @if (confirmandoBaja()) {
+        <p class="ayuda">Un gafete dado de baja ya no se vuelve a usar. ¿Confirmas?</p>
+      }
+    }
+  }
+
+  <p class="error" role="alert">{{ errorGeneral() }}</p>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  @switch (situacion()) {
+    @case ('disponible') {
+      @if (confirmandoBaja()) {
+        <button mat-button type="button" (click)="confirmandoBaja.set(false)">No</button>
+        <button mat-flat-button type="button" [disabled]="enviando()" (click)="resolver('DE_BAJA')">
+          Sí, dar de baja
+        </button>
+      } @else {
+        <button mat-button type="button" (click)="empezarBaja()">Dar de baja</button>
+        <button mat-stroked-button type="button" (click)="empezarPerdido()">Marcar perdido</button>
+      }
+    }
+    @case ('perdido') {
+      <button
+        mat-stroked-button
+        type="button"
+        [disabled]="enviando()"
+        (click)="resolver('APARECIDO')"
+      >
+        Apareció
+      </button>
+      <button mat-flat-button type="button" [disabled]="enviando()" (click)="resolver('PAGADO')">
+        Pagado
+      </button>
+    }
+    @default {
+      <button mat-button type="button" (click)="cerrar()">Cerrar</button>
+    }
+  }
+</mat-dialog-actions>

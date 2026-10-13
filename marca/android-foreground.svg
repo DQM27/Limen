@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="432" height="432">
+  <title>Limen, capa frontal del ícono adaptativo (zona segura 66x66 al centro)</title>
+  <g transform="translate(54 54) translate(-52.5 -46.5)">
+    <path d="M33 22 H48 V57 H69 V71 H33 Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="65" cy="34" r="7" fill="#FF5A1F"/>
+  </g>
+</svg>

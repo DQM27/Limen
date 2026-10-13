@@ -25,7 +25,7 @@ mod tests {
     use limen_dominio::ingreso_contratista::ErrorIngreso;
     use limen_dominio::medio::TipoMedio;
     use limen_dominio::tipo_ingreso::TipoIngreso;
-    use limen_infra_memoria::{IdsSecuenciales, RelojFijo};
+    use limen_infra_memoria::{IdsSecuenciales, RelojFijo, origen_de_pruebas};
     use limen_infra_surreal::AlmacenSurreal;
     use uuid::Uuid;
 
@@ -35,7 +35,10 @@ mod tests {
     }
 
     fn sesion() -> Sesion {
-        Sesion::nueva(OperadorId::desde_uuid(Uuid::from_u128(900)))
+        Sesion::nueva(
+            OperadorId::desde_uuid(Uuid::from_u128(900)),
+            origen_de_pruebas(),
+        )
     }
 
     fn comando(empresa: EmpresaId) -> ComandoContratista {
@@ -84,7 +87,7 @@ mod tests {
     /// última conexión: se reintenta mientras el candado siga tomado.
     async fn reabrir(ruta: &std::path::Path) -> AlmacenSurreal {
         for _ in 0..100 {
-            match AlmacenSurreal::en_disco(ruta).await {
+            match AlmacenSurreal::en_disco(ruta, origen_de_pruebas()).await {
                 Ok(almacen) => return almacen,
                 // "locked" en Linux; "os error 33" en Windows.
                 Err(error)
@@ -151,7 +154,9 @@ mod tests {
         let carpeta = CarpetaTemporal::nueva();
         let ids = IdsSecuenciales::new();
         {
-            let almacen = AlmacenSurreal::en_disco(&carpeta.0).await.unwrap();
+            let almacen = AlmacenSurreal::en_disco(&carpeta.0, origen_de_pruebas())
+                .await
+                .unwrap();
             registrar_todo(&almacen, &ids).await;
         }
 

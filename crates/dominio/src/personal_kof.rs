@@ -105,6 +105,25 @@ fn nombre_de(texto: &str) -> Result<NombrePersona, ErrorPersonalKof> {
     })
 }
 
+/// Todo lo que impide dar de alta a esta persona, en el orden en que se
+/// revisa al registrarla (vacío si se puede): el código, el nombre y que el
+/// código no esté repetido (sólo si el código vale). Es para marcar cada
+/// campo a la vez.
+pub fn problemas(codigo: &str, nombre: &str, hechos: HechosPersonalKof) -> Vec<ErrorPersonalKof> {
+    let codigo = CodigoEmpleado::nuevo(codigo);
+    let mut problemas = Vec::new();
+    if let Err(error) = &codigo {
+        problemas.push(*error);
+    }
+    if let Err(error) = nombre_de(nombre) {
+        problemas.push(error);
+    }
+    if codigo.is_ok() && hechos.codigo_en_uso {
+        problemas.push(ErrorPersonalKof::CodigoRepetido);
+    }
+    problemas
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PersonalKof {
     id: PersonalKofId,
@@ -224,6 +243,47 @@ mod tests {
         assert_eq!(
             CodigoEmpleado::nuevo("  "),
             Err(ErrorPersonalKof::CodigoVacio)
+        );
+    }
+
+    #[test]
+    fn los_problemas_traen_el_codigo_y_el_nombre_a_la_vez() {
+        assert_eq!(
+            problemas("", "", libre()),
+            [ErrorPersonalKof::CodigoVacio, ErrorPersonalKof::NombreVacio]
+        );
+        assert_eq!(
+            problemas("12A", "O'BRIEN", libre()),
+            [
+                ErrorPersonalKof::CodigoInvalido,
+                ErrorPersonalKof::NombreInvalido
+            ]
+        );
+        assert_eq!(
+            problemas("5040017", "ANA", libre()).len(),
+            0,
+            "sin problemas"
+        );
+    }
+
+    #[test]
+    fn el_codigo_repetido_solo_se_marca_si_el_codigo_vale() {
+        let en_uso = HechosPersonalKof {
+            codigo_en_uso: true,
+        };
+
+        assert_eq!(
+            problemas("5040017", "ANA", en_uso),
+            [ErrorPersonalKof::CodigoRepetido]
+        );
+        assert_eq!(
+            problemas("12", "ANA", en_uso),
+            [ErrorPersonalKof::CodigoInvalido]
+        );
+        assert_eq!(
+            problemas("5040017", "", en_uso).first().copied(),
+            PersonalKof::registrar(id(), "5040017", "", en_uso).err(),
+            "el primero es el que informa el registro"
         );
     }
 

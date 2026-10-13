@@ -6,6 +6,7 @@
         <mat-icon aria-hidden="true">search</mat-icon>
         <input
           type="search"
+          appAtajo="/"
           autocomplete="off"
           [placeholder]="marcador()"
           [attr.aria-label]="'Buscar en ' + etiqueta()"
@@ -83,11 +84,11 @@
       [defaultColDef]="columnaPorDefecto()"
       [columnTypes]="tiposDeColumna"
       [rowData]="filas()"
+      [context]="contexto"
       [getRowId]="obtenerIdFila()"
       [getRowClass]="obtenerClaseFila()"
-      [quickFilterText]="filtro()"
-      [quickFilterParser]="analizarBusqueda"
-      [quickFilterMatcher]="coincideBusqueda"
+      [isExternalFilterPresent]="hayBusqueda"
+      [doesExternalFilterPass]="pasaLaBusqueda"
       [localeText]="textos"
       [loading]="cargando()"
       [overlayNoRowsTemplate]="mensajeVacio()"

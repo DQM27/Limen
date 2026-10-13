@@ -1,8 +1,8 @@
 //! Vigila la regla de dependencias: el cascarón de Tauri sólo conecta la
 //! interfaz con `limen-escritorio-comandos` y arma la aplicación con
-//! `composicion`. No habla con el dominio, la aplicación ni la base de datos
-//! por su cuenta: si alguien agrega `limen-dominio` o `surrealdb`, esta
-//! prueba falla.
+//! `composicion`. No habla con el dominio, la aplicación, la base de datos ni
+//! los demás adaptadores por su cuenta: si alguien agrega `limen-dominio`,
+//! un `limen-infra-*` o `surrealdb`, esta prueba falla.
 //!
 //! Además, el cascarón no lleva pruebas propias a propósito: un ejecutable de
 //! pruebas que enlaza Tauri no arranca en Windows (falta el manifiesto de
@@ -10,11 +10,9 @@
 
 #[cfg(test)]
 mod tests {
-    const PERMITIDAS: [&str; 6] = [
+    const PERMITIDAS: [&str; 4] = [
         "limen-composicion",
         "limen-escritorio-comandos",
-        "limen-infra-plataforma",
-        "limen-infra-surreal",
         "tauri",
         "tauri-plugin-log",
     ];
