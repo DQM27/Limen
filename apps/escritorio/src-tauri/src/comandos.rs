@@ -51,10 +51,16 @@ pub async fn vincular_equipo_con_codigo(app: tauri::AppHandle, codigo: String) -
     vincular_equipo(&carpeta_de_datos(&app)?, &codigo).await
 }
 
-/// Reinicia la app (tras vincular, la base se abre con la identidad nueva).
+/// Reinicia la app (tras vincular, la base se abre con la identidad nueva). En desarrollo no:
+/// al reiniciarse, `tauri dev` da la sesión por terminada y apaga el servidor de la interfaz,
+/// y la ventana nueva quedaría en blanco. Devuelve `false` cuando no reinició (hay que
+/// abrirla de nuevo a mano).
 #[tauri::command]
-pub fn reiniciar(app: tauri::AppHandle) {
-    app.restart();
+pub fn reiniciar(app: tauri::AppHandle) -> bool {
+    if cfg!(debug_assertions) {
+        return false;
+    }
+    app.restart()
 }
 
 // --- Ventana ---

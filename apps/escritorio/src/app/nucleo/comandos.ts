@@ -326,7 +326,10 @@ export function vincularEquipo(codigo: string): Promise<void> {
   return invocar<void>('vincular_equipo_con_codigo', { codigo });
 }
 
-/** Reinicia la app: tras vincular, la base se abre con la identidad nueva. */
-export function reiniciar(): Promise<void> {
-  return invocar<void>('reiniciar');
+/**
+ * Reinicia la app: tras vincular, la base se abre con la identidad nueva. Si es una
+ * compilación de desarrollo no reinicia y responde `false`: hay que abrirla de nuevo.
+ */
+export function reiniciar(): Promise<boolean> {
+  return invocar<boolean>('reiniciar');
 }

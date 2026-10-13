@@ -60,13 +60,22 @@ describe('pantalla de vinculación', () => {
   });
 
   it('al vincular, reinicia la app para abrir la base con la identidad nueva', async () => {
-    const { fixture, raiz } = await crear({ vincular_equipo_con_codigo: null, reiniciar: null });
+    const { fixture, raiz } = await crear({ vincular_equipo_con_codigo: null, reiniciar: true });
 
     escribir(raiz, 'AB3DEFGH45');
     await enviar(fixture, raiz);
 
     expect(invoke).toHaveBeenCalledWith('reiniciar', undefined);
-    expect(raiz.textContent).toContain('Equipo vinculado');
+    expect(raiz.textContent).toContain('Reiniciando');
+  });
+
+  it('en desarrollo no se reinicia sola: pide abrirla de nuevo', async () => {
+    const { fixture, raiz } = await crear({ vincular_equipo_con_codigo: null, reiniciar: false });
+
+    escribir(raiz, 'AB3DEFGH45');
+    await enviar(fixture, raiz);
+
+    expect(raiz.textContent).toContain('Cierra la aplicación y ábrela de nuevo');
   });
 
   it('el error del código se muestra junto al campo y no reinicia', async () => {

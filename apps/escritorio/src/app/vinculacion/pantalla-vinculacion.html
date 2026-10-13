@@ -30,7 +30,10 @@
 
   <p class="error general" role="alert">{{ errorGeneral() }}</p>
   @if (vinculado()) {
-    <p class="aviso" role="status">Equipo vinculado. Reiniciando…</p>
+    <p class="aviso" role="status">
+      Equipo vinculado.
+      {{ reinicioManual() ? 'Cierra la aplicación y ábrela de nuevo.' : 'Reiniciando…' }}
+    </p>
   }
 
   <div class="acciones">

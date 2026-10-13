@@ -34,6 +34,8 @@ export class PantallaVinculacion {
   protected readonly codigo = signal('');
   protected readonly enviando = signal(false);
   protected readonly vinculado = signal(false);
+  /** En desarrollo la app no se reinicia sola: se le pide a la persona que la abra de nuevo. */
+  protected readonly reinicioManual = signal(false);
   protected readonly errorGeneral = signal<string | null>(null);
   protected readonly errorCodigo = signal<string | null>(null);
 
@@ -58,7 +60,7 @@ export class PantallaVinculacion {
     try {
       await vincularEquipo(this.codigo());
       this.vinculado.set(true);
-      await reiniciar();
+      this.reinicioManual.set(!(await reiniciar()));
     } catch (error) {
       this.mostrar(error);
     } finally {
