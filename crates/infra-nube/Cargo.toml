@@ -35,6 +35,9 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 [dev-dependencies]
 limen-aplicacion.workspace = true
 chrono.workspace = true
+# Para firmar, en las pruebas, el token que en producción emite el Worker del panel.
+hmac = "0.12"
+sha2 = "0.10"
 
 [lints]
 workspace = true
