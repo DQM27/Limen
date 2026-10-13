@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/dominio",
+    "crates/dominio-wasm",
     "crates/aplicacion",
     "crates/infra-memoria",
     "crates/infra-surreal",

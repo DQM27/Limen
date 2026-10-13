@@ -3,5 +3,9 @@ main = "src/index.js"
 compatibility_date = "2026-10-01"
 workers_dev = true
 
-# Secretos (wrangler secret put): SURREAL_URL, SURREAL_USUARIO, SURREAL_CLAVE, PANEL_CLAVE
-# Dominio propio (subdominio de megabrisas): ver README.md.
+# Subdominio propio: Cloudflare crea el registro DNS solo, porque megabrisas.com está en
+# la misma cuenta. Para cambiar el nombre, cambiar sólo `pattern`.
+routes = [{ pattern = "limen.megabrisas.com", custom_domain = true }]
+
+# Secretos (wrangler secret put): SURREAL_URL, SURREAL_USUARIO, SURREAL_CLAVE (sólo lectura),
+# SURREAL_ADMIN_USUARIO, SURREAL_ADMIN_CLAVE (escribe: registrar y retirar equipos), PANEL_CLAVE

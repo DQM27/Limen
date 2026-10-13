@@ -2,8 +2,8 @@
 // Lee la tabla `conexion` de la nube con credenciales que sólo viven en el Worker.
 // Acceso con clave simple (Basic) mientras no se ponga Cloudflare Access.
 
-const NAMESPACE = 'limen';
-const BASE = 'principal';
+import { consultar, resultado, LECTURA } from './nube.js';
+import { canjear, listar, registrar, retirar } from './vinculacion.js';
 // Un equipo que lleva más de dos latidos (5 min c/u) sin avisar se da por caído.
 const CAIDO_DESPUES_DE_MS = 10 * 60 * 1000;
 
@@ -36,46 +36,15 @@ function autorizado(request, env) {
   return clave === env.PANEL_CLAVE;
 }
 
-// SurrealDB no acepta a un usuario de base de datos con Basic auth: se entra por
-// /signin y se usa el token (dura 1 h). Se guarda mientras viva el Worker.
-let sesion = { token: '', hasta: 0 };
-
-async function token(env) {
-  if (sesion.token && Date.now() < sesion.hasta) return sesion.token;
-  const respuesta = await fetch(`${env.SURREAL_URL}/signin`, {
-    method: 'POST',
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      ns: NAMESPACE,
-      db: BASE,
-      user: env.SURREAL_USUARIO,
-      pass: env.SURREAL_CLAVE,
-    }),
-  });
-  const cuerpo = await respuesta.json();
-  if (!cuerpo.token) throw new Error('signin');
-  sesion = { token: cuerpo.token, hasta: Date.now() + 50 * 60 * 1000 };
-  return sesion.token;
-}
-
 async function equipos(env) {
-  const respuesta = await fetch(`${env.SURREAL_URL}/sql`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'text/plain',
-      'Surreal-NS': NAMESPACE,
-      'Surreal-DB': BASE,
-      Authorization: 'Bearer ' + (await token(env)),
-    },
-    body: 'SELECT equipo, unidad, en_linea, iniciada, visto FROM conexion ORDER BY unidad, equipo;',
-  });
-  const [resultado] = await respuesta.json();
+  const [s] = await consultar(
+    env,
+    LECTURA,
+    'SELECT equipo, unidad, en_linea, iniciada, visto FROM conexion ORDER BY unidad, equipo;',
+  );
   // Si todavía ningún equipo anunció su conexión, la tabla no existe: no hay equipos.
-  if (resultado?.status === 'ERR' && resultado.kind === 'NotFound') return [];
-  if (resultado?.status !== 'OK') throw new Error('consulta');
   const ahora = Date.now();
-  return resultado.result.map((f) => ({
+  return resultado(s).map((f) => ({
     equipo: f.equipo,
     unidad: f.unidad,
     iniciada: f.iniciada,
@@ -88,22 +57,36 @@ async function equipos(env) {
   }));
 }
 
+const json = ({ estado, cuerpo }) => Response.json(cuerpo, { status: estado });
+
 export default {
   async fetch(request, env) {
-    if (!autorizado(request, env)) {
-      return new Response('Acceso restringido', {
-        status: 401,
-        headers: { 'WWW-Authenticate': 'Basic realm="Limen"' },
-      });
-    }
     const { pathname } = new URL(request.url);
-    if (pathname === '/api/equipos') {
-      try {
-        return Response.json({ equipos: await equipos(env) });
-      } catch {
-        return Response.json({ error: 'nube' }, { status: 502 });
+    try {
+      // El único camino sin clave del panel: el equipo canjea su código (el código es su
+      // credencial, de un solo uso y de 15 minutos).
+      if (pathname === '/api/vincular' && request.method === 'POST') {
+        return json(await canjear(env, await request.json()));
       }
+      if (!autorizado(request, env)) {
+        return new Response('Acceso restringido', {
+          status: 401,
+          headers: { 'WWW-Authenticate': 'Basic realm="Limen"' },
+        });
+      }
+      if (pathname === '/api/equipos') return Response.json({ equipos: await equipos(env) });
+      if (pathname === '/api/dispositivos' && request.method === 'GET') {
+        return Response.json({ dispositivos: await listar(env) });
+      }
+      if (pathname === '/api/dispositivos' && request.method === 'POST') {
+        return json(await registrar(env, await request.json()));
+      }
+      const retiro = pathname.match(/^\/api\/dispositivos\/([0-9a-f-]{36})\/retirar$/);
+      if (retiro && request.method === 'POST') return json(await retirar(env, retiro[1]));
+      if (pathname.startsWith('/api/')) return Response.json({ error: 'no_existe' }, { status: 404 });
+      return new Response(PAGINA, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    } catch {
+      return Response.json({ error: 'nube' }, { status: 502 });
     }
-    return new Response(PAGINA, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   },
 };

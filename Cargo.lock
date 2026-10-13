@@ -3229,6 +3229,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "limen-dominio-wasm"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "limen-dominio",
+ "uuid",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "limen-escritorio"
 version = "0.1.0"
 dependencies = [

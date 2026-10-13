@@ -1,0 +1,35 @@
+[package]
+name = "limen-dominio-wasm"
+description = "El dominio de Limen para JavaScript (Worker del panel): sólo expone reglas, no decide nada propio"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+limen-dominio.workspace = true
+chrono.workspace = true
+wasm-bindgen = "0.2"
+
+# El código que genera `wasm-bindgen` usa `unsafe`, que el resto del proyecto
+# prohíbe (`unsafe_code = "forbid"`): aquí sólo se baja a `deny` y el crate propio
+# no escribe ninguno.
+[lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "deny"
+rust_2018_idioms = { level = "deny", priority = -1 }
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+missing_errors_doc = "allow"
+must_use_candidate = "allow"
+
+# `uuid` (v7) pide una fuente de azar en WebAssembly; el dominio no genera ninguno
+# (recibe los IDs), pero la función existe en el crate.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+uuid = { version = "1", features = ["js"] }

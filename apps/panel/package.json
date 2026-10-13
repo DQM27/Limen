@@ -1,0 +1,8 @@
+{
+  "name": "limen-panel",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dominio": "cargo build -p limen-dominio-wasm --target wasm32-unknown-unknown --release && wasm-bindgen --target web --out-dir apps/panel/src/dominio target/wasm32-unknown-unknown/release/limen_dominio_wasm.wasm"
+  }
+}
