@@ -241,3 +241,13 @@ DEFINE EVENT OVERWRITE hecho_inmutable ON hecho WHEN $event != "CREATE" THEN {
 -- sincronizacion:⟨tabla⟩. Es del equipo: no se comparte con la nube.
 DEFINE TABLE OVERWRITE sincronizacion SCHEMAFULL;
 DEFINE FIELD OVERWRITE hasta ON sincronizacion TYPE int;
+
+-- Presencia (panel de dispositivos): un registro por equipo, conexion:⟨equipo⟩,
+-- que se reescribe siempre. Sin CHANGEFEED: no sube ni baja con la
+-- sincronización, sólo lo lee el panel. La hora es la de la nube.
+DEFINE TABLE OVERWRITE conexion SCHEMAFULL;
+DEFINE FIELD OVERWRITE unidad ON conexion TYPE string;
+DEFINE FIELD OVERWRITE equipo ON conexion TYPE string;
+DEFINE FIELD OVERWRITE en_linea ON conexion TYPE bool;
+DEFINE FIELD OVERWRITE iniciada ON conexion TYPE option<datetime>;
+DEFINE FIELD OVERWRITE visto ON conexion TYPE datetime;
