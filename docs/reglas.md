@@ -122,7 +122,7 @@ reconstruir cómo estaba el contratista el día que entró.
 | L1 | Un solo rol: Operador. Sin roles especiales. Cada hecho y cada cambio queda a nombre del usuario que tenía la sesión. | ✅ |
 | L2 | Los usuarios son **globales: se crean y se administran en la nube**, nunca en un equipo. Se desactivan, no se borran, y nadie se desactiva a sí mismo. La cédula es su identidad para entrar: nacional o de extranjero (A1 y A3), única y no se edita. En el equipo sólo se inicia sesión, se cambia la propia clave (pidiendo la actual) y se cierra la sesión. | ✅ |
 | L3 | Clave de 8 a 128 caracteres que no puede ser la propia cédula. Se guarda sólo su hash Argon2id (sal aleatoria, formato PHC); nunca va a la auditoría ni a la interfaz. | ✅ |
-| L4 | Login sin conexión con credencial guardada, por un máximo de 24 horas. | ⏳ |
+| L4 | Login sin conexión con credencial guardada, por un máximo de 24 horas. | ✅ a medias: los usuarios bajan de la nube y el login es local (sin conexión). ⏳ el máximo de 24 horas. Falta crear y administrar usuarios desde el panel. |
 | L5 | Sesión única por equipo; cerrar la app cierra la sesión en la nube. | ⏳ |
 | L6 | Tras 5 intentos fallidos seguidos con la misma cédula, se bloquea su inicio de sesión por 5 minutos (aunque después escriba la clave correcta). Un fallo de hace más de 5 minutos ya no suma; entrar borra la cuenta. Las cédulas que no existen también se bloquean. | ✅ |
 | L7 | El inicio de sesión no revela qué cédulas existen: cédula desconocida o clave equivocada dan el mismo error y tardan lo mismo; "desactivado" sólo se le dice a quien escribió la clave correcta. | ✅ |
@@ -132,7 +132,7 @@ reconstruir cómo estaba el contratista el día que entró.
 
 | Código | Regla | Estado |
 |---|---|---|
-| M1 | Cada equipo se vincula con un código de un solo uso y su propio par de claves. | ⏳ |
+| M1 | Cada equipo se vincula con un código de un solo uso y su propio par de claves. | ✅ el código (M6) y el par de claves P-256 propio; el equipo prueba quién es firmando un desafío. ⏳ cifrar la clave privada en reposo (DPAPI / Keystore). |
 | M2 | Un equipo retirado pierde el acceso al instante y se cierra su sesión. | ✅ la regla (`puede_conectarse`) y el acceso: el equipo pide su token al Worker en cada conexión y uno retirado ya no lo recibe. ⏳ cortar al instante la sesión que ya está abierta. |
 | M3 | Tipos: PC, celular y visor; el visor sólo lee. | ⏳ |
 | M4 | Cada equipo pertenece a una **unidad operativa** (el "sitio" de Lattis). Los catálogos (contratistas, empresas, empresas proveedoras, personal KOF, usuarios) son **globales**: iguales en todas las unidades. Gafetes, ingresos, presencia, préstamos e historial son **de la unidad**: un equipo baja sólo los de la suya. Ver `nube.md`. | ✅ en el equipo: cada hecho lleva su unidad y su equipo, y lo de la unidad lleva su campo `unidad` (los gafetes, también en la clave). El reparto llega con la sincronización. |

@@ -87,10 +87,11 @@ lo de la suya**.
 
 ## 5. Identidad de los equipos
 
-Mientras no exista el bloque M (vinculación con código de un solo uso y par de claves
-propio, como en Lattis), **cada equipo entra con su propio usuario de base de datos**,
-limitado a lo que le corresponde. Cuando exista el bloque M se reemplaza por la firma del
-equipo sin cambiar el flujo de datos.
+**Hecho (bloque M):** el equipo se vincula con un código de un solo uso, genera su par de claves
+P-256 y, en cada conexión, firma un desafío; el Worker del panel comprueba la firma y le da un token
+de la base. El equipo no lleva ninguna clave de la base (`panel.md`, «Acceso del equipo a la nube»).
+Queda pendiente acotar el token a lo que cada equipo necesita (hoy es un usuario de base compartido
+con rol `EDITOR`) y cortar al instante las conexiones de un equipo retirado.
 
 ## 6. Orden de construcción
 
@@ -101,7 +102,8 @@ equipo sin cambiar el flujo de datos.
 4. ✅ Bajada: carga inicial de un equipo nuevo, en tiempo real y al volver la conexión
    (secciones 9 y 10).
 5. Indicador de incidente al unir lo de varios equipos.
-6. Usuarios desde la nube (L4, L5) y la hora de la nube para los equipos sin NTP.
+6. ✅ Usuarios desde la nube: bajan al equipo y el login es local. ⏳ Crearlos y administrarlos desde
+   el panel, la hora de la nube para los equipos sin NTP, y L5 (sesión única).
 7. ✅ Reintentos con espera aleatoria para que miles de equipos no vuelvan a la vez
    (sección 11).
 

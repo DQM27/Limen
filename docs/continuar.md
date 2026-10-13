@@ -4,7 +4,78 @@ Lee primero [`AGENTS.md`](../AGENTS.md) (reglas del dueño y de arquitectura) y,
 falta el detalle, [`arquitectura.md`](arquitectura.md), [`reglas.md`](reglas.md) y
 [`operacion-sin-conexion.md`](operacion-sin-conexion.md).
 
-## Dónde quedó todo
+## Estado al 13 de octubre de 2026 (lo último)
+
+**Funciona de punta a punta, probado con una PC real y la nube** (detalle en [`nube.md`](nube.md) y
+[`panel.md`](panel.md)):
+
+- **Vincular un equipo con un código** (reglas M1, M6 a M8): el administrador registra el equipo en
+  el panel web (`https://limen.megabrisas.com`, `apps/panel`) y recibe un código de 10 caracteres
+  (15 minutos, un solo uso). La app de escritorio lo pide en su primer arranque, genera su propio
+  par de claves P-256 (la privada no sale del equipo) y canjea el código. Las reglas del código
+  están en `crates/dominio/src/vinculacion.rs` y llegan al Worker compiladas a WebAssembly
+  (`crates/dominio-wasm`).
+- **Acceso del equipo a la nube por token** (regla M2): sin variables ni claves de la base en el
+  equipo. En cada conexión firma un desafío con su clave privada; el Worker comprueba la firma y,
+  si el dominio dice que está vinculado y no retirado, le da un token. Un equipo retirado ya no
+  entra y vuelve a pedir su código. Las variables `LIMEN_NUBE_*` siguen valiendo para desarrollo.
+- **Sincronización con la nube** (`crates/infra-nube`): al abrir baja todo (usuarios, catálogos y
+  lo de su unidad), en vivo le llega lo de los demás equipos en menos de un segundo y lo que se
+  registra sube solo, con su hecho. Los usuarios son globales: el equipo sólo los baja.
+- **Presencia**: el panel muestra qué equipos están en línea (la app anuncia su conexión y avisa
+  cada 5 minutos que sigue viva; `conexion`, un registro por equipo, fuera de la sincronización).
+- **Panel web en Angular** (`apps/panel/web`) servido por un Worker de Cloudflare con HTTPS forzado
+  y una clave simple: registrar y retirar equipos, unidad en desplegable, ver los conectados,
+  cerrar sesión.
+
+**Lo que costó aprender de SurrealDB** (todo en `nube.md`, sección 12, con pruebas que lo cubren):
+el registro de cambios por tabla se queda ciego si hay muchas transacciones de otras tablas en
+medio (ahora hay un solo cursor para toda la base), cada versión de una fila rebotaba entre el
+equipo y la nube (ahora sólo se aplica la última), un texto con forma de UUID se vuelve `uuid`, y
+un usuario de base no entra con Basic auth.
+
+### Lo que falta, en este orden
+
+1. **Usuarios en el panel**: crear, desactivar, clave temporal y desbloqueo (L4 y L5). Hoy se
+   siembran a mano en la nube; la app ya los baja sola. Las reglas van en `crates/dominio`
+   (compilado a WebAssembly, como la vinculación) y escribir pide un usuario de base propio con
+   permiso sólo sobre esas tablas. El panel necesita además inicio de sesión real con nombre y rol
+   (hoy es una clave compartida) y un registro de quién cambió qué.
+2. **Aviso «sincronizando…»** en la pantalla de entrada durante la primera descarga (unos 10
+   segundos en los que nadie puede entrar y el error dice «credenciales inválidas»).
+3. **Historiales y administrar contratistas** en el panel.
+4. **Equipo retirado conectado**: cortarle la conexión que ya tiene abierta (hoy sólo deja de
+   recibir tokens nuevos) y que la app vuelva a la pantalla del código sin reiniciar. Qué hace la
+   portería local con un equipo retirado es **decisión del dueño** (la portería no se bloquea por
+   la red).
+5. **Cifrar en reposo** la clave privada del equipo (hoy es el archivo `clave-equipo.json`): DPAPI
+   en Windows y Keystore en Android (`arquitectura.md`, 8.2).
+6. **Token propio por equipo en la base**: hoy el Worker entrega un token de un usuario de base
+   compartido (`panel_admin`, rol `EDITOR`); acotarlo a lo que cada equipo necesita.
+7. **Descarga inicial**: el equipo reenvía una vez a la nube lo que acaba de bajar (unas 4700 filas;
+   no duplica nada, pero es trabajo de más).
+8. **Prueba de carga con muchos equipos**, el paso 5 de `nube.md` (marcar como incidente los
+   choques entre equipos) y las exportaciones del Historial (CSV, Excel, PDF).
+9. **CI**: pruebas del Worker (`node --test apps/panel/test`) y de la página del panel, y avisar
+   cuando cambian las reglas que se compilan a WebAssembly (`npm --prefix apps/panel run dominio`).
+
+### Para tener presente
+
+- **Las contraseñas de prueba** que se usaron en las sesiones (usuarios de base `panel`,
+  `panel_admin` y `equipo`) hay que rotarlas antes de usar esto de verdad.
+- **Cómo trabajar con el panel y el Worker**: `cd apps/panel` y `npm run publicar` construye la
+  página y despliega (en Windows, si PowerShell no deja correr `wrangler`, usar `wrangler.cmd`). Los
+  secretos se ponen con `wrangler secret put` (lista en `apps/panel/README.md`). Los registros del
+  Worker se ven con `wrangler tail limen-panel`.
+- **En esta PC** ya compila Rust con el toolchain MSVC normal (Visual Studio está instalado): no
+  hace falta el truco del toolchain GNU. Si la app abre sola `ng serve` y se queda en «esperando
+  por el servidor 4200», es una pregunta de Angular en la terminal: `ng analytics disable --global`.
+- **Al desarrollar**, la app no se reinicia sola tras vincular (el modo desarrollo lo impide): pide
+  cerrarla y abrirla de nuevo.
+- **Trabajo nuevo, rama nueva**: no seguir empujando a una rama ya fusionada (pasó con el PR #20,
+  y lo posterior tuvo que ir en el #21).
+
+## Dónde quedó todo (núcleo y app de escritorio)
 
 - **Núcleo** terminado: dominio, aplicación, persistencia (memoria y SurrealDB),
   composición, buscador y consultas de lectura. Además, el historial de ingresos por
@@ -89,29 +160,20 @@ falta el detalle, [`arquitectura.md`](arquitectura.md), [`reglas.md`](reglas.md)
 
 ## Ramas y PR (nada va a `main` sin PR y CI en verde)
 
-El trabajo está en la rama **`feat/login`** (desde `main`), **sin PR todavía: el dueño
-avisa cuándo abrirlo**. Trae: entrada y splash, tema, formulario de contratista,
-Gafetes, Dentro, avisos, ingresos de contratista, proveedor, correo y KOF.
-`feat/importador-lattis` sigue aparte: necesita traer `main` y generar los hechos (con la
-hora sellada) de los ingresos importados antes de su PR. `fix/pruebas-en-windows` tiene 3
-commits en el remoto que no están en `main`: revisarlos o descartarlos.
+En `main`: el núcleo, la app de escritorio completa (entrada, Dentro, Contratistas, Historial, Gafetes,
+Proveedores, Correo y KOF), el resaltado, la sincronización con la nube y la primera versión del panel
+y la vinculación (PR #17 a #20). El acceso por token, el arreglo de la sincronización y los documentos
+van en el **PR #21** (`feat/vinculacion`). `feat/movil` y `exp/rocksdb` siguen aparte, a propósito:
+hay que revisarlos. `feat/importador-lattis` necesita traer `main` y generar los hechos (con la hora
+sellada) de los ingresos importados antes de su PR. **Trabajo nuevo, rama nueva.**
 
-## La nube (rama `feat/nube`)
+## La nube
 
-Modelo acordado con el dueño y estado en [`nube.md`](nube.md): la nube es la fuente de
-verdad, el equipo es desechable pero guarda su copia local y trabaja sin conexión, los
-catálogos son **globales** y lo demás es **de cada unidad operativa** (el "sitio" de
-Lattis). La instancia `limen` (SurrealDB Cloud, gratis, `aws-use1`) ya existe con el
-esquema aplicado; `crates/infra-nube` conecta y aplica el esquema. Por ahora hay una
-sola unidad, **Brisas**. Cada hecho ya lleva su unidad y su equipo, y lo de la unidad lleva
-su campo `unidad` (la identidad del equipo está en `equipo.txt`, en la carpeta de datos).
-La app ya **sincroniza sola y en tiempo real** con la nube: sube lo que se registra en
-el momento y la nube le avisa en vivo lo de los demás equipos (catálogos y lo de su
-unidad), con una vuelta cada 10 segundos (±15 %) como red de seguridad; sin red se
-acumula y, al reconectar, espera un tiempo al azar que crece con los fallos (para no
-saturar a la nube tras una caída; `nube.md`, sección 11). Las pantallas se recargan cuando
-llega algo. Falta la prueba de carga con muchos equipos. Lo siguiente es el paso 5 de `nube.md`: marcar
-como incidente los choques entre equipos.
+Modelo acordado con el dueño: la nube es la fuente de verdad, el equipo es desechable pero guarda su
+copia local y trabaja sin conexión, los catálogos son **globales** y lo demás es **de cada unidad
+operativa** (hoy sólo **Brisas**). La instancia `limen` (SurrealDB Cloud, gratis, `aws-use1`) tiene el
+esquema aplicado. Cómo sincroniza, cómo se conecta un equipo (token) y lo que aprendimos de SurrealDB
+está en [`nube.md`](nube.md); el panel y la vinculación, en [`panel.md`](panel.md).
 
 ## Decidido y en espera
 
@@ -140,7 +202,7 @@ como incidente los choques entre equipos.
 2. ✅ Las listas se mantienen al día solas: cuando baja algo de la nube, el núcleo manda
    `nube-cambios` y las pantallas recargan.
 3. Las exportaciones del Historial (CSV, Excel, PDF), al final y a pedido del dueño.
-4. CodeQL para el JavaScript en la CI. Equipos (bloque M) y la nube (con L4 y L5).
+4. CodeQL para el JavaScript en la CI. **El resto del orden está arriba, en «Estado al 13 de octubre».**
 
 ## Cómo trabajar en esta máquina
 

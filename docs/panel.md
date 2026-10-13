@@ -6,9 +6,10 @@ depende de él (`operacion-sin-conexion.md`).
 
 ## Orden de construcción
 
-1. ✅ **Dispositivos:** quién está conectado (`conexion`: la app anuncia su conexión y
-   avisa que sigue viva cada 5 minutos; `crates/infra-nube/src/presencia.rs`). Estado: en
-   línea, caído (más de 10 minutos sin avisar) o fuera.
+1. ✅ **Dispositivos:** registrar un equipo (nombre, unidad de una lista y tipo) y emitir su código
+   de vinculación (15 minutos, un solo uso), retirarlo, y ver quién está conectado (`conexion`: la
+   app anuncia su conexión y avisa cada 5 minutos que sigue viva; en línea, caído si lleva más de 10
+   minutos sin avisar, o fuera). Ver también «Acceso del equipo a la nube» más abajo.
 2. **Historiales** (sólo lectura): entradas y salidas de la tabla `hecho`, con filtros
    por unidad y fecha.
 3. **Usuarios** (bloque L4 y L5): crear, desactivar, clave temporal y desbloqueo. Los
