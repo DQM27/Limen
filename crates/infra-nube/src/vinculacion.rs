@@ -11,13 +11,19 @@
 
 use std::path::Path;
 
+use base64::Engine as _;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use limen_dominio::origen::{EquipoId, Origen, UnidadOperativaId};
 use limen_dominio::vinculacion::{CodigoVinculacion, ErrorVinculacion};
-use limen_infra_plataforma::guardar_origen;
+use limen_infra_plataforma::{guardar_origen, origen_del_equipo};
 use p256::SecretKey;
+use p256::ecdsa::signature::Signer;
+use p256::ecdsa::{Signature, SigningKey};
 use p256::elliptic_curve::rand_core::OsRng;
 use serde_json::{Value, json};
 use uuid::Uuid;
+
+use crate::{ConfigNube, Credenciales};
 
 /// A dónde se canjea el código si el equipo no dice otra cosa.
 pub const PANEL_POR_OMISION: &str = "https://limen.megabrisas.com";
@@ -154,6 +160,95 @@ fn guardar(
     guardar_origen(&carpeta.join("equipo.txt"), &vinculado.origen).map_err(falla)
 }
 
+/// Lo que el Worker responde al pedir el acceso, ya interpretado: la dirección de la nube
+/// y el token con que este equipo entra.
+fn acceso_desde(estado: u16, cuerpo: &Value) -> Result<ConfigNube, ErrorDeVinculacion> {
+    if estado != 200 {
+        let motivo = cuerpo
+            .get("error")
+            .and_then(Value::as_str)
+            .unwrap_or("rechazado");
+        return Err(ErrorDeVinculacion::Rechazado(motivo.to_owned()));
+    }
+    let texto = |clave: &str| {
+        cuerpo
+            .get(clave)
+            .and_then(Value::as_str)
+            .ok_or_else(|| ErrorDeVinculacion::Respuesta(format!("falta `{clave}`")))
+    };
+    Ok(ConfigNube {
+        url: texto("url")?.to_owned(),
+        credenciales: Some(Credenciales::con_token(texto("token")?.to_owned())),
+    })
+}
+
+/// La firma del equipo sobre un mensaje: ECDSA P-256 con SHA-256, en el formato de
+/// `WebCrypto` (r y s juntos, 64 bytes) y en base64 sin relleno.
+fn firmar(secreta: &SecretKey, mensaje: &str) -> String {
+    let firma: Signature = SigningKey::from(secreta).sign(mensaje.as_bytes());
+    URL_SAFE_NO_PAD.encode(firma.to_bytes())
+}
+
+async fn enviar(
+    cliente: &reqwest::Client,
+    url: &str,
+    cuerpo: &Value,
+) -> Result<(u16, Value), ErrorDeVinculacion> {
+    let respuesta = cliente
+        .post(url)
+        .json(cuerpo)
+        .send()
+        .await
+        .map_err(|e| ErrorDeVinculacion::Red(e.to_string()))?;
+    let estado = respuesta.status().as_u16();
+    let cuerpo = respuesta
+        .json()
+        .await
+        .map_err(|e| ErrorDeVinculacion::Respuesta(e.to_string()))?;
+    Ok((estado, cuerpo))
+}
+
+/// Pide al Worker del panel el acceso de este equipo a la nube. El equipo prueba quién es
+/// firmando un desafío con su clave privada (que nunca sale de él); si sigue vinculado y
+/// no lo han retirado, recibe un token. Se pide en cada conexión: un equipo retirado no
+/// vuelve a entrar.
+pub async fn pedir_acceso(carpeta: &Path) -> Result<ConfigNube, ErrorDeVinculacion> {
+    let falla = ErrorDeVinculacion::Guardar;
+    let leer = |nombre: &str| {
+        std::fs::read_to_string(carpeta.join(nombre)).map_err(|e| falla(format!("{nombre}: {e}")))
+    };
+    let origen = origen_del_equipo(&carpeta.join("equipo.txt"), "BRISAS").map_err(falla)?;
+    let secreta = SecretKey::from_jwk_str(&leer(ARCHIVO_CLAVE)?)
+        .map_err(|e| ErrorDeVinculacion::Guardar(format!("{ARCHIVO_CLAVE}: {e}")))?;
+    let datos: Value = serde_json::from_str(&leer(ARCHIVO_VINCULACION)?)
+        .map_err(|e| ErrorDeVinculacion::Guardar(format!("{ARCHIVO_VINCULACION}: {e}")))?;
+    let panel = datos
+        .get("panel")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ErrorDeVinculacion::Guardar("falta `panel`".to_owned()))?;
+    let url = format!("{}/api/token", panel.trim_end_matches('/'));
+    let equipo = origen.equipo.to_string();
+    let cliente = reqwest::Client::new();
+
+    let (estado, cuerpo) = enviar(&cliente, &url, &json!({ "equipo": equipo })).await?;
+    let desafio = match (estado, cuerpo.get("desafio").and_then(Value::as_str)) {
+        (200, Some(desafio)) => desafio.to_owned(),
+        _ => {
+            return Err(acceso_desde(estado, &cuerpo)
+                .err()
+                .unwrap_or_else(|| ErrorDeVinculacion::Respuesta("falta `desafio`".to_owned())));
+        }
+    };
+    let firma = firmar(&secreta, &desafio);
+    let (estado, cuerpo) = enviar(
+        &cliente,
+        &url,
+        &json!({ "equipo": equipo, "desafio": desafio, "firma": firma }),
+    )
+    .await?;
+    acceso_desde(estado, &cuerpo)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -231,5 +326,42 @@ mod tests {
         let identidad = std::fs::read_to_string(carpeta.join("equipo.txt")).unwrap();
         assert!(identidad.contains(EQUIPO), "{identidad}");
         drop(std::fs::remove_dir_all(carpeta));
+    }
+
+    #[test]
+    fn la_firma_es_de_64_bytes_y_se_verifica_con_la_publica() {
+        use p256::ecdsa::VerifyingKey;
+        use p256::ecdsa::signature::Verifier;
+
+        let secreta = SecretKey::random(&mut OsRng);
+        let firma = firmar(&secreta, "desafio-de-prueba");
+
+        let bytes = URL_SAFE_NO_PAD.decode(&firma).unwrap();
+        assert_eq!(bytes.len(), 64, "r y s juntos, como WebCrypto");
+        let firma = Signature::from_slice(&bytes).unwrap();
+        let publica = VerifyingKey::from(&SigningKey::from(&secreta));
+        assert!(publica.verify(b"desafio-de-prueba", &firma).is_ok());
+        assert!(
+            publica.verify(b"otro-desafio", &firma).is_err(),
+            "la firma sólo vale para ese desafío"
+        );
+    }
+
+    #[test]
+    fn el_acceso_trae_la_url_de_la_nube_y_el_token() {
+        let respuesta = json!({ "url": "wss://nube.prueba", "token": "abc.def" });
+
+        let config = acceso_desde(200, &respuesta).unwrap();
+
+        assert_eq!(config.url, "wss://nube.prueba");
+        let credenciales = config.credenciales.unwrap();
+        assert_eq!(credenciales.nivel, crate::Nivel::Token);
+        assert_eq!(credenciales.clave, "abc.def");
+    }
+
+    #[test]
+    fn un_equipo_retirado_recibe_el_motivo_y_ningun_acceso() {
+        let error = acceso_desde(401, &json!({ "error": "dispositivo_invalido" })).unwrap_err();
+        assert_eq!(error.codigo(), "dispositivo_invalido");
     }
 }

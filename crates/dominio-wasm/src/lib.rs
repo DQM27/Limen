@@ -11,6 +11,7 @@
 use chrono::{DateTime, Utc};
 use limen_dominio::vinculacion::{
     CodigoVinculacion, EmisionDeCodigo, ErrorVinculacion, LARGO_CODIGO, VIGENCIA_CODIGO_MINUTOS,
+    puede_conectarse,
 };
 use wasm_bindgen::prelude::*;
 
@@ -62,6 +63,14 @@ fn regla_motivo_de_rechazo(
         .to_owned())
 }
 
+fn regla_motivo_de_conexion(vinculado: bool, retirado: bool) -> String {
+    puede_conectarse(vinculado, retirado)
+        .err()
+        .map(ErrorVinculacion::codigo)
+        .unwrap_or_default()
+        .to_owned()
+}
+
 /// Un código nuevo con el azar que entrega el Worker (`crypto.getRandomValues`, 10 bytes).
 #[wasm_bindgen]
 pub fn generar_codigo(azar: &[u8]) -> Result<String, JsValue> {
@@ -91,6 +100,12 @@ pub fn motivo_de_rechazo(
     ahora_ms: f64,
 ) -> Result<String, JsValue> {
     regla_motivo_de_rechazo(emitido_ms, usado, anulado, ahora_ms).map_err(a_js)
+}
+
+/// ¿Puede conectarse un equipo con ese estado? Vacío si sí; si no, el código de la regla.
+#[wasm_bindgen]
+pub fn motivo_de_rechazo_del_equipo(vinculado: bool, retirado: bool) -> String {
+    regla_motivo_de_conexion(vinculado, retirado)
 }
 
 /// Cuántos minutos vale un código.
@@ -133,6 +148,16 @@ mod tests {
         assert_eq!(
             regla_motivo_de_rechazo(1_000.0, true, false, 2_000.0),
             Ok("codigo_usado".to_owned())
+        );
+    }
+
+    #[test]
+    fn un_equipo_retirado_o_sin_vincular_no_se_conecta() {
+        assert_eq!(regla_motivo_de_conexion(true, false), "");
+        assert_eq!(regla_motivo_de_conexion(true, true), "equipo_retirado");
+        assert_eq!(
+            regla_motivo_de_conexion(false, false),
+            "equipo_sin_vincular"
         );
     }
 }

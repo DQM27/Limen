@@ -37,6 +37,10 @@ pub enum ErrorVinculacion {
     CodigoVencido,
     #[error("El código fue anulado")]
     CodigoAnulado,
+    #[error("El equipo fue retirado")]
+    EquipoRetirado,
+    #[error("El equipo todavía no se ha vinculado")]
+    EquipoSinVincular,
 }
 
 impl ErrorVinculacion {
@@ -46,6 +50,8 @@ impl ErrorVinculacion {
             Self::CodigoUsado => "codigo_usado",
             Self::CodigoVencido => "codigo_vencido",
             Self::CodigoAnulado => "codigo_anulado",
+            Self::EquipoRetirado => "equipo_retirado",
+            Self::EquipoSinVincular => "equipo_sin_vincular",
         }
     }
 }
@@ -101,6 +107,18 @@ impl CodigoVinculacion {
 impl fmt::Debug for CodigoVinculacion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("CodigoVinculacion(***)")
+    }
+}
+
+/// ¿Puede este equipo conectarse a la nube? Sólo uno vinculado y no retirado (regla M2: un
+/// equipo retirado pierde el acceso). Lo retirado se avisa antes que lo no vinculado.
+pub const fn puede_conectarse(vinculado: bool, retirado: bool) -> Result<(), ErrorVinculacion> {
+    if retirado {
+        Err(ErrorVinculacion::EquipoRetirado)
+    } else if !vinculado {
+        Err(ErrorVinculacion::EquipoSinVincular)
+    } else {
+        Ok(())
     }
 }
 
@@ -234,6 +252,24 @@ mod tests {
         assert_eq!(
             emision(true, true).puede_canjearse(hoy() + Duration::hours(1)),
             Err(ErrorVinculacion::CodigoAnulado)
+        );
+    }
+
+    #[test]
+    fn solo_se_conecta_un_equipo_vinculado_y_no_retirado() {
+        assert_eq!(puede_conectarse(true, false), Ok(()));
+        assert_eq!(
+            puede_conectarse(false, false),
+            Err(ErrorVinculacion::EquipoSinVincular)
+        );
+        assert_eq!(
+            puede_conectarse(true, true),
+            Err(ErrorVinculacion::EquipoRetirado)
+        );
+        assert_eq!(
+            puede_conectarse(false, true),
+            Err(ErrorVinculacion::EquipoRetirado),
+            "retirado se avisa antes que sin vincular"
         );
     }
 }

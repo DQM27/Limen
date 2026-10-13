@@ -5,6 +5,7 @@ export const codigo_para_mostrar: (a: number, b: number) => [number, number, num
 export const generar_codigo: (a: number, b: number) => [number, number, number, number];
 export const leer_codigo: (a: number, b: number) => [number, number, number, number];
 export const motivo_de_rechazo: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+export const motivo_de_rechazo_del_equipo: (a: number, b: number) => [number, number];
 export const vigencia_minutos: () => number;
 export const __wbindgen_externrefs: WebAssembly.Table;
 export const __wbindgen_malloc: (a: number, b: number) => number;

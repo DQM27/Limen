@@ -58,7 +58,10 @@ use limen_aplicacion::puertos::{
     Claves, Consultas, ErrorPersistencia, FabricaUnidadDeTrabajo, GeneradorIds, Reloj,
 };
 use limen_aplicacion::sesion::Origen;
-use limen_infra_nube::{ConfigNube, instalar_cifrado, sincronizar};
+use limen_infra_nube::{
+    ConfigNube, ErrorNube, FuenteDeConfig, config_fija, esta_vinculado, instalar_cifrado,
+    pedir_acceso, sincronizar,
+};
 use limen_infra_plataforma::{
     ClavesArgon2, IdsV7, RelojConfiable, SERVIDORES_NTP, leer_desfase, origen_del_equipo,
 };
@@ -302,6 +305,28 @@ where
     }
 }
 
+/// De dónde sale la conexión a la nube de este equipo: las variables `LIMEN_NUBE_*` si están
+/// (desarrollo y herramientas) y, si no, el acceso que el Worker del panel le da a un equipo
+/// vinculado con su código, que se pide de nuevo en cada conexión. Sin ninguna de las dos, el
+/// equipo trabaja sólo, sin nube.
+fn fuente_de_configuracion(config: &Config) -> Option<FuenteDeConfig> {
+    if let Ok(nube) = ConfigNube::desde_entorno(|nombre| std::env::var(nombre).ok()) {
+        return Some(config_fija(nube));
+    }
+    let carpeta = config.ruta_equipo.parent()?.to_path_buf();
+    esta_vinculado(&carpeta).then(|| {
+        let fuente: FuenteDeConfig = std::sync::Arc::new(move || {
+            let carpeta = carpeta.clone();
+            Box::pin(async move {
+                pedir_acceso(&carpeta)
+                    .await
+                    .map_err(|e| ErrorNube::Autenticacion(e.to_string()))
+            })
+        });
+        fuente
+    })
+}
+
 /// La aplicación con los adaptadores reales.
 /// Los adaptadores reales, con nombre propio: así una app nombra sus tipos
 /// (por ejemplo, el estado de Tauri) sin depender de la infraestructura.
@@ -332,12 +357,12 @@ impl AplicacionLimen {
         let reloj = RelojConfiable::new(leer_desfase(&config.ruta_desfase_reloj));
         reloj.sincronizar_en_segundo_plano(&SERVIDORES_NTP, config.ruta_desfase_reloj.clone());
         let (aplicacion, almacen) = Self::abrir_con_almacen(config, &reloj).await?;
-        match ConfigNube::desde_entorno(|nombre| std::env::var(nombre).ok()) {
-            Ok(nube) => {
+        match fuente_de_configuracion(config) {
+            Some(fuente) => {
                 instalar_cifrado();
-                tokio::spawn(sincronizar(almacen, nube, al_llegar));
+                tokio::spawn(sincronizar(almacen, fuente, al_llegar));
             }
-            Err(motivo) => log::info!("sin sincronización con la nube: {motivo}"),
+            None => log::info!("sin sincronización con la nube: el equipo no está vinculado"),
         }
         Ok(aplicacion)
     }

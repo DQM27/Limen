@@ -133,7 +133,7 @@ reconstruir cómo estaba el contratista el día que entró.
 | Código | Regla | Estado |
 |---|---|---|
 | M1 | Cada equipo se vincula con un código de un solo uso y su propio par de claves. | ⏳ |
-| M2 | Un equipo retirado pierde el acceso al instante y se cierra su sesión. | ⏳ |
+| M2 | Un equipo retirado pierde el acceso al instante y se cierra su sesión. | ✅ la regla (`puede_conectarse`) y el acceso: el equipo pide su token al Worker en cada conexión y uno retirado ya no lo recibe. ⏳ cortar al instante la sesión que ya está abierta. |
 | M3 | Tipos: PC, celular y visor; el visor sólo lee. | ⏳ |
 | M4 | Cada equipo pertenece a una **unidad operativa** (el "sitio" de Lattis). Los catálogos (contratistas, empresas, empresas proveedoras, personal KOF, usuarios) son **globales**: iguales en todas las unidades. Gafetes, ingresos, presencia, préstamos e historial son **de la unidad**: un equipo baja sólo los de la suya. Ver `nube.md`. | ✅ en el equipo: cada hecho lleva su unidad y su equipo, y lo de la unidad lleva su campo `unidad` (los gafetes, también en la clave). El reparto llega con la sincronización. |
 | M5 | El equipo es desechable: la nube es la fuente de verdad. Guarda una copia local y trabaja sin conexión; lo pendiente se sube al volver la red. | ✅ subida y bajada en tiempo real, carga inicial de un equipo nuevo (`nube.md`). |

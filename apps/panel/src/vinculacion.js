@@ -40,7 +40,7 @@ async function huellaDeLaClave(jwk) {
   return base64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonico)));
 }
 
-async function evento(env, tipo, detalle) {
+export async function registrarEvento(env, tipo, detalle) {
   await consultar(
     env,
     ESCRITURA,
@@ -125,7 +125,7 @@ export async function canjear(env, { codigo, clave_publica: clave }) {
   try {
     canonico = leer_codigo(String(codigo ?? ''));
   } catch (motivo) {
-    await evento(env, String(motivo), 'formato del código');
+    await registrarEvento(env, String(motivo), 'formato del código');
     return { estado: 400, cuerpo: { error: String(motivo) } };
   }
   const huellaCodigo = await huellaDelCodigo(canonico);
@@ -137,12 +137,12 @@ export async function canjear(env, { codigo, clave_publica: clave }) {
   );
   const fila = resultado(leido, null);
   if (!fila) {
-    await evento(env, 'codigo_inexistente', 'huella ' + huellaCodigo.slice(0, 8));
+    await registrarEvento(env, 'codigo_inexistente', 'huella ' + huellaCodigo.slice(0, 8));
     return { estado: 404, cuerpo: { error: 'codigo_inexistente' } };
   }
   const motivo = motivo_de_rechazo(Date.parse(fila.emitido), fila.usado, fila.anulado, Date.now());
   if (motivo) {
-    await evento(env, motivo, 'dispositivo ' + fila.dispositivo);
+    await registrarEvento(env, motivo, 'dispositivo ' + fila.dispositivo);
     return { estado: 400, cuerpo: { error: motivo } };
   }
   let huellaClave;
@@ -161,7 +161,7 @@ export async function canjear(env, { codigo, clave_publica: clave }) {
     { huellaCodigo, id: fila.dispositivo, huellaClave, clave },
   );
   if (hechas.some((s) => s.status === 'ERR')) {
-    await evento(env, 'codigo_usado', 'dispositivo ' + fila.dispositivo);
+    await registrarEvento(env, 'codigo_usado', 'dispositivo ' + fila.dispositivo);
     return { estado: 400, cuerpo: { error: 'codigo_usado' } };
   }
   return {

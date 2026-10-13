@@ -28,6 +28,7 @@ futures = "0.3"
 rand = "0.9"
 # Vinculación del equipo con su código (docs/panel.md): el equipo genera su par de claves
 # P-256 (la privada no sale de él) y canjea el código en el Worker del panel.
+base64 = "0.22"
 p256 = { version = "0.13", features = ["ecdsa", "jwk"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 

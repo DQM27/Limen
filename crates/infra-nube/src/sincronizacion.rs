@@ -27,12 +27,13 @@ use std::time::Duration;
 
 use tokio::time::Instant;
 
+use futures::future::BoxFuture;
 use limen_infra_surreal::AlmacenSurreal;
 use tokio::sync::Notify;
 
 use crate::espera::{self, AzarDelSistema};
 use crate::presencia::LATIDO;
-use crate::{ConfigNube, Escucha, Nube};
+use crate::{ConfigNube, ErrorNube, Escucha, Nube};
 
 /// Cada cuánto se sincroniza, más o menos, aunque no llegue ningún aviso.
 pub const RED_DE_SEGURIDAD: Duration = Duration::from_secs(10);
@@ -43,11 +44,25 @@ const REINTENTOS_DE_VUELTA: u32 = 3;
 /// debajo de ese techo.
 pub const REINTENTO: Duration = Duration::from_secs(30);
 
+/// De dónde sale la configuración de conexión cada vez que hay que (re)conectar. Un equipo
+/// vinculado pide un token nuevo al Worker en cada conexión: así uno retirado no vuelve a
+/// entrar. Con variables de entorno es siempre la misma (`config_fija`).
+pub type FuenteDeConfig =
+    Arc<dyn Fn() -> BoxFuture<'static, Result<ConfigNube, ErrorNube>> + Send + Sync>;
+
+/// Una configuración que no cambia.
+pub fn config_fija(config: ConfigNube) -> FuenteDeConfig {
+    Arc::new(move || {
+        let config = config.clone();
+        Box::pin(async move { Ok(config) })
+    })
+}
+
 /// Sube y baja lo que cambia mientras la app esté abierta. No termina
 /// nunca: se lanza como tarea aparte al arrancar. `al_llegar` se llama cada
 /// vez que bajó algo que cambió el equipo (para que las pantallas se
 /// actualicen).
-pub async fn sincronizar<F>(almacen: AlmacenSurreal, config: ConfigNube, al_llegar: F)
+pub async fn sincronizar<F>(almacen: AlmacenSurreal, fuente: FuenteDeConfig, al_llegar: F)
 where
     F: Fn() + Send + Sync + 'static,
 {
@@ -59,7 +74,11 @@ where
     // cada reconexión sería carga inútil para la nube.
     let mut esquema_listo = false;
     loop {
-        match conectar(&config, !esquema_listo).await {
+        let conexion = match fuente().await {
+            Ok(config) => conectar(&config, !esquema_listo).await,
+            Err(error) => Err(error),
+        };
+        match conexion {
             Ok(nube) => {
                 esquema_listo = true;
                 fallos = 0;
@@ -75,7 +94,7 @@ where
     }
 }
 
-async fn conectar(config: &ConfigNube, aplicar_esquema: bool) -> Result<Nube, crate::ErrorNube> {
+async fn conectar(config: &ConfigNube, aplicar_esquema: bool) -> Result<Nube, ErrorNube> {
     let nube = Nube::conectar(config).await?;
     if aplicar_esquema {
         nube.aplicar_esquema().await?;
