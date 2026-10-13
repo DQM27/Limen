@@ -24,7 +24,7 @@ import { salir } from '../nucleo/ventana';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatButtonModule],
   templateUrl: './pantalla-vinculacion.html',
-  styleUrl: '../entrada/pantalla-entrada.scss',
+  styleUrls: ['../entrada/pantalla-entrada.scss', './pantalla-vinculacion.scss'],
 })
 export class PantallaVinculacion {
   /** En desarrollo se puede seguir sin vincular, con los usuarios de la semilla. */

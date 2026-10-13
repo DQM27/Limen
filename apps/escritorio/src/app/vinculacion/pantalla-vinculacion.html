@@ -37,10 +37,24 @@
   }
 
   <div class="acciones">
-    <button mat-stroked-button type="button" (click)="cancelar()">Cancelar</button>
-    @if (desarrollo()) {
-      <button mat-stroked-button type="button" (click)="omitir.emit()">Seguir sin vincular</button>
+    @if (vinculado()) {
+      @if (reinicioManual()) {
+        <button mat-flat-button type="button" class="principal" (click)="cancelar()">
+          Cerrar la aplicación
+        </button>
+      }
+    } @else {
+      <button mat-flat-button type="submit" class="principal" [disabled]="enviando()">
+        Vincular
+      </button>
+      <button mat-stroked-button type="button" class="secundaria" (click)="cancelar()">
+        Salir
+      </button>
+      @if (desarrollo()) {
+        <button mat-stroked-button type="button" class="secundaria" (click)="omitir.emit()">
+          Seguir sin vincular
+        </button>
+      }
     }
-    <button mat-flat-button type="submit" [disabled]="enviando() || vinculado()">Vincular</button>
   </div>
 </form>
