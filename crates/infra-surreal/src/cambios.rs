@@ -59,6 +59,37 @@ impl AlmacenSurreal {
         self.anotar_cursor(format!("bajada-{tabla}"), numero).await
     }
 
+    /// Hasta dónde subió este equipo el registro de cambios **de toda la base**, si alguna
+    /// vez subió. Es un solo cursor para todas las tablas: con uno por tabla, una tabla
+    /// tranquila (como `hecho`) se quedaba atrás y `SurrealDB`, que corta el escaneo antes de
+    /// filtrar por tabla, dejaba de verle las entradas nuevas.
+    pub async fn subido_hasta_en_la_base(&self) -> Result<Option<i64>, ErrorPersistencia> {
+        self.cursor("subida-de-la-base".to_owned()).await
+    }
+
+    /// Anota que el registro de toda la base ya subió hasta la entrada `numero`.
+    pub async fn anotar_subido_hasta_en_la_base(
+        &self,
+        numero: i64,
+    ) -> Result<(), ErrorPersistencia> {
+        self.anotar_cursor("subida-de-la-base".to_owned(), numero)
+            .await
+    }
+
+    /// Hasta dónde bajó este equipo el registro de cambios de toda la base **de la nube**.
+    pub async fn bajado_hasta_en_la_base(&self) -> Result<Option<i64>, ErrorPersistencia> {
+        self.cursor("bajada-de-la-base".to_owned()).await
+    }
+
+    /// Anota que el registro de toda la base en la nube ya bajó hasta `numero`.
+    pub async fn anotar_bajado_hasta_en_la_base(
+        &self,
+        numero: i64,
+    ) -> Result<(), ErrorPersistencia> {
+        self.anotar_cursor("bajada-de-la-base".to_owned(), numero)
+            .await
+    }
+
     async fn cursor(&self, clave: String) -> Result<Option<i64>, ErrorPersistencia> {
         let mut respuesta = self
             .db()
@@ -165,6 +196,39 @@ impl AlmacenSurreal {
         let crudo: Value = respuesta.take(0).map_err(tecnica)?;
         entradas(crudo)
     }
+
+    /// Las entradas del registro de **toda la base** desde la número `desde` (incluida), en
+    /// orden, a lo sumo `limite`. Trae las de todas las tablas con registro de cambios, así
+    /// que el cursor siempre avanza; quien llama reparte los cambios por tabla.
+    pub async fn cambios_de_la_base_desde(
+        &self,
+        desde: i64,
+        limite: usize,
+    ) -> Result<Vec<Entrada>, ErrorPersistencia> {
+        // `SINCE` y `LIMIT` sólo aceptan valores literales: son números.
+        let mut respuesta = self
+            .db()
+            .query(format!(
+                "SHOW CHANGES FOR DATABASE SINCE {desde} LIMIT {limite}"
+            ))
+            .await
+            .map_err(tecnica)?;
+        let crudo: Value = respuesta.take(0).map_err(tecnica)?;
+        entradas(crudo)
+    }
+}
+
+/// De qué tabla es un cambio.
+pub fn tabla_de(cambio: &Cambio) -> Option<&str> {
+    let id = match cambio {
+        Cambio::Guardada(Value::Object(campos)) => match campos.get("id") {
+            Some(Value::RecordId(id)) => id,
+            _ => return None,
+        },
+        Cambio::Guardada(_) => return None,
+        Cambio::Borrada(id) => id,
+    };
+    Some(id.table.as_str())
 }
 
 /// Lee lo que devuelve `SHOW CHANGES` (de la base del equipo o de la nube,

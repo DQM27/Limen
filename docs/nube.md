@@ -252,3 +252,19 @@ duplicarla). Hoy la usa sólo `espera.rs`. **Ojo con el cifrado:** `rand` sirve 
 jitter, pero claves, sales y nonces deben salir del generador del sistema operativo
 (`getrandom`/`OsRng`) o de los crates de cifrado, nunca de un generador previsible; que
 `rand` esté a mano no es motivo para usarla ahí.
+
+## 12. Lo que aprendimos de SurrealDB (sincronización)
+
+- **`SHOW CHANGES FOR TABLE … LIMIT n` aplica el límite *antes* de filtrar por tabla.** Si entre el
+  cursor de una tabla tranquila (`hecho`) y su próxima entrada hay más de `n` transacciones de otras
+  tablas, devuelve cero y el cursor no avanza nunca (el hecho de una entrada se quedó sin subir).
+  Por eso la subida y la bajada usan **un solo cursor para toda la base**
+  (`SHOW CHANGES FOR DATABASE`) y reparten los cambios por tabla.
+- **El registro guarda cada versión de una fila.** Aplicarlas todas escribía versiones intermedias
+  que rebotaban entre el equipo y la nube sin parar. Por tanda sólo se aplica la última versión de
+  cada fila (`bajada::colapsar`).
+- Un texto con forma de UUID que llega como parámetro JSON se convierte en `uuid`: los campos de
+  texto necesitan `<string>$id`.
+- Un usuario de base de datos no entra con Basic auth: hay que pasar por `/signin` y usar el token.
+- Con `DEFINE USER … ROLES VIEWER` se lee todo (incluida `usuario`), aunque las tablas tengan
+  `PERMISSIONS NONE`.

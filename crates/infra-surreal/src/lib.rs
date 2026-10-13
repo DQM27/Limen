@@ -20,7 +20,7 @@ mod repositorios;
 mod unidad_de_trabajo;
 
 pub use almacen::{AlmacenSurreal, BASE, ESQUEMA, NAMESPACE, UNIDAD_DE_PRUEBAS};
-pub use cambios::{Cambio, Entrada, entradas, id_de};
+pub use cambios::{Cambio, Entrada, entradas, id_de, tabla_de};
 pub use registros::TABLAS_DE_LA_UNIDAD;
 pub use registros::{AuditoriaRegistro, CambioRegistro};
 pub use repositorios::{

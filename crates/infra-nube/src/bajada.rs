@@ -10,10 +10,10 @@
 //! (`AlmacenSurreal::aplicar_de_la_nube`): por eso un cambio no rebota entre
 //! los equipos y la nube.
 
-use limen_infra_surreal::{AlmacenSurreal, Cambio, TABLAS_DE_LA_UNIDAD, entradas};
+use limen_infra_surreal::{AlmacenSurreal, Cambio, TABLAS_DE_LA_UNIDAD, entradas, tabla_de};
 use surrealdb::types::Value;
 
-use crate::subida::{Copia, SOLO_BAJADA, TABLAS};
+use crate::subida::{Copia, SOLO_BAJADA, TABLAS, copia_de};
 use crate::{ErrorNube, Nube};
 
 /// Cuántas entradas del registro de la nube se piden por consulta.
@@ -30,14 +30,19 @@ impl Nube {
         let unidad = almacen.unidad().as_str().to_owned();
         let mut cambiadas = 0;
         // Los usuarios primero: sin ellos nadie puede iniciar sesión.
-        for (tabla, copia) in SOLO_BAJADA.into_iter().chain(TABLAS) {
+        let tablas: Vec<(&'static str, Copia)> = SOLO_BAJADA.into_iter().chain(TABLAS).collect();
+        // 1. La primera vez, cada tabla baja entera (para un equipo nuevo es la carga inicial).
+        for (tabla, copia) in &tablas {
             let error = |e: &dyn std::fmt::Display| ErrorNube::Bajada(format!("{tabla}: {e}"));
-            let inmutable = copia == Copia::Agregar;
-            let de_la_unidad = es_de_la_unidad(tabla);
-            let ya_bajado = almacen.bajado_hasta(tabla).await.map_err(|e| error(&e))?;
-            if ya_bajado.is_none() {
+            let inmutable = *copia == Copia::Agregar;
+            if almacen
+                .bajado_hasta(tabla)
+                .await
+                .map_err(|e| error(&e))?
+                .is_none()
+            {
                 let filas = self
-                    .filas_de_la_nube(tabla, de_la_unidad.then_some(unidad.as_str()))
+                    .filas_de_la_nube(tabla, es_de_la_unidad(tabla).then_some(unidad.as_str()))
                     .await
                     .map_err(|e| error(&e))?;
                 for lote in filas.chunks(POR_LOTE) {
@@ -52,34 +57,43 @@ impl Nube {
                     .await
                     .map_err(|e| error(&e))?;
             }
-            let mut desde = ya_bajado.map_or(0, |hasta| hasta + 1);
-            loop {
-                let crudo = self
-                    .registro_de_la_nube(tabla, desde)
-                    .await
-                    .map_err(|e| error(&e))?;
-                let lote = entradas(crudo).map_err(|e| error(&e))?;
-                let Some(ultima) = lote.last().map(|entrada| entrada.numero) else {
-                    break;
-                };
-                // Sólo la última versión de cada fila de la tanda: aplicar las intermedias
-                // escribiría en el equipo algo que ya no es, y esa escritura rebotaría.
-                let cambios = colapsar(
-                    lote.into_iter()
-                        .flat_map(|entrada| entrada.cambios)
-                        .filter(|cambio| !de_la_unidad || es_de(cambio, &unidad))
-                        .collect(),
-                );
+        }
+        // 2. Después, el registro de toda la base de la nube desde el último cursor: uno solo
+        //    para todas las tablas (ver `AlmacenSurreal::subido_hasta_en_la_base`).
+        let error = |e: &dyn std::fmt::Display| ErrorNube::Bajada(e.to_string());
+        let nombres: Vec<&'static str> = tablas.iter().map(|(tabla, _)| *tabla).collect();
+        let mut desde = almacen
+            .bajado_hasta_en_la_base()
+            .await
+            .map_err(|e| error(&e))?
+            .map_or(0, |hasta| hasta + 1);
+        loop {
+            let crudo = self
+                .registro_de_la_base(desde)
+                .await
+                .map_err(|e| error(&e))?;
+            let lote = entradas(crudo).map_err(|e| error(&e))?;
+            let Some(ultima) = lote.last().map(|entrada| entrada.numero) else {
+                break;
+            };
+            let todos = lote.into_iter().flat_map(|e| e.cambios).collect();
+            for (tabla, cambios) in por_tabla(todos, &nombres) {
+                let de_la_unidad = es_de_la_unidad(tabla);
+                let cambios: Vec<Cambio> = cambios
+                    .into_iter()
+                    .filter(|cambio| !de_la_unidad || es_de(cambio, &unidad))
+                    .collect();
+                let inmutable = copia_de(tabla) == Copia::Agregar;
                 cambiadas += almacen
                     .aplicar_de_la_nube(cambios, inmutable)
                     .await
-                    .map_err(|e| error(&e))?;
-                almacen
-                    .anotar_bajado_hasta(tabla, ultima)
-                    .await
-                    .map_err(|e| error(&e))?;
-                desde = ultima + 1;
+                    .map_err(|e| ErrorNube::Bajada(format!("{tabla}: {e}")))?;
             }
+            almacen
+                .anotar_bajado_hasta_en_la_base(ultima)
+                .await
+                .map_err(|e| error(&e))?;
+            desde = ultima + 1;
         }
         Ok(cambiadas)
     }
@@ -109,20 +123,38 @@ impl Nube {
         respuesta.take(0)
     }
 
-    async fn registro_de_la_nube(
-        &self,
-        tabla: &'static str,
-        desde: i64,
-    ) -> Result<Value, surrealdb::Error> {
-        // `SINCE` y `LIMIT` sólo aceptan literales: son números, y la tabla
-        // sale de `TABLAS`, nunca de un dato.
+    /// Las entradas del registro de cambios de **toda la base** de la nube desde `desde`,
+    /// a lo sumo [`POR_LOTE`]. Trae las de todas las tablas, así que el cursor siempre avanza
+    /// (con uno por tabla, `SurrealDB` corta el escaneo antes de filtrar por tabla y una tabla
+    /// tranquila dejaba de ver sus entradas nuevas).
+    async fn registro_de_la_base(&self, desde: i64) -> Result<Value, surrealdb::Error> {
+        // `SINCE` y `LIMIT` sólo aceptan literales: son números.
         self.db
             .query(format!(
-                "SHOW CHANGES FOR TABLE {tabla} SINCE {desde} LIMIT {POR_LOTE}"
+                "SHOW CHANGES FOR DATABASE SINCE {desde} LIMIT {POR_LOTE}"
             ))
             .await?
             .take(0)
     }
+}
+
+/// Reparte los cambios de una tanda por tabla, en el orden de `tablas` (los catálogos antes de
+/// lo que los usa), y de cada fila deja sólo el último. Las tablas sin cambios no aparecen.
+pub fn por_tabla(
+    cambios: Vec<Cambio>,
+    tablas: &[&'static str],
+) -> Vec<(&'static str, Vec<Cambio>)> {
+    tablas
+        .iter()
+        .filter_map(|&tabla| {
+            let propios: Vec<Cambio> = cambios
+                .iter()
+                .filter(|cambio| tabla_de(cambio) == Some(tabla))
+                .cloned()
+                .collect();
+            (!propios.is_empty()).then(|| (tabla, colapsar(propios)))
+        })
+        .collect()
 }
 
 /// Deja sólo el último cambio de cada fila, en el orden en que quedaron.
@@ -317,12 +349,18 @@ mod tests {
     }
 
     /// Cuántas entradas lleva el registro de cambios de una tabla en la nube.
-    async fn entradas_en_la_nube(nube: &Nube, tabla: &'static str) -> usize {
-        let respuesta = nube.registro_de_la_nube(tabla, 0).await.unwrap();
-        match respuesta {
-            Value::Array(entradas) => entradas.len(),
-            _ => 0,
-        }
+    async fn entradas_en_la_nube(nube: &Nube, tabla: &str) -> usize {
+        let crudo = nube.registro_de_la_base(0).await.unwrap();
+        entradas(crudo)
+            .unwrap()
+            .iter()
+            .filter(|entrada| {
+                entrada
+                    .cambios
+                    .iter()
+                    .any(|cambio| tabla_de(cambio) == Some(tabla))
+            })
+            .count()
     }
 
     /// Una fila que cambió dos veces en la nube deja dos entradas en su registro. Al
@@ -391,6 +429,105 @@ mod tests {
             "y nada que subir"
         );
         assert!(!adentro(&equipo, "603500432").await, "nadie quedó adentro");
+    }
+
+    fn hecho_de_prueba(equipo: &AlmacenSurreal, numero: u128) -> limen_dominio::hecho::Hecho {
+        use limen_dominio::hecho::{CalidadHora, Hecho, HechoId, Salida, Suceso};
+        use limen_dominio::movimiento::Marca;
+        use limen_dominio::operador::OperadorId;
+        use uuid::Uuid;
+
+        Hecho::restaurar(
+            HechoId::desde_uuid(Uuid::from_u128(numero)),
+            Suceso::Salida(Salida {
+                via: Via::Contratista,
+                registro: Uuid::from_u128(5),
+                marca: Marca {
+                    en: en(),
+                    operador: OperadorId::desde_uuid(Uuid::from_u128(9)),
+                },
+            }),
+            equipo.origen().clone(),
+            CalidadHora {
+                confiable: true,
+                hora_equipo: en(),
+            },
+        )
+    }
+
+    async fn hechos_en_la_nube(nube: &Nube) -> usize {
+        let mut respuesta = nube.db.query("SELECT VALUE id FROM hecho").await.unwrap();
+        let ids: Vec<surrealdb::types::RecordId> = respuesta.take(0).unwrap();
+        ids.len()
+    }
+
+    /// El caso de la instalación nueva: el equipo baja los hechos que ya había en la nube y
+    /// después registra uno propio. Ese hecho nuevo tiene que llegar a la nube.
+    #[tokio::test]
+    async fn un_hecho_nuevo_sube_despues_de_bajar_los_que_ya_habia() {
+        use limen_aplicacion::puertos::{FabricaUnidadDeTrabajo, RegistroHechos, UnidadDeTrabajo};
+
+        let nube = nube().await;
+        let otro = AlmacenSurreal::en_memoria().await.unwrap();
+        let mut uow = otro.nueva();
+        uow.hechos().anotar(hecho_de_prueba(&otro, 1));
+        uow.confirmar().await.unwrap();
+        vuelta(&nube, &otro).await;
+        assert_eq!(hechos_en_la_nube(&nube).await, 1, "el otro equipo lo subió");
+
+        let equipo = AlmacenSurreal::en_memoria().await.unwrap();
+        vuelta(&nube, &equipo).await;
+        vuelta(&nube, &equipo).await;
+        let mut uow = equipo.nueva();
+        uow.hechos().anotar(hecho_de_prueba(&equipo, 2));
+        uow.confirmar().await.unwrap();
+        vuelta(&nube, &equipo).await;
+
+        assert_eq!(
+            hechos_en_la_nube(&nube).await,
+            2,
+            "el hecho que registró el equipo nuevo llegó a la nube"
+        );
+    }
+
+    /// `SurrealDB` aplica el `LIMIT` de `SHOW CHANGES` antes de filtrar por tabla: si entre el
+    /// cursor de una tabla y su entrada nueva hay muchos cambios de otras tablas (la descarga
+    /// de una instalación nueva escribe miles), la consulta con límite no ve nada de esa tabla
+    /// y el cursor no avanza nunca. Pasaba con el hecho de la entrada de un ingreso.
+    #[tokio::test]
+    async fn un_hecho_nuevo_sube_aunque_haya_muchos_cambios_de_otras_tablas_en_medio() {
+        use limen_aplicacion::puertos::{
+            FabricaUnidadDeTrabajo, RegistroHechos, RepositorioGafetes, UnidadDeTrabajo,
+        };
+        use limen_dominio::gafete::{Gafete, NumeroGafete, TipoGafete};
+
+        let nube = nube().await;
+        let equipo = AlmacenSurreal::en_memoria().await.unwrap();
+        let mut uow = equipo.nueva();
+        uow.hechos().anotar(hecho_de_prueba(&equipo, 1));
+        uow.confirmar().await.unwrap();
+        vuelta(&nube, &equipo).await;
+        assert_eq!(hechos_en_la_nube(&nube).await, 1);
+
+        // Muchas transacciones de otra tabla entre el cursor de `hecho` y su próxima entrada.
+        for numero in 1..=250_u32 {
+            let mut uow = equipo.nueva();
+            let numero = NumeroGafete::nuevo(numero).unwrap();
+            uow.gafetes()
+                .agregar(&Gafete::registrar(TipoGafete::Contratista, numero, false).unwrap());
+            uow.confirmar().await.unwrap();
+        }
+        let mut uow = equipo.nueva();
+        uow.hechos().anotar(hecho_de_prueba(&equipo, 2));
+        uow.confirmar().await.unwrap();
+
+        vuelta(&nube, &equipo).await;
+
+        assert_eq!(
+            hechos_en_la_nube(&nube).await,
+            2,
+            "el hecho nuevo llegó a la nube aunque 250 transacciones de gafetes lo separaran del cursor"
+        );
     }
 
     #[tokio::test]

@@ -16,7 +16,7 @@
 use limen_infra_surreal::{AlmacenSurreal, Cambio};
 use surrealdb::types::Value;
 
-use crate::bajada::colapsar;
+use crate::bajada::por_tabla;
 use crate::{ErrorNube, Nube};
 
 /// Cuántas filas se mandan por consulta.
@@ -57,6 +57,15 @@ pub const TABLAS: [(&str, Copia); 14] = [
 /// (el equipo sólo inicia sesión y cambia su propia clave).
 pub const SOLO_BAJADA: [(&str, Copia); 1] = [("usuario", Copia::Reemplazar)];
 
+/// Cómo se copia una tabla: reemplazando o sólo agregando.
+pub fn copia_de(tabla: &str) -> Copia {
+    TABLAS
+        .iter()
+        .chain(SOLO_BAJADA.iter())
+        .find(|(nombre, _)| *nombre == tabla)
+        .map_or(Copia::Reemplazar, |(_, copia)| *copia)
+}
+
 impl Nube {
     /// Sube lo que cambió en el equipo desde la última vez: las altas, los
     /// cambios y los borrados que anotó el registro de cambios de cada tabla
@@ -69,11 +78,16 @@ impl Nube {
     /// Si algo falla, lo que no se anotó como subido se vuelve a intentar la
     /// próxima vez.
     pub async fn subir_cambios(&self, almacen: &AlmacenSurreal) -> Result<usize, ErrorNube> {
-        let mut subidos = 0;
+        // 1. La primera vez, cada tabla se copia entera: lo que había antes del registro de
+        //    cambios no está anotado.
         for (tabla, copia) in TABLAS {
             let error = |e: &dyn std::fmt::Display| ErrorNube::Subida(format!("{tabla}: {e}"));
-            let ya_subido = almacen.subido_hasta(tabla).await.map_err(|e| error(&e))?;
-            if ya_subido.is_none() {
+            if almacen
+                .subido_hasta(tabla)
+                .await
+                .map_err(|e| error(&e))?
+                .is_none()
+            {
                 let filas = filas_para_subir(tabla, almacen).await?;
                 self.copiar(tabla, copia, filas)
                     .await
@@ -83,27 +97,38 @@ impl Nube {
                     .await
                     .map_err(|e| error(&e))?;
             }
-            let mut desde = ya_subido.map_or(0, |hasta| hasta + 1);
-            loop {
-                let entradas = almacen
-                    .cambios_desde(tabla, desde, POR_LOTE)
-                    .await
-                    .map_err(|e| error(&e))?;
-                let Some(ultima) = entradas.last().map(|entrada| entrada.numero) else {
-                    break;
-                };
-                // Sólo la última versión de cada fila de la tanda (ver `bajada::colapsar`).
-                let cambios = colapsar(entradas.into_iter().flat_map(|e| e.cambios).collect());
+        }
+        // 2. Después, lo anotado en el registro de toda la base desde el último cursor: uno
+        //    solo para todas las tablas (ver `AlmacenSurreal::subido_hasta_en_la_base`).
+        let error = |e: &dyn std::fmt::Display| ErrorNube::Subida(e.to_string());
+        let tablas: Vec<&'static str> = TABLAS.iter().map(|(tabla, _)| *tabla).collect();
+        let mut subidos = 0;
+        let mut desde = almacen
+            .subido_hasta_en_la_base()
+            .await
+            .map_err(|e| error(&e))?
+            .map_or(0, |hasta| hasta + 1);
+        loop {
+            let entradas = almacen
+                .cambios_de_la_base_desde(desde, POR_LOTE)
+                .await
+                .map_err(|e| error(&e))?;
+            let Some(ultima) = entradas.last().map(|entrada| entrada.numero) else {
+                break;
+            };
+            let todos = entradas.into_iter().flat_map(|e| e.cambios).collect();
+            for (tabla, cambios) in por_tabla(todos, &tablas) {
+                let copia = copia_de(tabla);
                 subidos += cambios.len();
                 self.aplicar(tabla, copia, cambios, almacen)
                     .await
-                    .map_err(|e| error(&e))?;
-                almacen
-                    .anotar_subido_hasta(tabla, ultima)
-                    .await
-                    .map_err(|e| error(&e))?;
-                desde = ultima + 1;
+                    .map_err(|e| ErrorNube::Subida(format!("{tabla}: {e}")))?;
             }
+            almacen
+                .anotar_subido_hasta_en_la_base(ultima)
+                .await
+                .map_err(|e| error(&e))?;
+            desde = ultima + 1;
         }
         Ok(subidos)
     }
