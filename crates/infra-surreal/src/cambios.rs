@@ -76,17 +76,18 @@ impl AlmacenSurreal {
             .await
     }
 
-    /// Hasta dónde bajó este equipo el registro de cambios de toda la base **de la nube**.
-    pub async fn bajado_hasta_en_la_base(&self) -> Result<Option<i64>, ErrorPersistencia> {
-        self.cursor("bajada-de-la-base".to_owned()).await
+    /// Hasta dónde bajó este equipo el diario de cambios de la nube (microsegundos de la última
+    /// anotación que leyó), si alguna vez bajó.
+    pub async fn bajado_hasta_en_el_diario(&self) -> Result<Option<i64>, ErrorPersistencia> {
+        self.cursor("bajada-del-diario".to_owned()).await
     }
 
-    /// Anota que el registro de toda la base en la nube ya bajó hasta `numero`.
-    pub async fn anotar_bajado_hasta_en_la_base(
+    /// Anota hasta dónde bajó el diario de cambios de la nube.
+    pub async fn anotar_bajado_hasta_en_el_diario(
         &self,
-        numero: i64,
+        micros: i64,
     ) -> Result<(), ErrorPersistencia> {
-        self.anotar_cursor("bajada-de-la-base".to_owned(), numero)
+        self.anotar_cursor("bajada-del-diario".to_owned(), micros)
             .await
     }
 

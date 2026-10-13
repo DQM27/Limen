@@ -10,14 +10,16 @@
 //! (`AlmacenSurreal::aplicar_de_la_nube`): por eso un cambio no rebota entre
 //! los equipos y la nube.
 
-use limen_infra_surreal::{AlmacenSurreal, Cambio, TABLAS_DE_LA_UNIDAD, entradas, tabla_de};
-use surrealdb::types::Value;
+use limen_infra_surreal::{AlmacenSurreal, Cambio, TABLAS_DE_LA_UNIDAD, tabla_de};
+use surrealdb::types::{Number, RecordId, Value};
 
 use crate::subida::{Copia, SOLO_BAJADA, TABLAS, copia_de};
 use crate::{ErrorNube, Nube};
 
 /// Cuántas entradas del registro de la nube se piden por consulta.
 const POR_LOTE: usize = 200;
+/// Cuánto se vuelve a leer del diario antes del último cursor (microsegundos): 60 segundos.
+const MARGEN_DEL_DIARIO: i64 = 60_000_000;
 
 impl Nube {
     /// Baja al equipo lo que cambió en la nube desde la última vez y
@@ -58,26 +60,29 @@ impl Nube {
                     .map_err(|e| error(&e))?;
             }
         }
-        // 2. Después, el registro de toda la base de la nube desde el último cursor: uno solo
-        //    para todas las tablas (ver `AlmacenSurreal::subido_hasta_en_la_base`).
+        // 2. Después, el diario de cambios de la nube (`cambio`): qué filas cambiaron desde la
+        //    última vez. Un equipo con token sólo recibe las anotaciones de su unidad y las
+        //    globales (los permisos de la tabla); el registro de cambios de SurrealDB le está
+        //    prohibido. Ver `docs/nube.md`, sección 13.
         let error = |e: &dyn std::fmt::Display| ErrorNube::Bajada(e.to_string());
         let nombres: Vec<&'static str> = tablas.iter().map(|(tabla, _)| *tabla).collect();
-        let mut desde = almacen
-            .bajado_hasta_en_la_base()
+        let hasta_ahora = almacen
+            .bajado_hasta_en_el_diario()
             .await
-            .map_err(|e| error(&e))?
-            .map_or(0, |hasta| hasta + 1);
+            .map_err(|e| error(&e))?;
+        // Se vuelve a leer un margen antes del cursor: dos transacciones que confirman casi a la
+        // vez pueden anotarse en el diario en otro orden que su hora, y lo que ya está igual no
+        // se escribe, así que repasar un poco es gratis.
+        let mut desde = hasta_ahora.map_or(0, |hasta| (hasta - MARGEN_DEL_DIARIO).max(0));
+        let mut mayor = hasta_ahora.unwrap_or(0);
         loop {
-            let crudo = self
-                .registro_de_la_base(desde)
-                .await
-                .map_err(|e| error(&e))?;
-            let lote = entradas(crudo).map_err(|e| error(&e))?;
-            let Some(ultima) = lote.last().map(|entrada| entrada.numero) else {
+            let anotaciones = self.diario_desde(desde).await.map_err(|e| error(&e))?;
+            let Some(ultima) = anotaciones.iter().map(|a| a.micros).max() else {
                 break;
             };
-            let todos = lote.into_iter().flat_map(|e| e.cambios).collect();
-            for (tabla, cambios) in por_tabla(todos, &nombres) {
+            let completa = anotaciones.len() >= POR_LOTE;
+            let cambios = self.cambios_de(anotaciones).await.map_err(|e| error(&e))?;
+            for (tabla, cambios) in por_tabla(cambios, &nombres) {
                 let de_la_unidad = es_de_la_unidad(tabla);
                 let cambios: Vec<Cambio> = cambios
                     .into_iter()
@@ -89,11 +94,17 @@ impl Nube {
                     .await
                     .map_err(|e| ErrorNube::Bajada(format!("{tabla}: {e}")))?;
             }
+            mayor = mayor.max(ultima);
+            if !completa {
+                break;
+            }
+            desde = ultima + 1;
+        }
+        if hasta_ahora != Some(mayor) {
             almacen
-                .anotar_bajado_hasta_en_la_base(ultima)
+                .anotar_bajado_hasta_en_el_diario(mayor)
                 .await
                 .map_err(|e| error(&e))?;
-            desde = ultima + 1;
         }
         Ok(cambiadas)
     }
@@ -123,18 +134,90 @@ impl Nube {
         respuesta.take(0)
     }
 
-    /// Las entradas del registro de cambios de **toda la base** de la nube desde `desde`,
-    /// a lo sumo [`POR_LOTE`]. Trae las de todas las tablas, así que el cursor siempre avanza
-    /// (con uno por tabla, `SurrealDB` corta el escaneo antes de filtrar por tabla y una tabla
-    /// tranquila dejaba de ver sus entradas nuevas).
-    async fn registro_de_la_base(&self, desde: i64) -> Result<Value, surrealdb::Error> {
-        // `SINCE` y `LIMIT` sólo aceptan literales: son números.
-        self.db
-            .query(format!(
-                "SHOW CHANGES FOR DATABASE SINCE {desde} LIMIT {POR_LOTE}"
-            ))
-            .await?
-            .take(0)
+    /// Las anotaciones del diario de la nube desde `desde` (microsegundos, incluida), en orden,
+    /// a lo sumo [`POR_LOTE`].
+    async fn diario_desde(&self, desde: i64) -> Result<Vec<Anotacion>, surrealdb::Error> {
+        let mut respuesta = self
+            .db
+            .query(
+                "SELECT time::micros(en) AS micros, tabla, registro, tipo FROM cambio \
+                 WHERE en >= time::from_micros($desde) ORDER BY en LIMIT $limite",
+            )
+            .bind(("desde", desde))
+            .bind(("limite", i64::try_from(POR_LOTE).unwrap_or(i64::MAX)))
+            .await?;
+        let filas: Vec<Value> = respuesta.take(0)?;
+        Ok(filas.into_iter().filter_map(Anotacion::de).collect())
+    }
+
+    /// Lo que cambió en cada fila anotada: de cada una sólo cuenta la última anotación. Un
+    /// borrado se aplica como borrado; lo demás, con la fila tal como está ahora (si ya no
+    /// existe o no es de esta unidad, no hay nada que aplicar).
+    async fn cambios_de(
+        &self,
+        anotaciones: Vec<Anotacion>,
+    ) -> Result<Vec<Cambio>, surrealdb::Error> {
+        let mut ultimas: Vec<Anotacion> = Vec::new();
+        for anotacion in anotaciones.into_iter().rev() {
+            if !ultimas
+                .iter()
+                .any(|vista| vista.registro == anotacion.registro)
+            {
+                ultimas.push(anotacion);
+            }
+        }
+        ultimas.reverse();
+        let mut cambios = Vec::new();
+        let mut vigentes = Vec::new();
+        for anotacion in ultimas {
+            if anotacion.tipo == "DELETE" {
+                cambios.push(Cambio::Borrada(anotacion.registro));
+            } else {
+                vigentes.push(anotacion.registro);
+            }
+        }
+        if !vigentes.is_empty() {
+            let mut respuesta = self
+                .db
+                .query("SELECT * FROM $registros")
+                .bind(("registros", vigentes))
+                .await?;
+            let filas: Vec<Value> = respuesta.take(0)?;
+            cambios.extend(filas.into_iter().map(Cambio::Guardada));
+        }
+        Ok(cambios)
+    }
+}
+
+/// Una anotación del diario: qué fila cambió y cómo.
+struct Anotacion {
+    micros: i64,
+    registro: RecordId,
+    tipo: String,
+}
+
+impl Anotacion {
+    fn de(fila: Value) -> Option<Self> {
+        let Value::Object(campos) = fila else {
+            return None;
+        };
+        let (
+            Some(Value::Number(Number::Int(micros))),
+            Some(Value::RecordId(registro)),
+            Some(Value::String(tipo)),
+        ) = (
+            campos.get("micros"),
+            campos.get("registro"),
+            campos.get("tipo"),
+        )
+        else {
+            return None;
+        };
+        Some(Self {
+            micros: *micros,
+            registro: registro.clone(),
+            tipo: tipo.clone(),
+        })
     }
 }
 
@@ -344,23 +427,20 @@ mod tests {
         assert_eq!(
             nombres_de_usuarios(&equipo).await,
             vec!["ANA MORA SOTO".to_owned()],
-            "un cambio posterior llega por el registro de cambios"
+            "un cambio posterior llega por el diario"
         );
     }
 
-    /// Cuántas entradas lleva el registro de cambios de una tabla en la nube.
+    /// Cuántas anotaciones lleva el diario de la nube de una tabla.
     async fn entradas_en_la_nube(nube: &Nube, tabla: &str) -> usize {
-        let crudo = nube.registro_de_la_base(0).await.unwrap();
-        entradas(crudo)
-            .unwrap()
-            .iter()
-            .filter(|entrada| {
-                entrada
-                    .cambios
-                    .iter()
-                    .any(|cambio| tabla_de(cambio) == Some(tabla))
-            })
-            .count()
+        let mut respuesta = nube
+            .db
+            .query("SELECT VALUE id FROM cambio WHERE tabla = $tabla")
+            .bind(("tabla", tabla.to_owned()))
+            .await
+            .unwrap();
+        let ids: Vec<RecordId> = respuesta.take(0).unwrap();
+        ids.len()
     }
 
     /// Una fila que cambió dos veces en la nube deja dos entradas en su registro. Al
@@ -457,7 +537,7 @@ mod tests {
 
     async fn hechos_en_la_nube(nube: &Nube) -> usize {
         let mut respuesta = nube.db.query("SELECT VALUE id FROM hecho").await.unwrap();
-        let ids: Vec<surrealdb::types::RecordId> = respuesta.take(0).unwrap();
+        let ids: Vec<RecordId> = respuesta.take(0).unwrap();
         ids.len()
     }
 
