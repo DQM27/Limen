@@ -3,6 +3,7 @@
 // Acceso con clave simple (Basic) mientras no se ponga Cloudflare Access.
 
 import { consultar, resultado, LECTURA } from './nube.js';
+import { acceso } from './acceso.js';
 import { canjear, listar, registrar, retirar, unidades } from './vinculacion.js';
 // Un equipo que lleva más de dos latidos (5 min c/u) sin avisar se da por caído.
 const CAIDO_DESPUES_DE_MS = 10 * 60 * 1000;
@@ -85,6 +86,11 @@ async function atender(request, env) {
           },
         },
       );
+    }
+    // El otro camino sin clave del panel: el equipo prueba quién es con su firma y recibe su
+    // acceso a la nube.
+    if (pathname === '/api/token' && request.method === 'POST') {
+      return json(await acceso(env, await request.json()));
     }
     if (!autorizado(request, env)) {
       return new Response('Acceso restringido', {

@@ -1,0 +1,20 @@
+// La tarjeta es la de la entrada (../entrada/pantalla-entrada.scss); aquí sólo se acomodan los
+// botones: la acción principal ocupa todo el ancho y las secundarias van en una fila debajo.
+.acciones {
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+
+  button {
+    white-space: nowrap;
+  }
+
+  .principal {
+    grid-column: 1 / -1;
+    height: 44px;
+  }
+
+  // Una secundaria sola (sin "Seguir sin vincular") ocupa el ancho completo.
+  .secundaria:only-of-type {
+    grid-column: 1 / -1;
+  }
+}

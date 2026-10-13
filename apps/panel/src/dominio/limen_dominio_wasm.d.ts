@@ -24,6 +24,11 @@ export function leer_codigo(texto: string): string;
 export function motivo_de_rechazo(emitido_ms: number, usado: boolean, anulado: boolean, ahora_ms: number): string;
 
 /**
+ * ¿Puede conectarse un equipo con ese estado? Vacío si sí; si no, el código de la regla.
+ */
+export function motivo_de_rechazo_del_equipo(vinculado: boolean, retirado: boolean): string;
+
+/**
  * Cuántos minutos vale un código.
  */
 export function vigencia_minutos(): number;
@@ -36,6 +41,7 @@ export interface InitOutput {
     readonly generar_codigo: (a: number, b: number) => [number, number, number, number];
     readonly leer_codigo: (a: number, b: number) => [number, number, number, number];
     readonly motivo_de_rechazo: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly motivo_de_rechazo_del_equipo: (a: number, b: number) => [number, number];
     readonly vigencia_minutos: () => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;

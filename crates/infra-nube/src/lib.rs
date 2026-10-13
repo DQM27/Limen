@@ -27,11 +27,11 @@ use surrealdb::opt::auth::{Database, Namespace, Root};
 
 pub use en_vivo::Escucha;
 pub use presencia::LATIDO;
-pub use sincronizacion::{RED_DE_SEGURIDAD, REINTENTO, sincronizar};
+pub use sincronizacion::{FuenteDeConfig, RED_DE_SEGURIDAD, REINTENTO, config_fija, sincronizar};
 pub use subida::{Copia, TABLAS};
 pub use vinculacion::{
     ARCHIVO_CLAVE, ARCHIVO_VINCULACION, EquipoVinculado, ErrorDeVinculacion, PANEL_POR_OMISION,
-    VAR_PANEL, esta_vinculado, vincular,
+    VAR_PANEL, esta_vinculado, pedir_acceso, vincular,
 };
 
 /// Elige el proveedor de cifrado de las conexiones seguras (`ring`). Con
@@ -60,6 +60,9 @@ pub enum Nivel {
     Root,
     Namespace,
     Base,
+    /// Un token de acceso que el Worker del panel emitió a este equipo (vinculado con su
+    /// código). La clave de las `Credenciales` es el token; no hay usuario ni clave de base.
+    Token,
 }
 
 impl Nivel {
@@ -79,6 +82,17 @@ pub struct Credenciales {
     pub nivel: Nivel,
     pub usuario: String,
     pub clave: String,
+}
+
+impl Credenciales {
+    /// El acceso de un equipo vinculado: el token que le dio el Worker.
+    pub fn con_token(token: String) -> Self {
+        Self {
+            nivel: Nivel::Token,
+            usuario: "equipo".to_owned(),
+            clave: token,
+        }
+    }
 }
 
 impl fmt::Debug for Credenciales {
@@ -240,6 +254,7 @@ async fn entrar(db: &Surreal<Any>, credenciales: &Credenciales) -> Result<(), Er
             })
             .await
             .map(drop),
+        Nivel::Token => db.authenticate(clave).await.map(drop),
     };
     resultado.map_err(|e| ErrorNube::Autenticacion(e.to_string()))
 }
@@ -253,7 +268,7 @@ async fn crear_si_falta(db: &Surreal<Any>, nivel: Nivel) -> Result<(), ErrorNube
              DEFINE DATABASE IF NOT EXISTS {BASE};"
         ),
         Nivel::Namespace => format!("USE NS {NAMESPACE}; DEFINE DATABASE IF NOT EXISTS {BASE};"),
-        Nivel::Base => return Ok(()),
+        Nivel::Base | Nivel::Token => return Ok(()),
     };
     db.query(sentencias)
         .await

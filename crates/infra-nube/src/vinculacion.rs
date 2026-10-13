@@ -11,13 +11,19 @@
 
 use std::path::Path;
 
+use base64::Engine as _;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use limen_dominio::origen::{EquipoId, Origen, UnidadOperativaId};
 use limen_dominio::vinculacion::{CodigoVinculacion, ErrorVinculacion};
-use limen_infra_plataforma::guardar_origen;
+use limen_infra_plataforma::{guardar_origen, origen_del_equipo};
 use p256::SecretKey;
+use p256::ecdsa::signature::Signer;
+use p256::ecdsa::{Signature, SigningKey};
 use p256::elliptic_curve::rand_core::OsRng;
 use serde_json::{Value, json};
 use uuid::Uuid;
+
+use crate::{ConfigNube, Credenciales};
 
 /// A dónde se canjea el código si el equipo no dice otra cosa.
 pub const PANEL_POR_OMISION: &str = "https://limen.megabrisas.com";
@@ -26,6 +32,11 @@ pub const VAR_PANEL: &str = "LIMEN_PANEL_URL";
 
 pub const ARCHIVO_CLAVE: &str = "clave-equipo.json";
 pub const ARCHIVO_VINCULACION: &str = "vinculacion.json";
+/// La marca que deja el equipo cuando el panel le dice que ya no es suyo (lo retiraron): sin
+/// vincular de nuevo con un código no vuelve a pedir acceso.
+const ARCHIVO_REVOCADA: &str = "vinculacion-revocada.txt";
+/// Lo que responde el Worker cuando el equipo está retirado, sin vincular o su firma no vale.
+const MOTIVO_NO_VIGENTE: &str = "dispositivo_invalido";
 
 #[derive(Debug, thiserror::Error)]
 pub enum ErrorDeVinculacion {
@@ -108,9 +119,12 @@ fn interpretar(estado: u16, cuerpo: &Value) -> Result<EquipoVinculado, ErrorDeVi
     })
 }
 
-/// ¿Este equipo ya se vinculó con un código? (Existe su clave y a dónde se vinculó.)
+/// ¿Este equipo está vinculado? Existe su clave y a dónde se vinculó, y el panel no lo ha
+/// retirado (la marca de revocación la deja `pedir_acceso` y la borra una vinculación nueva).
 pub fn esta_vinculado(carpeta: &Path) -> bool {
-    carpeta.join(ARCHIVO_CLAVE).is_file() && carpeta.join(ARCHIVO_VINCULACION).is_file()
+    carpeta.join(ARCHIVO_CLAVE).is_file()
+        && carpeta.join(ARCHIVO_VINCULACION).is_file()
+        && !carpeta.join(ARCHIVO_REVOCADA).exists()
 }
 
 /// Vincula este equipo: genera su par de claves, canjea el código en el panel y guarda su
@@ -151,7 +165,108 @@ fn guardar(
     let datos = json!({ "panel": panel, "huella": vinculado.huella });
     std::fs::write(carpeta.join(ARCHIVO_VINCULACION), datos.to_string())
         .map_err(|e| falla(e.to_string()))?;
+    // Una vinculación nueva deja sin efecto la revocación anterior.
+    drop(std::fs::remove_file(carpeta.join(ARCHIVO_REVOCADA)));
     guardar_origen(&carpeta.join("equipo.txt"), &vinculado.origen).map_err(falla)
+}
+
+/// Lo que el Worker responde al pedir el acceso, ya interpretado: la dirección de la nube
+/// y el token con que este equipo entra.
+fn acceso_desde(estado: u16, cuerpo: &Value) -> Result<ConfigNube, ErrorDeVinculacion> {
+    if estado != 200 {
+        let motivo = cuerpo
+            .get("error")
+            .and_then(Value::as_str)
+            .unwrap_or("rechazado");
+        return Err(ErrorDeVinculacion::Rechazado(motivo.to_owned()));
+    }
+    let texto = |clave: &str| {
+        cuerpo
+            .get(clave)
+            .and_then(Value::as_str)
+            .ok_or_else(|| ErrorDeVinculacion::Respuesta(format!("falta `{clave}`")))
+    };
+    Ok(ConfigNube {
+        url: texto("url")?.to_owned(),
+        credenciales: Some(Credenciales::con_token(texto("token")?.to_owned())),
+    })
+}
+
+/// La firma del equipo sobre un mensaje: ECDSA P-256 con SHA-256, en el formato de
+/// `WebCrypto` (r y s juntos, 64 bytes) y en base64 sin relleno.
+fn firmar(secreta: &SecretKey, mensaje: &str) -> String {
+    let firma: Signature = SigningKey::from(secreta).sign(mensaje.as_bytes());
+    URL_SAFE_NO_PAD.encode(firma.to_bytes())
+}
+
+async fn enviar(
+    cliente: &reqwest::Client,
+    url: &str,
+    cuerpo: &Value,
+) -> Result<(u16, Value), ErrorDeVinculacion> {
+    let respuesta = cliente
+        .post(url)
+        .json(cuerpo)
+        .send()
+        .await
+        .map_err(|e| ErrorDeVinculacion::Red(e.to_string()))?;
+    let estado = respuesta.status().as_u16();
+    let cuerpo = respuesta
+        .json()
+        .await
+        .map_err(|e| ErrorDeVinculacion::Respuesta(e.to_string()))?;
+    Ok((estado, cuerpo))
+}
+
+/// Pide al Worker del panel el acceso de este equipo a la nube. El equipo prueba quién es
+/// firmando un desafío con su clave privada (que nunca sale de él); si sigue vinculado y
+/// no lo han retirado, recibe un token. Se pide en cada conexión: un equipo retirado no
+/// vuelve a entrar.
+pub async fn pedir_acceso(carpeta: &Path) -> Result<ConfigNube, ErrorDeVinculacion> {
+    let falla = ErrorDeVinculacion::Guardar;
+    let leer = |nombre: &str| {
+        std::fs::read_to_string(carpeta.join(nombre)).map_err(|e| falla(format!("{nombre}: {e}")))
+    };
+    let origen = origen_del_equipo(&carpeta.join("equipo.txt"), "BRISAS").map_err(falla)?;
+    let secreta = SecretKey::from_jwk_str(&leer(ARCHIVO_CLAVE)?)
+        .map_err(|e| ErrorDeVinculacion::Guardar(format!("{ARCHIVO_CLAVE}: {e}")))?;
+    let datos: Value = serde_json::from_str(&leer(ARCHIVO_VINCULACION)?)
+        .map_err(|e| ErrorDeVinculacion::Guardar(format!("{ARCHIVO_VINCULACION}: {e}")))?;
+    let panel = datos
+        .get("panel")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ErrorDeVinculacion::Guardar("falta `panel`".to_owned()))?;
+    let url = format!("{}/api/token", panel.trim_end_matches('/'));
+    let equipo = origen.equipo.to_string();
+    let cliente = reqwest::Client::new();
+
+    let (estado, cuerpo) = enviar(&cliente, &url, &json!({ "equipo": equipo })).await?;
+    let desafio = match (estado, cuerpo.get("desafio").and_then(Value::as_str)) {
+        (200, Some(desafio)) => desafio.to_owned(),
+        _ => {
+            return Err(acceso_desde(estado, &cuerpo)
+                .err()
+                .unwrap_or_else(|| ErrorDeVinculacion::Respuesta("falta `desafio`".to_owned())));
+        }
+    };
+    let firma = firmar(&secreta, &desafio);
+    let (estado, cuerpo) = enviar(
+        &cliente,
+        &url,
+        &json!({ "equipo": equipo, "desafio": desafio, "firma": firma }),
+    )
+    .await?;
+    let acceso = acceso_desde(estado, &cuerpo);
+    if matches!(&acceso, Err(ErrorDeVinculacion::Rechazado(motivo)) if motivo == MOTIVO_NO_VIGENTE)
+    {
+        // El panel ya no reconoce a este equipo: se deja constancia para que la app vuelva
+        // a pedir el código en vez de seguir intentando.
+        drop(std::fs::write(
+            carpeta.join(ARCHIVO_REVOCADA),
+            "retirado por el panel\n",
+        ));
+    }
+    acceso
 }
 
 #[cfg(test)]
@@ -230,6 +345,69 @@ mod tests {
         assert!(esta_vinculado(&carpeta));
         let identidad = std::fs::read_to_string(carpeta.join("equipo.txt")).unwrap();
         assert!(identidad.contains(EQUIPO), "{identidad}");
+        drop(std::fs::remove_dir_all(carpeta));
+    }
+
+    #[test]
+    fn la_firma_es_de_64_bytes_y_se_verifica_con_la_publica() {
+        use p256::ecdsa::VerifyingKey;
+        use p256::ecdsa::signature::Verifier;
+
+        let secreta = SecretKey::random(&mut OsRng);
+        let firma = firmar(&secreta, "desafio-de-prueba");
+
+        let bytes = URL_SAFE_NO_PAD.decode(&firma).unwrap();
+        assert_eq!(bytes.len(), 64, "r y s juntos, como WebCrypto");
+        let firma = Signature::from_slice(&bytes).unwrap();
+        let publica = VerifyingKey::from(&SigningKey::from(&secreta));
+        assert!(publica.verify(b"desafio-de-prueba", &firma).is_ok());
+        assert!(
+            publica.verify(b"otro-desafio", &firma).is_err(),
+            "la firma sólo vale para ese desafío"
+        );
+    }
+
+    #[test]
+    fn el_acceso_trae_la_url_de_la_nube_y_el_token() {
+        let respuesta = json!({ "url": "wss://nube.prueba", "token": "abc.def" });
+
+        let config = acceso_desde(200, &respuesta).unwrap();
+
+        assert_eq!(config.url, "wss://nube.prueba");
+        let credenciales = config.credenciales.unwrap();
+        assert_eq!(credenciales.nivel, crate::Nivel::Token);
+        assert_eq!(credenciales.clave, "abc.def");
+    }
+
+    #[test]
+    fn un_equipo_retirado_recibe_el_motivo_y_ningun_acceso() {
+        let error = acceso_desde(401, &json!({ "error": "dispositivo_invalido" })).unwrap_err();
+        assert_eq!(error.codigo(), "dispositivo_invalido");
+    }
+
+    #[test]
+    fn un_equipo_revocado_ya_no_esta_vinculado_hasta_vincularse_de_nuevo() {
+        let carpeta = std::env::temp_dir().join(format!("limen-vinc-{}", Uuid::now_v7()));
+        let par = generar_par().unwrap();
+        let vinculado = interpretar(
+            200,
+            &json!({ "equipo": EQUIPO, "unidad": "BRISAS", "huella": "abc" }),
+        )
+        .unwrap();
+        guardar(&carpeta, "https://panel.prueba", &par, &vinculado).unwrap();
+        assert!(esta_vinculado(&carpeta));
+
+        std::fs::write(carpeta.join(ARCHIVO_REVOCADA), "retirado").unwrap();
+        assert!(
+            !esta_vinculado(&carpeta),
+            "retirado: vuelve a pedir el código"
+        );
+
+        guardar(&carpeta, "https://panel.prueba", &par, &vinculado).unwrap();
+        assert!(
+            esta_vinculado(&carpeta),
+            "una vinculación nueva borra la marca"
+        );
         drop(std::fs::remove_dir_all(carpeta));
     }
 }

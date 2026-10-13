@@ -108,6 +108,25 @@ export function motivo_de_rechazo(emitido_ms, usado, anulado, ahora_ms) {
 }
 
 /**
+ * ¿Puede conectarse un equipo con ese estado? Vacío si sí; si no, el código de la regla.
+ * @param {boolean} vinculado
+ * @param {boolean} retirado
+ * @returns {string}
+ */
+export function motivo_de_rechazo_del_equipo(vinculado, retirado) {
+    let deferred1_0;
+    let deferred1_1;
+    try {
+        const ret = wasm.motivo_de_rechazo_del_equipo(vinculado, retirado);
+        deferred1_0 = ret[0];
+        deferred1_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+    }
+}
+
+/**
  * Cuántos minutos vale un código.
  * @returns {number}
  */

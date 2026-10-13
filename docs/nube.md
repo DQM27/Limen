@@ -87,10 +87,11 @@ lo de la suya**.
 
 ## 5. Identidad de los equipos
 
-Mientras no exista el bloque M (vinculación con código de un solo uso y par de claves
-propio, como en Lattis), **cada equipo entra con su propio usuario de base de datos**,
-limitado a lo que le corresponde. Cuando exista el bloque M se reemplaza por la firma del
-equipo sin cambiar el flujo de datos.
+**Hecho (bloque M):** el equipo se vincula con un código de un solo uso, genera su par de claves
+P-256 y, en cada conexión, firma un desafío; el Worker del panel comprueba la firma y le da un token
+de la base. El equipo no lleva ninguna clave de la base (`panel.md`, «Acceso del equipo a la nube»).
+Queda pendiente acotar el token a lo que cada equipo necesita (hoy es un usuario de base compartido
+con rol `EDITOR`) y cortar al instante las conexiones de un equipo retirado.
 
 ## 6. Orden de construcción
 
@@ -101,7 +102,8 @@ equipo sin cambiar el flujo de datos.
 4. ✅ Bajada: carga inicial de un equipo nuevo, en tiempo real y al volver la conexión
    (secciones 9 y 10).
 5. Indicador de incidente al unir lo de varios equipos.
-6. Usuarios desde la nube (L4, L5) y la hora de la nube para los equipos sin NTP.
+6. ✅ Usuarios desde la nube: bajan al equipo y el login es local. ⏳ Crearlos y administrarlos desde
+   el panel, la hora de la nube para los equipos sin NTP, y L5 (sesión única).
 7. ✅ Reintentos con espera aleatoria para que miles de equipos no vuelvan a la vez
    (sección 11).
 
@@ -252,3 +254,19 @@ duplicarla). Hoy la usa sólo `espera.rs`. **Ojo con el cifrado:** `rand` sirve 
 jitter, pero claves, sales y nonces deben salir del generador del sistema operativo
 (`getrandom`/`OsRng`) o de los crates de cifrado, nunca de un generador previsible; que
 `rand` esté a mano no es motivo para usarla ahí.
+
+## 12. Lo que aprendimos de SurrealDB (sincronización)
+
+- **`SHOW CHANGES FOR TABLE … LIMIT n` aplica el límite *antes* de filtrar por tabla.** Si entre el
+  cursor de una tabla tranquila (`hecho`) y su próxima entrada hay más de `n` transacciones de otras
+  tablas, devuelve cero y el cursor no avanza nunca (el hecho de una entrada se quedó sin subir).
+  Por eso la subida y la bajada usan **un solo cursor para toda la base**
+  (`SHOW CHANGES FOR DATABASE`) y reparten los cambios por tabla.
+- **El registro guarda cada versión de una fila.** Aplicarlas todas escribía versiones intermedias
+  que rebotaban entre el equipo y la nube sin parar. Por tanda sólo se aplica la última versión de
+  cada fila (`bajada::colapsar`).
+- Un texto con forma de UUID que llega como parámetro JSON se convierte en `uuid`: los campos de
+  texto necesitan `<string>$id`.
+- Un usuario de base de datos no entra con Basic auth: hay que pasar por `/signin` y usar el token.
+- Con `DEFINE USER … ROLES VIEWER` se lee todo (incluida `usuario`), aunque las tablas tengan
+  `PERMISSIONS NONE`.

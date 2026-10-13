@@ -76,6 +76,9 @@ describe('pantalla de vinculación', () => {
     await enviar(fixture, raiz);
 
     expect(raiz.textContent).toContain('Cierra la aplicación y ábrela de nuevo');
+    expect(raiz.textContent, 'sin marco, hace falta un botón para cerrarla').toContain(
+      'Cerrar la aplicación',
+    );
   });
 
   it('el error del código se muestra junto al campo y no reinicia', async () => {

@@ -8,9 +8,7 @@ export const BASE = 'principal';
 // /signin y se usa el token (dura 1 h). Se guarda por usuario mientras viva el Worker.
 const sesiones = new Map();
 
-async function token(env, usuario, clave) {
-  const guardada = sesiones.get(usuario);
-  if (guardada && Date.now() < guardada.hasta) return guardada.token;
+async function iniciarSesion(env, usuario, clave) {
   const respuesta = await fetch(`${env.SURREAL_URL}/signin`, {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
@@ -18,8 +16,21 @@ async function token(env, usuario, clave) {
   });
   const cuerpo = await respuesta.json();
   if (!cuerpo.token) throw new Error('signin');
-  sesiones.set(usuario, { token: cuerpo.token, hasta: Date.now() + 50 * 60 * 1000 });
   return cuerpo.token;
+}
+
+async function token(env, usuario, clave) {
+  const guardada = sesiones.get(usuario);
+  if (guardada && Date.now() < guardada.hasta) return guardada.token;
+  const nuevo = await iniciarSesion(env, usuario, clave);
+  sesiones.set(usuario, { token: nuevo, hasta: Date.now() + 50 * 60 * 1000 });
+  return nuevo;
+}
+
+/** Un token recién emitido (no el guardado): el de un equipo que acaba de probar quién es. */
+export function tokenNuevo(env, rol) {
+  const [usuario, clave] = rol(env);
+  return iniciarSesion(env, usuario, clave);
 }
 
 /** Quién consulta: el usuario de sólo lectura o el que puede escribir. */

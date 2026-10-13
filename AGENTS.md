@@ -44,23 +44,22 @@ cargo test
 
 ## Estado actual y siguiente paso
 
-El **núcleo** (todo lo que funciona dentro de un equipo, sin pantalla ni nube) está
-completo y probado: dominio, aplicación, `infra-memoria`, `infra-surreal`, `infra-plataforma`
-y `composicion`. Cubre contratistas, empresas, gafetes, ingresos y salidas (contratista,
-proveedor y correo), personal KOF con su gafete provisional, el buscador, las consultas
-de lectura y el inicio de sesión (bloque L: cédula y clave, Argon2id, bloqueo tras 5
-fallos; la app arranca sin sesión). **Los usuarios son globales y vienen de la nube**: el
-equipo no los crea ni los administra; sólo inicia sesión y cambia la propia clave. Al
-desarrollar, la base se siembra con usuarios de prueba (`composicion/src/semilla.rs`,
-sólo en depuración). El detalle está en [`docs/reglas.md`](docs/reglas.md) y en la hoja de ruta de
-`docs/arquitectura.md` (sección 13).
+El **núcleo** (todo lo que funciona dentro de un equipo) está completo y probado: dominio, aplicación,
+`infra-memoria`, `infra-surreal`, `infra-plataforma` y `composicion`. La **app de escritorio** (Tauri +
+Angular) tiene todas sus pantallas. La **nube** funciona de punta a punta: la app sincroniza sola y en
+tiempo real con SurrealDB Cloud, y un equipo se vincula con un código que el administrador emite en el
+**panel web** (`apps/panel`, un Worker de Cloudflare con una página en Angular, en
+`limen.megabrisas.com`); tras vincularse, el equipo entra a la nube con un token que le da el Worker,
+sin claves en el equipo. **Los usuarios son globales y vienen de la nube**: el equipo sólo inicia
+sesión y cambia la propia clave. Al desarrollar, la base se siembra con usuarios de prueba
+(`composicion/src/semilla.rs`, sólo en depuración). El detalle está en
+[`docs/continuar.md`](docs/continuar.md) (empieza con «Estado al 13 de octubre»), `docs/nube.md`,
+`docs/panel.md` y `docs/reglas.md`.
 
-Lo que sigue, en este orden: **(1)** app de escritorio con Tauri (`apps/escritorio`),
-empezando por contratistas: buscar, registrar, entrar y salir; **(2)** el resto de las
-pantallas, empezando por el inicio de sesión (el núcleo ya está); **(3)** equipos
-(bloque M); **(4)** la nube
-(`infra-nube`: SurrealDB Cloud gratis en `aws-use1` para empezar, sincronización, Worker de
-Cloudflare); **(5)** móvil. El almacén clave-valor (configuración del equipo) se define
+Lo que sigue, en este orden: **(1)** usuarios en el panel (crear, desactivar, clave temporal), con sus
+reglas en `crates/dominio`; **(2)** aviso «sincronizando…» en el primer arranque; **(3)** historiales y
+contratistas en el panel; **(4)** cortar al instante a un equipo retirado; **(5)** cifrar la clave
+privada del equipo en reposo; **(6)** móvil. El almacén clave-valor (configuración del equipo) se define
 cuando la pantalla diga qué necesita.
 
 El personal KOF cuenta como "adentro" mientras tenga un gafete provisional sin devolver
@@ -70,7 +69,9 @@ pantalla "dentro" junta las cuatro vías en un solo lugar (útil en una emergenc
 Regla de oro para la sincronización: **la portería nunca se bloquea por la red.** Sin
 conexión se registra con las reglas locales; los choques entre equipos se detectan al
 sincronizar y marcan el registro con un indicador de incidente, sin borrar nada. Léelo completo en
-[`docs/operacion-sin-conexion.md`](docs/operacion-sin-conexion.md) antes de tocar la nube.
+[`docs/operacion-sin-conexion.md`](docs/operacion-sin-conexion.md) antes de tocar la nube, y la
+sección 12 de [`docs/nube.md`](docs/nube.md) (lo que aprendimos de SurrealDB) antes de tocar la
+sincronización.
 
 ## Cosas que ya costaron un tropiezo
 
@@ -79,6 +80,7 @@ sincronizar y marcan el registro con un indicador de incidente, sin borrar nada.
   con mensaje, sin indexar, funciones de menos de 100 líneas).
 - Todo puerto o repositorio nuevo se implementa en `infra-memoria` y en `infra-surreal`,
   y se prueba con la batería de `pruebas-contrato` (que corre contra los dos).
+- **Nunca empujes trabajo nuevo a una rama ya fusionada**: rama nueva y PR nuevo.
 - Lo que debe ser único entre equipos usa una clave natural en la base (`presencia:⟨cédula⟩`,
   `prestamo_gafete:⟨TIPO-NÚMERO⟩`…): la base rechaza al segundo y el caso de uso traduce el
   choque al error de negocio. El nombre del índice o de la tabla va en `infra-surreal/src/error.rs`.
