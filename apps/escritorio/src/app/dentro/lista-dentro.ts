@@ -17,7 +17,9 @@ import { Atajo } from '../compartido/atajo';
 import { Avisos } from '../compartido/avisos';
 import { DialogoConfirmar, type DatosConfirmar } from '../compartido/dialogo-confirmar';
 import { soloFecha, soloHora } from '../compartido/formato';
+import { resaltable } from '../compartido/tabla/resaltado';
 import { Tabla } from '../compartido/tabla/tabla';
+import { reglasDelNucleo } from '../nucleo/busqueda';
 import { dentro, registrarSalida, registrarSalidaPorGafete } from '../nucleo/comandos';
 import { esErrorApp } from '../nucleo/tauri';
 import type { PersonaAdentro, Via } from '../nucleo/tipos';
@@ -84,6 +86,7 @@ export class ListaDentro implements OnInit {
   protected readonly visibles = computed(() => filtrarPorGafete(this.filas(), this.filtro()));
 
   protected readonly idFila = (fila: PersonaAdentro): string => `${fila.via}-${fila.ingreso_id}`;
+  protected readonly reglas = reglasDelNucleo;
   protected readonly claseFila = (fila: PersonaAdentro): string | undefined =>
     fila.demasiado_tiempo ? 'fila-demasiado-tiempo' : undefined;
 
@@ -92,8 +95,11 @@ export class ListaDentro implements OnInit {
 
   private columnasBase(): ColDef<PersonaAdentro>[] {
     return [
-      { field: 'identidad', headerName: 'Cédula / código', flex: 1.2, minWidth: 130 },
-      { field: 'nombre', headerName: 'Nombre', flex: 2, minWidth: 200 },
+      resaltable(
+        { field: 'identidad', headerName: 'Cédula / código', flex: 1.2, minWidth: 130 },
+        'IDENTIFICACION',
+      ),
+      resaltable({ field: 'nombre', headerName: 'Nombre', flex: 2, minWidth: 200 }, 'NOMBRE'),
       {
         colId: 'via',
         headerName: 'Vía',
@@ -101,7 +107,10 @@ export class ListaDentro implements OnInit {
         minWidth: 110,
         valueGetter: (p) => (p.data ? etiquetaDeVia(p.data.via) : ''),
       },
-      { field: 'procedencia', headerName: 'Empresa / motivo', flex: 1.5, minWidth: 150 },
+      resaltable(
+        { field: 'procedencia', headerName: 'Empresa / motivo', flex: 1.5, minWidth: 150 },
+        'EMPRESA',
+      ),
       {
         colId: 'medio',
         headerName: 'Medio',

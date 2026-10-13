@@ -31,6 +31,7 @@ use limen_dominio::cedula::Cedula;
 use limen_dominio::contratista::{Contratista, ContratistaId, ErrorContratista};
 use limen_dominio::empresa::{Empresa, EmpresaId};
 use limen_dominio::empresa_proveedora::{EmpresaProveedora, EmpresaProveedoraId};
+use limen_dominio::filtro_de_tabla::Operacion;
 use limen_dominio::gafete::{NumeroGafete, Portador, Resolucion, TipoGafete};
 use limen_dominio::ingreso_contratista::ErrorIngreso;
 use limen_dominio::ingreso_proveedor::ErrorIngresoProveedor;
@@ -38,6 +39,7 @@ use limen_dominio::medio::{Medio, TipoMedio};
 use limen_dominio::personal_kof::{PersonalKof, PersonalKofId};
 use limen_dominio::presencia::{Via, YaEstaAdentro};
 use limen_dominio::rango_fechas::Atajo;
+use limen_dominio::resaltado::{Campo, Segmento};
 use limen_dominio::tipo_ingreso::TipoIngreso;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -68,6 +70,14 @@ pub fn leer_via(codigo: &str) -> Result<Via, ErrorEntrada> {
     Via::desde_codigo(codigo).ok_or(ErrorEntrada::ViaInvalida)
 }
 
+pub fn leer_campo_resaltable(codigo: &str) -> Result<Campo, ErrorEntrada> {
+    Campo::desde_codigo(codigo).ok_or(ErrorEntrada::CampoInvalido)
+}
+
+pub fn leer_operacion_de_filtro(codigo: &str) -> Result<Operacion, ErrorEntrada> {
+    Operacion::desde_codigo(codigo).ok_or(ErrorEntrada::OperacionInvalida)
+}
+
 fn leer_medio(codigo: &str) -> Result<TipoMedio, ErrorEntrada> {
     match codigo {
         A_PIE => Ok(TipoMedio::APie),
@@ -77,6 +87,23 @@ fn leer_medio(codigo: &str) -> Result<TipoMedio, ErrorEntrada> {
 }
 
 // --- Salida: lo que la interfaz muestra ---
+
+/// Un tramo de un texto: la pantalla pinta los que vienen `resaltado`
+/// (regla N1). Los segmentos de un texto, en orden, lo reconstruyen exacto.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SegmentoDto {
+    pub texto: String,
+    pub resaltado: bool,
+}
+
+impl From<&Segmento> for SegmentoDto {
+    fn from(segmento: &Segmento) -> Self {
+        Self {
+            texto: segmento.texto.clone(),
+            resaltado: segmento.resaltado,
+        }
+    }
+}
 
 /// Una persona que está adentro, por cualquiera de las cuatro vías.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -288,6 +315,24 @@ impl From<EntradaContratista> for EntradaRegistradaDto {
 }
 
 // --- Entrada: lo que llena el operador ---
+
+/// Un texto de una fila de la tabla y de qué clase es (`NOMBRE`,
+/// `IDENTIFICACION` o `EMPRESA`): con eso el núcleo decide con qué regla lo
+/// compara (regla N2).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct CampoDeTextoEntrada {
+    pub campo: String,
+    pub texto: String,
+}
+
+/// Una celda y el filtro de columna que se le aplica: `CONTIENE`,
+/// `NO_CONTIENE`, `IGUAL`, `DISTINTO`, `EMPIEZA_CON` o `TERMINA_CON`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct PedidoDeFiltroEntrada {
+    pub operacion: String,
+    pub celda: String,
+    pub filtro: String,
+}
 
 /// El formulario de un contratista, tal cual se escribió. Las reglas (cédula,
 /// nombre, PRAIND) las aplica el dominio; aquí sólo se lee el formato.

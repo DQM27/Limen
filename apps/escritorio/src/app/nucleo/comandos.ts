@@ -2,6 +2,8 @@ import type {
   AtajoFecha,
   Cambio,
   CambioGafete,
+  CampoDeTexto,
+  CampoResaltable,
   CandidatoIngreso,
   ContratistaEntrada,
   Empresa,
@@ -13,8 +15,10 @@ import type {
   FilaContratista,
   Gafete,
   Historial,
+  PedidoDeFiltro,
   PersonaAdentro,
   PersonalKof,
+  Segmento,
   TipoGafete,
   UsuarioActual,
   Via,
@@ -29,6 +33,35 @@ import { invocar, type ErrorApp } from './tauri';
 
 export function listarContratistas(): Promise<FilaContratista[]> {
   return invocar<FilaContratista[]>('listar_contratistas');
+}
+
+/**
+ * Cada texto partido en segmentos, con lo que coincide con lo buscado
+ * resaltado (regla N1). Devuelve un arreglo de segmentos por cada texto, en el
+ * mismo orden. No toca datos: sólo aplica la regla del núcleo.
+ */
+export function resaltarCoincidencias(
+  buscado: string,
+  campo: CampoResaltable,
+  textos: string[],
+): Promise<Segmento[][]> {
+  return invocar<Segmento[][]>('resaltar_coincidencias', { buscado, campo, textos });
+}
+
+/**
+ * De cada fila de una tabla, si coincide con lo escrito en el buscador
+ * (regla N2). Una respuesta por fila, en el mismo orden.
+ */
+export function filasQueCoinciden(buscado: string, filas: CampoDeTexto[][]): Promise<boolean[]> {
+  return invocar<boolean[]>('filas_que_coinciden', { buscado, filas });
+}
+
+/**
+ * De cada celda, si cumple el filtro de columna que se le pide (regla N2).
+ * Una respuesta por pedido, en el mismo orden.
+ */
+export function celdasQueCumplen(pedidos: PedidoDeFiltro[]): Promise<boolean[]> {
+  return invocar<boolean[]>('celdas_que_cumplen', { pedidos });
 }
 
 /** Empresas de contratistas cuyo nombre coincide, de la mejor a la peor. */

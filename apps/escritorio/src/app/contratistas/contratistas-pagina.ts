@@ -7,7 +7,9 @@ import type { CellClickedEvent, ColDef } from 'ag-grid-community';
 import { Atajo } from '../compartido/atajo';
 import { Avisos } from '../compartido/avisos';
 import { fechaCorta } from '../compartido/formato';
+import { resaltable } from '../compartido/tabla/resaltado';
 import { Tabla } from '../compartido/tabla/tabla';
+import { reglasDelNucleo } from '../nucleo/busqueda';
 import { listarContratistas } from '../nucleo/comandos';
 import { esErrorApp } from '../nucleo/tauri';
 import type { FilaContratista } from '../nucleo/tipos';
@@ -19,9 +21,6 @@ import {
   type ResultadoFormularioContratista,
 } from './formulario-contratista';
 import { CambiosDeLaNube } from '../nucleo/cambios-de-la-nube';
-
-/** El buscador general sólo mira lo que identifica a la persona. */
-const fueraDelBuscador = (): string => '';
 
 @Component({
   selector: 'app-contratistas-pagina',
@@ -39,18 +38,24 @@ export class ContratistasPagina {
   protected readonly error = signal<string | null>(null);
 
   protected readonly idFila = (fila: FilaContratista): string => fila.id;
+  protected readonly reglas = reglasDelNucleo;
 
   protected readonly columnas: ColDef<FilaContratista>[] = [
-    { field: 'cedula', headerName: 'Cédula', flex: 1.2, minWidth: 120 },
-    { field: 'nombre', headerName: 'Nombre', flex: 2, minWidth: 220 },
-    { field: 'empresa_nombre', headerName: 'Empresa', flex: 1.5, minWidth: 150 },
+    resaltable(
+      { field: 'cedula', headerName: 'Cédula', flex: 1.2, minWidth: 120 },
+      'IDENTIFICACION',
+    ),
+    resaltable({ field: 'nombre', headerName: 'Nombre', flex: 2, minWidth: 220 }, 'NOMBRE'),
+    resaltable(
+      { field: 'empresa_nombre', headerName: 'Empresa', flex: 1.5, minWidth: 150 },
+      'EMPRESA',
+    ),
     {
       field: 'tipo_ingreso',
       headerName: 'Tipo',
       flex: 1,
       minWidth: 100,
       valueGetter: (p) => (p.data ? etiquetaDeTipo(p.data.tipo_ingreso) : ''),
-      getQuickFilterText: fueraDelBuscador,
     },
     {
       field: 'fecha_vencimiento_praind',
@@ -59,7 +64,6 @@ export class ContratistasPagina {
       flex: 1.2,
       minWidth: 140,
       valueFormatter: (p) => fechaCorta(p.value),
-      getQuickFilterText: fueraDelBuscador,
     },
     {
       colId: 'estado',
@@ -67,7 +71,6 @@ export class ContratistasPagina {
       flex: 1.2,
       minWidth: 150,
       valueGetter: (p) => (p.data ? etiquetaDeAcceso(p.data.acceso) : ''),
-      getQuickFilterText: fueraDelBuscador,
     },
     {
       colId: 'accion',

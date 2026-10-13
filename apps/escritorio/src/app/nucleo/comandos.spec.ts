@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import {
   buscarEmpresas,
   buscarParaIngreso,
+  resaltarCoincidencias,
   dentro,
   prepararIngreso,
   registrarEntradaContratista,
@@ -69,6 +70,15 @@ describe('comandos del núcleo', () => {
   it('buscarEmpresas pasa el texto y el límite', async () => {
     await buscarEmpresas('acm', 10);
     expect(invoke).toHaveBeenCalledWith('buscar_empresas', { texto: 'acm', limite: 10 });
+  });
+
+  it('resaltarCoincidencias pasa lo buscado, el campo y los textos', async () => {
+    await resaltarCoincidencias('jos pe', 'NOMBRE', ['José Peña']);
+    expect(invoke).toHaveBeenCalledWith('resaltar_coincidencias', {
+      buscado: 'jos pe',
+      campo: 'NOMBRE',
+      textos: ['José Peña'],
+    });
   });
 
   it('registrarEmpresa pasa el nombre tal cual', async () => {

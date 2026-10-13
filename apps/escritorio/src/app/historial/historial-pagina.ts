@@ -11,7 +11,9 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import type { ColDef } from 'ag-grid-community';
 import { soloFecha, soloHora } from '../compartido/formato';
+import { resaltable } from '../compartido/tabla/resaltado';
 import { Tabla } from '../compartido/tabla/tabla';
+import { reglasDelNucleo } from '../nucleo/busqueda';
 import { etiquetaDeVia, textoGafete, textoMedio, textoOperador } from '../dentro/etiquetas';
 import { atajosDeFecha, listarHistorial } from '../nucleo/comandos';
 import { esErrorApp } from '../nucleo/tauri';
@@ -51,10 +53,14 @@ export class HistorialPagina implements OnInit {
   protected readonly textoAtajo = computed(() => this.atajo()?.corta ?? 'Personalizado');
 
   protected readonly idFila = (fila: Movimiento): string => `${fila.via}-${fila.ingreso_id}`;
+  protected readonly reglas = reglasDelNucleo;
 
   protected readonly columnas: ColDef<Movimiento>[] = [
-    { field: 'identidad', headerName: 'Cédula / código', flex: 1.2, minWidth: 130 },
-    { field: 'nombre', headerName: 'Nombre', flex: 2, minWidth: 200 },
+    resaltable(
+      { field: 'identidad', headerName: 'Cédula / código', flex: 1.2, minWidth: 130 },
+      'IDENTIFICACION',
+    ),
+    resaltable({ field: 'nombre', headerName: 'Nombre', flex: 2, minWidth: 200 }, 'NOMBRE'),
     {
       colId: 'via',
       headerName: 'Vía',
@@ -62,7 +68,10 @@ export class HistorialPagina implements OnInit {
       minWidth: 110,
       valueGetter: (p) => (p.data ? etiquetaDeVia(p.data.via) : ''),
     },
-    { field: 'procedencia', headerName: 'Empresa / motivo', flex: 1.5, minWidth: 150 },
+    resaltable(
+      { field: 'procedencia', headerName: 'Empresa / motivo', flex: 1.5, minWidth: 150 },
+      'EMPRESA',
+    ),
     {
       colId: 'medio',
       headerName: 'Medio',

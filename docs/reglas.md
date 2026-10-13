@@ -138,6 +138,13 @@ reconstruir cómo estaba el contratista el día que entró.
 | M4 | Cada equipo pertenece a una **unidad operativa** (el "sitio" de Lattis). Los catálogos (contratistas, empresas, empresas proveedoras, personal KOF, usuarios) son **globales**: iguales en todas las unidades. Gafetes, ingresos, presencia, préstamos e historial son **de la unidad**: un equipo baja sólo los de la suya. Ver `nube.md`. | ✅ en el equipo: cada hecho lleva su unidad y su equipo, y lo de la unidad lleva su campo `unidad` (los gafetes, también en la clave). El reparto llega con la sincronización. |
 | M5 | El equipo es desechable: la nube es la fuente de verdad. Guarda una copia local y trabaja sin conexión; lo pendiente se sube al volver la red. | ✅ subida y bajada en tiempo real, carga inicial de un equipo nuevo (`nube.md`). |
 
+## N. Buscador
+
+| Código | Regla | Estado |
+|---|---|---|
+| N1 | Al buscar, lo que coincide se **resalta** en los resultados con la misma regla del buscador: sin importar mayúsculas ni tildes (la Ñ cuenta como N), una palabra completa se resalta entera; el comienzo de una palabra o un fragmento dentro de ella, sólo lo escrito; con errores de tecleo, la palabra parecida entera. Cada palabra escrita se resalta donde aparece; la que no aparece en ese texto no marca nada (qué filas coinciden lo decide el buscador o el filtro, y una búsqueda puede repartir sus palabras entre columnas: nombre y empresa). La cédula se resalta ignorando guiones, puntos y espacios. El dominio entrega el texto partido en segmentos (`dominio/resaltado.rs`); la pantalla sólo los pinta. | ✅ |
+| N2 | El buscador de una tabla y sus filtros de texto por columna se deciden en el núcleo; la pantalla sólo pregunta y aplica la respuesta, sin repetir ninguna regla. **Buscador:** cada palabra escrita debe aparecer en alguna columna de la fila, en cualquier orden, con las reglas del buscador (palabra completa, comienzo, dentro de una palabra o con errores de tecleo); si son sólo números, busca por cédula o código y también dentro de la empresa; vacío no excluye a nadie. Es la misma coincidencia que usa el resaltado (N1). **Filtros de columna:** sin importar mayúsculas ni tildes (la Ñ cuenta como N); «contiene» parte por palabras en cualquier orden y «no contiene» es su contrario; «igual», «distinto», «empieza con» y «termina con» comparan una frase; sin texto de filtro todo coincide. | ✅ |
+
 ## Fuera de alcance por ahora
 
 Visitas con cita agendada y salidas de rutas: no están aprobadas del todo y no se

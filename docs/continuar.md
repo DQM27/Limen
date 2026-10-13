@@ -181,3 +181,121 @@ como incidente los choques entre equipos.
 - **Nada se mergea a `main` sin un PR con su CI**; los PR se abren cuando el dueño lo
   indica o tras fusionar los pendientes.
 - Los datos reales del cliente nunca entran al repositorio.
+
+## Sesión del 11 y 12 de octubre de 2026 (lo último)
+
+Ninguna de estas ramas tiene PR todavía; el dueño dirá cuándo.
+
+| Rama | Qué tiene |
+|---|---|
+| `feat/nube` | Sincronización en tiempo real; reintentos con espera aleatoria (*jitter*, `infra-nube/src/espera.rs`); decisión de escala sin Kafka ni Nginx (`nube.md`, sección 11) |
+| `feat/resaltado` (sale de `main`) | **N1:** resaltado de lo que coincide con el buscador. **N2:** el buscador y los filtros de columna de la tabla los decide el núcleo; `pliegue.ts` se eliminó. Comandos `resaltar_coincidencias`, `filas_que_coinciden` y `celdas_que_cumplen` |
+
+### Lo que falta verificar de `feat/resaltado` (en la nube no se pudo)
+
+- Compilar `apps/escritorio/src-tauri`: el contenedor de la sesión no tenía las librerías
+  GTK. Los cambios ahí son tres funciones cortas con el patrón de los demás comandos.
+- **Ver la app corriendo:** el aspecto de las marcas (`<mark>`) en modo claro y oscuro, y la
+  sensación de la pausa de 150 ms al teclear con la tabla llena.
+- **Rendimiento con muchas filas:** cada pregunta del buscador envía los textos de todas
+  las filas al núcleo. Medir con 100 000 a 500 000 contratistas sintéticos (va con la prueba
+  de rendimiento del buscador, abajo).
+
+### Hallazgo: el motor SurrealKV tiene un problema de durabilidad conocido
+
+Verificado en las fuentes originales (no sólo en resúmenes):
+
+- La documentación oficial marca SurrealKV como **beta** y recomienda RocksDB para producción
+  prudente en servidor.
+- [Issue #428 de `surrealkv`](https://github.com/surrealdb/surrealkv/issues/428): en la
+  **0.21.4 (la que usamos)**, un commit confirmado puede **perderse tras un cierre brusco**
+  (caída, `SIGKILL`, o el proceso termina antes de cerrar la base), incluso con la
+  durabilidad máxima, si ese commit coincide con la rotación de la memoria de escritura.
+  Tras un cierre limpio no se pierde nada. Corregido sólo en `main` de `surrealkv`; la última
+  versión publicada sigue siendo la 0.21.4. El reporte no probó cortes de energía.
+- [PR #420](https://github.com/surrealdb/surrealkv/pull/420): otros errores de recuperación
+  del registro de escrituras, también sólo en `main`.
+- **Por qué nos toca:** `AlmacenSurreal` no puede esperar un cierre (ver `arquitectura.md`,
+  8.2), así que al cerrar la app el proceso puede terminar antes. Se pierde **una sola
+  escritura, en silencio**. Con nuestro volumen bajo es poco frecuente, pero no está medido.
+- **No se cambia el motor por defecto todavía.** RocksDB perdería el camino del cifrado en
+  reposo (TDE de SurrealKV; el cifrado de RocksDB no está conectado en SurrealDB) y complica
+  Android. Mientras tanto: medir, cerrar ordenado si se puede, y actualizar cuando salga la
+  versión con las correcciones (junto con el cifrado, que ya estaba en espera). Ya existe
+  `surrealdb 3.3.3` (usamos la 3.3.2): revisar sus notas antes de subir.
+
+### Experimento en curso: compilar y probar RocksDB en esta PC
+
+Es una **prueba**, en la rama `exp/rocksdb` (sale de `main`); no se fusiona ni cambia el motor
+por defecto. Esta PC compila con el toolchain GNU y sin Visual Studio (ver "Cómo trabajar en
+esta máquina"): RocksDB necesita un compilador de C++ y `libclang`, así que primero hay que
+ver qué hay instalado y avisar al dueño de lo que falte, sin instalar nada a ciegas.
+
+1. **Entorno:** anotar `rustc -vV`, `g++ --version`, `clang --version` y `cmake --version`
+   (y `LIBCLANG_PATH` si hace falta).
+2. **Compilar:** activar `kv-rocksdb` en `surrealdb` (`Cargo.toml` del workspace) y agregar
+   un constructor experimental con `surrealdb::engine::local::RocksDb` junto a `en_disco`
+   en `infra-surreal/src/almacen.rs`. Medir: tiempo de compilación en frío y el incremental
+   (`cargo build --timings`), tamaño de `target` y del ejecutable en `--release`, frente a
+   SurrealKV. Si falla, guardar el error tal cual.
+3. **Pruebas:** que las pruebas de `infra-surreal` pasen con una base en disco en los dos
+   motores.
+4. **Cierre brusco** (lo que de verdad se quiere saber): un programa de prueba que abre la
+   base, confirma hechos uno por uno imprimiendo cuántos confirmó, y un proceso padre que lo
+   mata a destiempo (`taskkill /F`) y lo reabre para contar cuántos confirmados faltan.
+   Al menos 100 repeticiones por motor y con dos tamaños de escritura: realista (unos 300 B
+   por hecho) y grande (transacciones de ~500 filas, que fuerzan la rotación y reproducen el
+   reporte #428). Matar el proceso no es lo mismo que cortar la energía: decirlo en el
+   informe.
+   **Repetir cada combinación variando el parámetro `sync`** de SurrealDB (`never`,
+   `every` o una duración como `5s`), que según su documentación decide cuándo se vuelca
+   la base al sistema de archivos. Averiguar además **cuál es el valor por omisión con el
+   que abre hoy** `AlmacenSurreal::en_disco` (se abre sin parámetros) y cómo se pasa en el
+   modo embebido. RocksDB, por su parte, escribe de forma asíncrona por omisión: un cierre
+   del proceso no pierde nada, pero una caída de la máquina puede perder las últimas
+   escrituras ([wiki de RocksDB](https://github.com/facebook/rocksdb/wiki/Basic-Operations)).
+   Esto puede pesar más que la elección del motor.
+5. **Informe:** `docs/motor-de-base-de-datos.md` con los números y una recomendación. El
+   dueño decide; el motor por defecto no cambia en esta prueba. Probar en Android queda
+   aparte.
+
+### Clave-valor: ajustes del equipo (esperando al dueño)
+
+`AGENTS.md` dice que el almacén clave-valor se define cuando la pantalla diga qué necesita.
+El dueño **todavía está entendiendo cómo funciona** el clave-valor en SurrealDB, así que
+primero explicarlo simple, con ejemplos del propio código, y recién después diseñar.
+
+- **Cómo funciona:** SurrealDB no tiene un clave-valor aparte; el ID del registro es la
+  clave. `presencia:⟨cédula⟩` es una consulta directa por clave (`via_adentro`), y crear
+  una clave que ya existe falla, y de eso se vale "una persona adentro una sola vez".
+  `id_reloj()` es un registro único de ID fijo. Ver `infra-surreal/src/repositorios.rs`.
+- **Qué NO puede ir ahí:** lo que se necesita antes de abrir la base (`equipo.txt`,
+  `reloj-desfase.txt`).
+- **Candidatos:** el diseño de las tablas (columnas, anchos), hoy en `localStorage` del
+  navegador, y las preferencias de cada operador (hoy no existen).
+- **Propuesta (sin aprobar):** ajustes **tipados**, no una bolsa de texto; un puerto con
+  implementación en `infra-memoria` y en `infra-surreal` y su prueba de contrato; la
+  validación en el dominio; y decidir desde el nombre de la tabla si es sólo del equipo (como
+  `sincronizacion`, que no se comparte) o por operador (que se sincronizaría).
+- **No implementar sin que el dueño apruebe el diseño y el primer ajuste concreto.**
+
+### Otros pendientes que salieron
+
+- **Índice por fecha del historial:** no hay índice sobre `entrada_en`; la consulta recorre
+  la tabla. Proponer `(unidad, entrada_en)` y comprobarlo con `EXPLAIN`.
+- **Filtros combinados del historial** (`FiltroHistorial` en el dominio, paginación por
+  cursor) y la consulta "quién estaba adentro el martes a las 3 pm". Primero un borrador en
+  `docs/` para que lo revise el dueño.
+- **Aviso de reloj en la interfaz** (hora sin comprobar, PC desfasada), la **hora de la nube
+  como fuente del reloj** para los equipos sin NTP, y `recibido_en` asignado por la nube.
+- **Prueba de carga de la sincronización** con muchos equipos simulados.
+
+### Cómo le gusta trabajar al dueño (aprendido en esta sesión)
+
+- **No se duplican reglas.** Si una regla está en el dominio, la pantalla no la repite
+  (por eso se eliminó `pliegue.ts`). Si aparece una duplicada, se corrige.
+- Cuando dice que no entiende algo, explicarlo **simple y con ejemplos del propio código**,
+  sin mezclar conceptos.
+- Las decisiones se **documentan en `docs/`**, con lo verificado separado de lo supuesto.
+- Verificar contra la fuente (documentación, código, reportes originales) antes de afirmar.
+

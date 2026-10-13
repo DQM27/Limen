@@ -5,7 +5,9 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import type { ColDef } from 'ag-grid-community';
 import { Avisos } from '../compartido/avisos';
+import { resaltable } from '../compartido/tabla/resaltado';
 import { Tabla } from '../compartido/tabla/tabla';
+import { reglasDelNucleo } from '../nucleo/busqueda';
 import { listarGafetes } from '../nucleo/comandos';
 import { esErrorApp } from '../nucleo/tauri';
 import type { Gafete, TipoGafete } from '../nucleo/tipos';
@@ -56,9 +58,13 @@ export class GafetesPagina {
   protected readonly error = signal<string | null>(null);
 
   protected readonly idFila = (fila: Gafete): string => `${fila.tipo}-${fila.numero}`;
+  protected readonly reglas = reglasDelNucleo;
 
   protected readonly columnas: ColDef<Gafete>[] = [
-    { field: 'numero', type: 'numero', headerName: 'Número', flex: 1, minWidth: 100 },
+    resaltable(
+      { field: 'numero', type: 'numero', headerName: 'Número', flex: 1, minWidth: 100 },
+      'IDENTIFICACION',
+    ),
     {
       colId: 'estado',
       headerName: 'Estado',
@@ -66,13 +72,16 @@ export class GafetesPagina {
       minWidth: 120,
       valueGetter: (p) => (p.data ? etiquetaDeEstadoGafete(p.data) : ''),
     },
-    {
-      colId: 'asignado',
-      headerName: 'Asignado a',
-      flex: 3,
-      minWidth: 220,
-      valueGetter: (p) => (p.data ? textoAsignado(p.data) : ''),
-    },
+    resaltable(
+      {
+        colId: 'asignado',
+        headerName: 'Asignado a',
+        flex: 3,
+        minWidth: 220,
+        valueGetter: (p) => (p.data ? textoAsignado(p.data) : ''),
+      },
+      'NOMBRE',
+    ),
   ];
 
   constructor() {
