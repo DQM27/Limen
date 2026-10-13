@@ -2,15 +2,15 @@
 // Habla con la nube con credenciales que sólo viven en el Worker.
 // Acceso con clave simple (Basic) mientras no se ponga Cloudflare Access.
 
-import { consultar, resultado, LECTURA } from "./nube.js";
-import { canjear, listar, registrar, retirar } from "./vinculacion.js";
+import { consultar, resultado, LECTURA } from './nube.js';
+import { canjear, listar, registrar, retirar, unidades } from './vinculacion.js';
 // Un equipo que lleva más de dos latidos (5 min c/u) sin avisar se da por caído.
 const CAIDO_DESPUES_DE_MS = 10 * 60 * 1000;
 
 function autorizado(request, env) {
-  const cabecera = request.headers.get("Authorization") ?? "";
-  if (!cabecera.startsWith("Basic ") || !env.PANEL_CLAVE) return false;
-  const [, clave = ""] = atob(cabecera.slice(6)).split(/:(.*)/s);
+  const cabecera = request.headers.get('Authorization') ?? '';
+  if (!cabecera.startsWith('Basic ') || !env.PANEL_CLAVE) return false;
+  const [, clave = ''] = atob(cabecera.slice(6)).split(/:(.*)/s);
   return clave === env.PANEL_CLAVE;
 }
 
@@ -18,7 +18,7 @@ async function equipos(env) {
   const [s] = await consultar(
     env,
     LECTURA,
-    "SELECT equipo, unidad, en_linea, iniciada, visto FROM conexion ORDER BY unidad, equipo;",
+    'SELECT equipo, unidad, en_linea, iniciada, visto FROM conexion ORDER BY unidad, equipo;',
   );
   // Si todavía ningún equipo anunció su conexión, la tabla no existe: no hay equipos.
   const ahora = Date.now();
@@ -28,10 +28,10 @@ async function equipos(env) {
     iniciada: f.iniciada,
     visto: f.visto,
     estado: !f.en_linea
-      ? "fuera"
+      ? 'fuera'
       : ahora - Date.parse(f.visto) > CAIDO_DESPUES_DE_MS
-        ? "caido"
-        : "en_linea",
+        ? 'caido'
+        : 'en_linea',
   }));
 }
 
@@ -40,12 +40,9 @@ const json = ({ estado, cuerpo }) => Response.json(cuerpo, { status: estado });
 /** Todo el panel va por HTTPS: la clave y el código no deben viajar sin cifrar. */
 const conSeguridad = (respuesta) => {
   const cabeceras = new Headers(respuesta.headers);
-  cabeceras.set(
-    "Strict-Transport-Security",
-    "max-age=31536000; includeSubDomains",
-  );
-  cabeceras.set("X-Content-Type-Options", "nosniff");
-  cabeceras.set("Referrer-Policy", "no-referrer");
+  cabeceras.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  cabeceras.set('X-Content-Type-Options', 'nosniff');
+  cabeceras.set('Referrer-Policy', 'no-referrer');
   return new Response(respuesta.body, {
     status: respuesta.status,
     headers: cabeceras,
@@ -55,9 +52,9 @@ const conSeguridad = (respuesta) => {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.protocol === "http:") {
+    if (url.protocol === 'http:') {
       // Antes de pedir ninguna clave: así ni siquiera se envía por un camino sin cifrar.
-      url.protocol = "https:";
+      url.protocol = 'https:';
       return Response.redirect(url.toString(), 301);
     }
     return conSeguridad(await atender(request, env));
@@ -69,32 +66,47 @@ async function atender(request, env) {
   try {
     // El único camino sin clave del panel: el equipo canjea su código (el código es su
     // credencial, de un solo uso y de 15 minutos).
-    if (pathname === "/api/vincular" && request.method === "POST") {
+    if (pathname === '/api/vincular' && request.method === 'POST') {
       return json(await canjear(env, await request.json()));
     }
+    // Cerrar sesión: el navegador guarda la clave de la ventana de acceso y sólo la suelta
+    // cuando el servidor la rechaza. Esta ruta siempre responde 401 con una página de salida.
+    if (pathname === '/salir') {
+      return new Response(
+        '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+          '<title>Limen · sesión cerrada</title><body style="font:16px system-ui;margin:3rem auto;max-width:28rem;padding:0 1rem">' +
+          '<h1>Sesión cerrada</h1><p><a href="/">Volver a entrar</a></p>',
+        {
+          status: 401,
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'WWW-Authenticate': 'Basic realm="Limen"',
+            'Cache-Control': 'no-store',
+          },
+        },
+      );
+    }
     if (!autorizado(request, env)) {
-      return new Response("Acceso restringido", {
+      return new Response('Acceso restringido', {
         status: 401,
-        headers: { "WWW-Authenticate": 'Basic realm="Limen"' },
+        headers: { 'WWW-Authenticate': 'Basic realm="Limen"' },
       });
     }
-    if (pathname === "/api/equipos")
-      return Response.json({ equipos: await equipos(env) });
-    if (pathname === "/api/dispositivos" && request.method === "GET") {
+    if (pathname === '/api/equipos') return Response.json({ equipos: await equipos(env) });
+    if (pathname === '/api/unidades') return Response.json({ unidades: await unidades(env) });
+    if (pathname === '/api/dispositivos' && request.method === 'GET') {
       return Response.json({ dispositivos: await listar(env) });
     }
-    if (pathname === "/api/dispositivos" && request.method === "POST") {
+    if (pathname === '/api/dispositivos' && request.method === 'POST') {
       return json(await registrar(env, await request.json()));
     }
-    const retiro = pathname.match(
-      /^\/api\/dispositivos\/([0-9a-f-]{36})\/retirar$/,
-    );
-    if (retiro && request.method === "POST")
-      return json(await retirar(env, retiro[1]));
-    if (pathname.startsWith("/api/"))
-      return Response.json({ error: "no_existe" }, { status: 404 });
+    const retiro = pathname.match(/^\/api\/dispositivos\/([0-9a-f-]{36})\/retirar$/);
+    if (retiro && request.method === 'POST') return json(await retirar(env, retiro[1]));
+    if (pathname.startsWith('/api/')) return Response.json({ error: 'no_existe' }, { status: 404 });
     return env.ASSETS.fetch(request);
-  } catch {
-    return Response.json({ error: "nube" }, { status: 502 });
+  } catch (error) {
+    // Queda en los registros del Worker (`wrangler tail`); al navegador sólo llega el código.
+    console.error('falla del panel:', pathname, error);
+    return Response.json({ error: 'nube' }, { status: 502 });
   }
 }

@@ -17,7 +17,8 @@ initSync({ module: modulo });
 
 const TIPOS = ['pc', 'celular', 'visor'];
 
-const hex = (bytes) => [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('');
+const hex = (bytes) =>
+  [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('');
 const base64url = (bytes) =>
   btoa(String.fromCharCode(...new Uint8Array(bytes)))
     .replaceAll('+', '-')
@@ -32,21 +33,32 @@ async function huellaDelCodigo(codigoCanonico) {
 /** Huella de la clave pública (RFC 7638): SHA-256 del JWK canónico. Valida la clave. */
 async function huellaDeLaClave(jwk) {
   if (jwk?.kty !== 'EC' || jwk?.crv !== 'P-256') throw new Error('clave_invalida');
-  await crypto.subtle.importKey('jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+  await crypto.subtle.importKey('jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, [
+    'verify',
+  ]);
   const canonico = JSON.stringify({ crv: jwk.crv, kty: jwk.kty, x: jwk.x, y: jwk.y });
   return base64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonico)));
 }
 
 async function evento(env, tipo, detalle) {
-  await consultar(env, ESCRITURA, 'CREATE evento_seguridad SET tipo = $tipo, detalle = $detalle, en = time::now();', {
-    tipo,
-    detalle,
-  }).catch(() => {});
+  await consultar(
+    env,
+    ESCRITURA,
+    'CREATE evento_seguridad SET tipo = $tipo, detalle = $detalle, en = time::now();',
+    {
+      tipo,
+      detalle,
+    },
+  ).catch(() => {});
 }
 
 /** Las unidades operativas que existen: lo único que se puede elegir al registrar. */
 export async function unidades(env) {
-  const [s] = await consultar(env, LECTURA, 'SELECT record::id(id) AS codigo, nombre FROM unidad_operativa ORDER BY nombre;');
+  const [s] = await consultar(
+    env,
+    LECTURA,
+    'SELECT record::id(id) AS codigo, nombre FROM unidad_operativa ORDER BY nombre;',
+  );
   return resultado(s);
 }
 
@@ -152,5 +164,8 @@ export async function canjear(env, { codigo, clave_publica: clave }) {
     await evento(env, 'codigo_usado', 'dispositivo ' + fila.dispositivo);
     return { estado: 400, cuerpo: { error: 'codigo_usado' } };
   }
-  return { estado: 200, cuerpo: { equipo: fila.dispositivo, unidad: fila.unidad, huella: huellaClave } };
+  return {
+    estado: 200,
+    cuerpo: { equipo: fila.dispositivo, unidad: fila.unidad, huella: huellaClave },
+  };
 }
