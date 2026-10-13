@@ -112,6 +112,17 @@ Esto también significa que la unicidad de la nube (por ejemplo `presencia:⟨c�
 no puede ser lo que rechace el envío: tiene que convertirse en esa marca. Se resuelve
 cuando se construya la sincronización (hoja de ruta, paso 7).
 
+**Excepción acordada el 13 de octubre de 2026 (regla A9):** con conexión se **verifica antes**
+de registrar. Si la persona ya está adentro en otra unidad o equipo, no se registra: se le
+dice al guarda dónde está, el guarda pide la salida allá y después ingresa a la persona
+aquí. La pregunta tiene un límite de espera corto; si la nube no responde, se trata como
+**sin conexión** (la portería nunca se bloquea por la red) y vale todo lo de esta sección.
+
+**Quién resuelve un incidente de persona adentro dos veces:** el administrador, en el panel,
+decide qué registro se acepta. Nada se borra: los hechos no se editan, así que el registro
+que no se acepta se cierra con una **resolución** (un hecho nuevo, con quién lo decidió y por
+qué). La nube no escoge por sí sola.
+
 ### 4.4 El indicador de incidente (sin flujo aparte)
 
 Se decidió mantenerlo simple: **no hay una tabla ni un flujo de incidencias**. Es una
