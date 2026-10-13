@@ -18,6 +18,11 @@
   margin: 0;
   color: var(--suave);
 }
+.salir {
+  margin-left: auto;
+  color: var(--suave);
+  font-size: 0.9rem;
+}
 .tarjeta {
   background: var(--tarjeta);
   border: 1px solid var(--borde);
