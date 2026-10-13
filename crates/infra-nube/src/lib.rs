@@ -13,6 +13,7 @@
 mod bajada;
 mod en_vivo;
 mod espera;
+mod presencia;
 mod sincronizacion;
 mod subida;
 
@@ -24,6 +25,7 @@ use surrealdb::engine::any::{Any, connect};
 use surrealdb::opt::auth::{Database, Namespace, Root};
 
 pub use en_vivo::Escucha;
+pub use presencia::LATIDO;
 pub use sincronizacion::{RED_DE_SEGURIDAD, REINTENTO, sincronizar};
 pub use subida::{Copia, TABLAS};
 

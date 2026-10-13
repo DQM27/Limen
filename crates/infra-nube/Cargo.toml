@@ -16,6 +16,7 @@ surrealdb = { workspace = true, features = ["protocol-ws", "rustls"] }
 # Con `ring` y `aws-lc-rs` a la vez en el árbol, rustls no elige solo: se
 # instala `ring` al arrancar (`instalar_cifrado`).
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+limen-dominio.workspace = true
 thiserror.workspace = true
 log.workspace = true
 tokio = { workspace = true, features = ["time", "sync"] }
@@ -26,7 +27,6 @@ rand = "0.9"
 
 [dev-dependencies]
 limen-aplicacion.workspace = true
-limen-dominio.workspace = true
 chrono.workspace = true
 uuid.workspace = true
 

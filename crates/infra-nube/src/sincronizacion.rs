@@ -25,10 +25,13 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use tokio::time::Instant;
+
 use limen_infra_surreal::AlmacenSurreal;
 use tokio::sync::Notify;
 
 use crate::espera::{self, AzarDelSistema};
+use crate::presencia::LATIDO;
 use crate::{ConfigNube, Escucha, Nube};
 
 /// Cada cuánto se sincroniza, más o menos, aunque no llegue ningún aviso.
@@ -88,6 +91,13 @@ async fn sincronizar_mientras_haya_conexion<F: Fn() + Sync>(
     let avisos = Arc::new(Notify::new());
     let mut azar = AzarDelSistema;
     let mut escucha: Option<Escucha> = None;
+    // Presencia para el panel de dispositivos: se anuncia al conectar y se
+    // avisa que sigue vivo cada `LATIDO`. Si falla, no importa: la
+    // sincronización sigue (`docs/nube.md`, sección 12).
+    if let Err(error) = nube.anunciar_conexion(almacen.origen()).await {
+        log::warn!("no se pudo anunciar la conexión: {error}");
+    }
+    let mut ultimo_latido = Instant::now();
     loop {
         // Sin avisos en vivo se sigue igual, con la vuelta periódica, y se
         // vuelve a intentar suscribirse en cada vuelta.
@@ -105,6 +115,12 @@ async fn sincronizar_mientras_haya_conexion<F: Fn() + Sync>(
         }
         if !una_vuelta_con_reintentos(nube, almacen, al_llegar).await {
             return;
+        }
+        if ultimo_latido.elapsed() >= LATIDO {
+            ultimo_latido = Instant::now();
+            if let Err(error) = nube.latir(almacen.origen()).await {
+                log::debug!("no se pudo avisar que el equipo sigue vivo: {error}");
+            }
         }
         let red_de_seguridad = espera::variar(RED_DE_SEGURIDAD, &mut azar);
         tokio::select! {

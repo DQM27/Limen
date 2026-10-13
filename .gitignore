@@ -11,3 +11,6 @@ datos-privados/
 *.sql
 *.dump
 *.csv
+
+# Caché local de wrangler
+.wrangler/
