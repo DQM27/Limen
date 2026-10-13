@@ -22,6 +22,7 @@ import type {
   TipoGafete,
   UsuarioActual,
   Via,
+  EstadoVinculacion,
 } from './tipos';
 import { invocar, type ErrorApp } from './tauri';
 
@@ -307,4 +308,25 @@ export function listarHistorial(desde: string | null, hasta: string | null): Pro
 /** Los accesos rápidos de fecha, con el rango que da cada uno hoy. */
 export function atajosDeFecha(): Promise<AtajoFecha[]> {
   return invocar<AtajoFecha[]>('atajos_de_fecha');
+}
+
+// --- Vinculación del equipo (bloque M) ---
+
+/** Si el equipo ya se vinculó con un código. Se pregunta antes de iniciar sesión. */
+export function estadoVinculacion(): Promise<EstadoVinculacion> {
+  return invocar<EstadoVinculacion>('estado_vinculacion_equipo');
+}
+
+/**
+ * Canjea el código del administrador y deja guardada la identidad del equipo. Los
+ * errores traen `campo: 'codigo'` (código mal escrito, vencido, usado…) o son generales
+ * (sin conexión con el panel).
+ */
+export function vincularEquipo(codigo: string): Promise<void> {
+  return invocar<void>('vincular_equipo_con_codigo', { codigo });
+}
+
+/** Reinicia la app: tras vincular, la base se abre con la identidad nueva. */
+export function reiniciar(): Promise<void> {
+  return invocar<void>('reiniciar');
 }

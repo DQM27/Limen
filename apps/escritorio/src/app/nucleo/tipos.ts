@@ -296,3 +296,9 @@ export interface Segmento {
   texto: string;
   resaltado: boolean;
 }
+
+/** Si el equipo ya se vinculó con un código y si es una compilación de desarrollo. */
+export interface EstadoVinculacion {
+  vinculado: boolean;
+  desarrollo: boolean;
+}

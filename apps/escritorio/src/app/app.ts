@@ -17,7 +17,10 @@ import { AvisosPanel } from './compartido/avisos';
 import { Splash } from './entrada/splash';
 import { registrarIconos } from './iconos';
 import { SECCIONES } from './navegacion';
+import { estadoVinculacion } from './nucleo/comandos';
 import { SesionServicio } from './nucleo/sesion';
+import type { EstadoVinculacion } from './nucleo/tipos';
+import { PantallaVinculacion } from './vinculacion/pantalla-vinculacion';
 import { enTauri } from './nucleo/tauri';
 import { modoVentana } from './nucleo/ventana';
 
@@ -31,6 +34,7 @@ import { modoVentana } from './nucleo/ventana';
     MatListModule,
     MatTooltipModule,
     PantallaEntrada,
+    PantallaVinculacion,
     RouterLink,
     RouterLinkActive,
     RouterOutlet,
@@ -44,6 +48,10 @@ export class App {
   private readonly sesion = inject(SesionServicio);
   protected readonly operador = this.sesion.usuario;
   private readonly splashVisto = signal(false);
+  /** Si el equipo ya se vinculó con un código; `null` mientras se pregunta. */
+  protected readonly vinculacion = signal<EstadoVinculacion | null>(null);
+  /** En desarrollo se puede seguir sin vincular, con los usuarios de la semilla. */
+  protected readonly vinculacionOmitida = signal(false);
   protected readonly enTauri = enTauri();
 
   /**
@@ -51,12 +59,16 @@ export class App {
    * sesión o cambio de clave) sin sesión o con clave temporal, y la app. Fuera
    * de la app (en el navegador) no hay sesión que pedir.
    */
-  protected readonly fase = computed<'cargando' | 'entrada' | 'aplicacion'>(() => {
+  protected readonly fase = computed<'cargando' | 'vincular' | 'entrada' | 'aplicacion'>(() => {
     if (!this.enTauri) {
       return 'aplicacion';
     }
-    if (!this.sesion.cargada() || !this.splashVisto()) {
+    const vinculacion = this.vinculacion();
+    if (!this.sesion.cargada() || !this.splashVisto() || vinculacion === null) {
       return 'cargando';
+    }
+    if (vinculacion.vinculado === false && !this.vinculacionOmitida()) {
+      return 'vincular';
     }
     const usuario = this.sesion.usuario();
     return usuario && !usuario.debe_cambiar_clave ? 'aplicacion' : 'entrada';
@@ -68,6 +80,13 @@ export class App {
   constructor() {
     registrarIconos();
     void this.sesion.cargar();
+    // Un equipo sin vincular pide su código antes que nada. Si la pregunta falla se sigue
+    // como si estuviera vinculado: la entrada de siempre.
+    if (this.enTauri) {
+      void estadoVinculacion()
+        .catch((): EstadoVinculacion => ({ vinculado: true, desarrollo: false }))
+        .then((estado) => this.vinculacion.set(estado ?? { vinculado: true, desarrollo: false }));
+    }
     // El splash se ve un mínimo, aunque el núcleo responda al instante: sin
     // esto pasa tan fugaz que no se alcanza a ver la marca.
     const minimo = inject(DURACION_MINIMA_SPLASH_MS);

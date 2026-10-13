@@ -1,0 +1,43 @@
+<form class="tarjeta" (submit)="enviar($event)" novalidate>
+  <div class="cabecera" data-tauri-drag-region>
+    <img src="logo.svg" alt="" width="72" height="72" />
+    <h1>Limen</h1>
+    <p class="aviso">
+      Este equipo todavía no está vinculado. Escribe el código que te dio el administrador.
+    </p>
+  </div>
+
+  <div class="campo">
+    <label for="codigo-vinculacion">Código de vinculación</label>
+    <input
+      #campoCodigo
+      id="codigo-vinculacion"
+      name="codigo-vinculacion"
+      type="text"
+      autocomplete="off"
+      autocapitalize="characters"
+      spellcheck="false"
+      placeholder="XXXXX-XXXXX"
+      [value]="codigo()"
+      (input)="escribir($event)"
+      [attr.aria-invalid]="errorCodigo() ? 'true' : null"
+      [attr.aria-describedby]="errorCodigo() ? 'error-codigo' : null"
+    />
+    @if (errorCodigo(); as mensaje) {
+      <p class="error" id="error-codigo">{{ mensaje }}</p>
+    }
+  </div>
+
+  <p class="error general" role="alert">{{ errorGeneral() }}</p>
+  @if (vinculado()) {
+    <p class="aviso" role="status">Equipo vinculado. Reiniciando…</p>
+  }
+
+  <div class="acciones">
+    <button mat-stroked-button type="button" (click)="cancelar()">Cancelar</button>
+    @if (desarrollo()) {
+      <button mat-stroked-button type="button" (click)="omitir.emit()">Seguir sin vincular</button>
+    }
+    <button mat-flat-button type="submit" [disabled]="enviando() || vinculado()">Vincular</button>
+  </div>
+</form>

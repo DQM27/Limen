@@ -18,6 +18,14 @@
 #[cfg(debug_assertions)]
 pub mod semilla;
 
+/// Vincular el equipo con un código (bloque M). La interfaz llega a la infraestructura
+/// sólo por aquí: `apps → composicion → infra-*`.
+pub mod vinculacion {
+    pub use limen_infra_nube::{
+        ErrorDeVinculacion, PANEL_POR_OMISION, VAR_PANEL, esta_vinculado, vincular,
+    };
+}
+
 use std::fmt;
 use std::path::PathBuf;
 

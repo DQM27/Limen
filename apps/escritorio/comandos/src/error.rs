@@ -49,6 +49,16 @@ impl ErrorJson {
         }
     }
 
+    /// Una falla técnica: al operador sólo le llega el mensaje genérico.
+    pub fn tecnico() -> Self {
+        Self {
+            tipo: TipoErrorJson::Tecnico,
+            codigo: "error_tecnico",
+            mensaje: "Ocurrió un error inesperado. Intente de nuevo".to_owned(),
+            campo: None,
+        }
+    }
+
     /// El mismo error, atribuido a un campo del formulario.
     #[must_use]
     pub const fn en_campo(mut self, campo: Option<&'static str>) -> Self {

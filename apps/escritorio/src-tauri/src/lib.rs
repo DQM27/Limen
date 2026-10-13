@@ -88,6 +88,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             comandos::modo_ventana,
             comandos::salir,
+            comandos::estado_vinculacion_equipo,
+            comandos::vincular_equipo_con_codigo,
+            comandos::reiniciar,
             comandos::iniciar_sesion,
             comandos::cerrar_sesion,
             comandos::usuario_actual,

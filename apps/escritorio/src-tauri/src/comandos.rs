@@ -22,12 +22,40 @@ use limen_escritorio_comandos::{
     ErrorJson, FilaContratistaDto, GafeteDto, HistorialDto, PedidoDeFiltroEntrada,
     PersonaAdentroDto, PersonalKofDto, SegmentoDto, UsuarioActual,
 };
+use limen_escritorio_comandos::{EstadoVinculacionDto, estado_vinculacion, vincular_equipo};
 use tauri::window::Color;
-use tauri::{LogicalSize, State, WebviewWindow};
+use tauri::{LogicalSize, Manager, State, WebviewWindow};
 
 use crate::estado::Estado;
 
 type Resultado<T> = Result<T, ErrorJson>;
+
+// --- Vinculación del equipo (bloque M) ---
+
+fn carpeta_de_datos(app: &tauri::AppHandle) -> Result<std::path::PathBuf, ErrorJson> {
+    app.path().app_data_dir().map_err(|e| {
+        tauri_plugin_log::log::error!("no se encontró la carpeta de datos: {e}");
+        ErrorJson::tecnico()
+    })
+}
+
+/// Si el equipo ya se vinculó con un código. Sin sesión: se pregunta antes de entrar.
+#[tauri::command]
+pub fn estado_vinculacion_equipo(app: tauri::AppHandle) -> Resultado<EstadoVinculacionDto> {
+    Ok(estado_vinculacion(&carpeta_de_datos(&app)?))
+}
+
+/// Canjea el código y deja guardada la identidad del equipo.
+#[tauri::command]
+pub async fn vincular_equipo_con_codigo(app: tauri::AppHandle, codigo: String) -> Resultado<()> {
+    vincular_equipo(&carpeta_de_datos(&app)?, &codigo).await
+}
+
+/// Reinicia la app (tras vincular, la base se abre con la identidad nueva).
+#[tauri::command]
+pub fn reiniciar(app: tauri::AppHandle) {
+    app.restart();
+}
 
 // --- Ventana ---
 
