@@ -750,6 +750,64 @@ mod tests {
         );
     }
 
+    /// El aviso en tiempo real también funciona con el token de un equipo: le llega lo de su
+    /// unidad y lo global, y de otra unidad no le avisa nada.
+    #[tokio::test]
+    async fn el_aviso_en_vivo_funciona_con_el_token_de_un_equipo() {
+        use std::sync::Arc;
+        use std::time::Duration;
+
+        use tokio::sync::Notify;
+
+        let (administrador, nube_del_equipo) = nube_con_token_de_un_equipo().await;
+        let avisos = Arc::new(Notify::new());
+        let _escucha = nube_del_equipo
+            .escuchar(limen_infra_surreal::UNIDAD_DE_PRUEBAS, Arc::clone(&avisos))
+            .await
+            .unwrap();
+        let avisa = |avisos: Arc<Notify>| async move {
+            tokio::time::timeout(Duration::from_secs(2), avisos.notified())
+                .await
+                .is_ok()
+        };
+
+        administrador
+            .db
+            .query(
+                "CREATE presencia:`555555555` CONTENT { unidad: 'OTRA', via: 'PROVEEDOR', \
+                 desde: d'2026-10-09T08:00:00Z' }",
+            )
+            .await
+            .unwrap()
+            .check()
+            .unwrap();
+        assert!(
+            !avisa(Arc::clone(&avisos)).await,
+            "lo de otra unidad no le avisa nada"
+        );
+
+        administrador
+            .db
+            .query(
+                "CREATE presencia:`444444444` CONTENT { unidad: 'PRUEBAS', via: 'PROVEEDOR', \
+                 desde: d'2026-10-09T08:00:00Z' }",
+            )
+            .await
+            .unwrap()
+            .check()
+            .unwrap();
+        assert!(avisa(Arc::clone(&avisos)).await, "lo de su unidad sí");
+
+        administrador
+            .db
+            .query("CREATE empresa:dos CONTENT { nombre: 'ACME', nombre_busqueda: 'acme' }")
+            .await
+            .unwrap()
+            .check()
+            .unwrap();
+        assert!(avisa(avisos).await, "y lo global, que es de todos");
+    }
+
     #[tokio::test]
     async fn lo_de_otra_unidad_no_baja() {
         let nube = nube().await;
