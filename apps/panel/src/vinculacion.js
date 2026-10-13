@@ -78,8 +78,8 @@ export async function registrar(env, { nombre, unidad, tipo }) {
     env,
     ESCRITURA,
     `BEGIN;
-     CREATE type::record('dispositivo', $id) SET nombre = $nombre, unidad = $unidad, tipo = $tipo, creado = time::now();
-     CREATE type::record('codigo_vinculacion', $huella) SET dispositivo = $id, emitido = time::now(), usado = false, anulado = false;
+     CREATE type::record('dispositivo', <string>$id) SET nombre = $nombre, unidad = $unidad, tipo = $tipo, creado = time::now();
+     CREATE type::record('codigo_vinculacion', $huella) SET dispositivo = <string>$id, emitido = time::now(), usado = false, anulado = false;
      COMMIT;`,
     { id, nombre: nombre.trim(), unidad: elegida.codigo, tipo, huella },
   );
@@ -110,8 +110,8 @@ export async function retirar(env, id) {
     env,
     ESCRITURA,
     `BEGIN;
-     UPDATE type::record('dispositivo', $id) SET retirado = time::now() WHERE retirado = NONE;
-     UPDATE codigo_vinculacion SET anulado = true WHERE dispositivo = $id AND usado = false;
+     UPDATE type::record('dispositivo', <string>$id) SET retirado = time::now() WHERE retirado = NONE;
+     UPDATE codigo_vinculacion SET anulado = true WHERE dispositivo = <string>$id AND usado = false;
      COMMIT;`,
     { id },
   );
@@ -157,7 +157,7 @@ export async function canjear(env, { codigo, clave_publica: clave }) {
     ESCRITURA,
     `LET $marcado = UPDATE type::record('codigo_vinculacion', $huellaCodigo) SET usado = true WHERE usado = false AND anulado = false;
      IF array::len($marcado) = 0 { THROW 'codigo_usado' };
-     UPDATE type::record('dispositivo', $id) SET huella = $huellaClave, clave_publica = $clave, vinculado = time::now() WHERE retirado = NONE AND vinculado = NONE;`,
+     UPDATE type::record('dispositivo', <string>$id) SET huella = $huellaClave, clave_publica = $clave, vinculado = time::now() WHERE retirado = NONE AND vinculado = NONE;`,
     { huellaCodigo, id: fila.dispositivo, huellaClave, clave },
   );
   if (hechas.some((s) => s.status === 'ERR')) {
