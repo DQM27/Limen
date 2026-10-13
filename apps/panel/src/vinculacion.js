@@ -110,7 +110,7 @@ export async function canjear(env, { codigo, clave_publica: clave }) {
   const [leido] = await consultar(
     env,
     LECTURA,
-    `SELECT record::id(id) AS huella, dispositivo, emitido, usado, anulado FROM ONLY type::record('codigo_vinculacion', $huella);`,
+    `SELECT record::id(id) AS huella, dispositivo, type::record('dispositivo', dispositivo).unidad AS unidad, emitido, usado, anulado FROM ONLY type::record('codigo_vinculacion', $huella);`,
     { huella: huellaCodigo },
   );
   const fila = resultado(leido, null);
@@ -142,5 +142,5 @@ export async function canjear(env, { codigo, clave_publica: clave }) {
     await evento(env, 'codigo_usado', 'dispositivo ' + fila.dispositivo);
     return { estado: 400, cuerpo: { error: 'codigo_usado' } };
   }
-  return { estado: 200, cuerpo: { equipo: fila.dispositivo, huella: huellaClave } };
+  return { estado: 200, cuerpo: { equipo: fila.dispositivo, unidad: fila.unidad, huella: huellaClave } };
 }

@@ -16,6 +16,7 @@ mod espera;
 mod presencia;
 mod sincronizacion;
 mod subida;
+mod vinculacion;
 
 use std::fmt;
 
@@ -28,6 +29,10 @@ pub use en_vivo::Escucha;
 pub use presencia::LATIDO;
 pub use sincronizacion::{RED_DE_SEGURIDAD, REINTENTO, sincronizar};
 pub use subida::{Copia, TABLAS};
+pub use vinculacion::{
+    ARCHIVO_CLAVE, ARCHIVO_VINCULACION, EquipoVinculado, ErrorDeVinculacion, PANEL_POR_OMISION,
+    VAR_PANEL, esta_vinculado, vincular,
+};
 
 /// Elige el proveedor de cifrado de las conexiones seguras (`ring`). Con
 /// `ring` y `aws-lc-rs` a la vez en el árbol de dependencias, `rustls` no

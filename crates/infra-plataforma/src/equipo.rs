@@ -44,6 +44,17 @@ pub fn origen_del_equipo(ruta: &Path, unidad_por_omision: &str) -> Result<Origen
     }
 }
 
+/// Guarda la identidad del equipo, reemplazando la que hubiera (la vinculación con un
+/// código le da su unidad y su ID definitivos).
+pub fn guardar_origen(ruta: &Path, origen: &Origen) -> Result<(), String> {
+    if let Some(carpeta) = ruta.parent() {
+        std::fs::create_dir_all(carpeta)
+            .map_err(|e| format!("no se pudo crear {}: {e}", carpeta.display()))?;
+    }
+    std::fs::write(ruta, escribir(origen))
+        .map_err(|e| format!("no se pudo guardar {}: {e}", ruta.display()))
+}
+
 fn escribir(origen: &Origen) -> String {
     format!(
         "{CLAVE_UNIDAD}={}\n{CLAVE_EQUIPO}={}\n",
