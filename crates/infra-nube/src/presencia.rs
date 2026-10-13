@@ -63,7 +63,7 @@ impl Nube {
 }
 
 #[cfg(test)]
-mod pruebas {
+mod tests {
     use limen_dominio::origen::{EquipoId, UnidadOperativaId};
     use uuid::Uuid;
 
