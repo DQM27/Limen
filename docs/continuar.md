@@ -34,6 +34,10 @@ medio (ahora hay un solo cursor para toda la base), cada versión de una fila re
 equipo y la nube (ahora sólo se aplica la última), un texto con forma de UUID se vuelve `uuid`, y
 un usuario de base no entra con Basic auth.
 
+- **Cada equipo ve sólo lo de su unidad, y lo decide la base** (rama `feat/aislamiento-por-unidad`, `nube.md`
+  sección 13): token del Worker con la unidad, permisos por fila, y un diario de cambios propio
+  (`cambio`) que reemplaza a `SHOW CHANGES`, que está prohibido para un acceso limitado.
+
 ### Lo que falta, en este orden
 
 1. **Usuarios en el panel**: crear, desactivar, clave temporal y desbloqueo (L4 y L5). Hoy se
