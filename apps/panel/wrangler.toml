@@ -3,17 +3,17 @@ main = "src/index.js"
 compatibility_date = "2026-10-01"
 workers_dev = true
 
+# Subdominio propio: Cloudflare crea el registro DNS solo, porque megabrisas.com está en
+# la misma cuenta. Para cambiar el nombre, cambiar sólo `pattern`.
+# Va ANTES de [assets]: en TOML lo que sigue a una sección le pertenece.
+routes = [{ pattern = "limen.megabrisas.com", custom_domain = true }]
+
+# Secretos (wrangler secret put): SURREAL_URL, SURREAL_USUARIO, SURREAL_CLAVE (sólo lectura),
+# SURREAL_ADMIN_USUARIO, SURREAL_ADMIN_CLAVE (escribe: registrar y retirar equipos), PANEL_CLAVE
+
 # La página (Angular, web/) se construye con `npm run publicar`. El Worker corre primero
 # en todo, para pedir la clave del panel antes de servir hasta los archivos estáticos.
 [assets]
 directory = "./web/dist/limen-panel/browser"
 binding = "ASSETS"
 run_worker_first = true
-
-
-# Subdominio propio: Cloudflare crea el registro DNS solo, porque megabrisas.com está en
-# la misma cuenta. Para cambiar el nombre, cambiar sólo `pattern`.
-routes = [{ pattern = "limen.megabrisas.com", custom_domain = true }]
-
-# Secretos (wrangler secret put): SURREAL_URL, SURREAL_USUARIO, SURREAL_CLAVE (sólo lectura),
-# SURREAL_ADMIN_USUARIO, SURREAL_ADMIN_CLAVE (escribe: registrar y retirar equipos), PANEL_CLAVE
