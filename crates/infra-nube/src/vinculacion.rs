@@ -32,6 +32,11 @@ pub const VAR_PANEL: &str = "LIMEN_PANEL_URL";
 
 pub const ARCHIVO_CLAVE: &str = "clave-equipo.json";
 pub const ARCHIVO_VINCULACION: &str = "vinculacion.json";
+/// La marca que deja el equipo cuando el panel le dice que ya no es suyo (lo retiraron): sin
+/// vincular de nuevo con un código no vuelve a pedir acceso.
+const ARCHIVO_REVOCADA: &str = "vinculacion-revocada.txt";
+/// Lo que responde el Worker cuando el equipo está retirado, sin vincular o su firma no vale.
+const MOTIVO_NO_VIGENTE: &str = "dispositivo_invalido";
 
 #[derive(Debug, thiserror::Error)]
 pub enum ErrorDeVinculacion {
@@ -114,9 +119,12 @@ fn interpretar(estado: u16, cuerpo: &Value) -> Result<EquipoVinculado, ErrorDeVi
     })
 }
 
-/// ¿Este equipo ya se vinculó con un código? (Existe su clave y a dónde se vinculó.)
+/// ¿Este equipo está vinculado? Existe su clave y a dónde se vinculó, y el panel no lo ha
+/// retirado (la marca de revocación la deja `pedir_acceso` y la borra una vinculación nueva).
 pub fn esta_vinculado(carpeta: &Path) -> bool {
-    carpeta.join(ARCHIVO_CLAVE).is_file() && carpeta.join(ARCHIVO_VINCULACION).is_file()
+    carpeta.join(ARCHIVO_CLAVE).is_file()
+        && carpeta.join(ARCHIVO_VINCULACION).is_file()
+        && !carpeta.join(ARCHIVO_REVOCADA).exists()
 }
 
 /// Vincula este equipo: genera su par de claves, canjea el código en el panel y guarda su
@@ -157,6 +165,8 @@ fn guardar(
     let datos = json!({ "panel": panel, "huella": vinculado.huella });
     std::fs::write(carpeta.join(ARCHIVO_VINCULACION), datos.to_string())
         .map_err(|e| falla(e.to_string()))?;
+    // Una vinculación nueva deja sin efecto la revocación anterior.
+    drop(std::fs::remove_file(carpeta.join(ARCHIVO_REVOCADA)));
     guardar_origen(&carpeta.join("equipo.txt"), &vinculado.origen).map_err(falla)
 }
 
@@ -246,7 +256,17 @@ pub async fn pedir_acceso(carpeta: &Path) -> Result<ConfigNube, ErrorDeVinculaci
         &json!({ "equipo": equipo, "desafio": desafio, "firma": firma }),
     )
     .await?;
-    acceso_desde(estado, &cuerpo)
+    let acceso = acceso_desde(estado, &cuerpo);
+    if matches!(&acceso, Err(ErrorDeVinculacion::Rechazado(motivo)) if motivo == MOTIVO_NO_VIGENTE)
+    {
+        // El panel ya no reconoce a este equipo: se deja constancia para que la app vuelva
+        // a pedir el código en vez de seguir intentando.
+        drop(std::fs::write(
+            carpeta.join(ARCHIVO_REVOCADA),
+            "retirado por el panel\n",
+        ));
+    }
+    acceso
 }
 
 #[cfg(test)]
@@ -363,5 +383,31 @@ mod tests {
     fn un_equipo_retirado_recibe_el_motivo_y_ningun_acceso() {
         let error = acceso_desde(401, &json!({ "error": "dispositivo_invalido" })).unwrap_err();
         assert_eq!(error.codigo(), "dispositivo_invalido");
+    }
+
+    #[test]
+    fn un_equipo_revocado_ya_no_esta_vinculado_hasta_vincularse_de_nuevo() {
+        let carpeta = std::env::temp_dir().join(format!("limen-vinc-{}", Uuid::now_v7()));
+        let par = generar_par().unwrap();
+        let vinculado = interpretar(
+            200,
+            &json!({ "equipo": EQUIPO, "unidad": "BRISAS", "huella": "abc" }),
+        )
+        .unwrap();
+        guardar(&carpeta, "https://panel.prueba", &par, &vinculado).unwrap();
+        assert!(esta_vinculado(&carpeta));
+
+        std::fs::write(carpeta.join(ARCHIVO_REVOCADA), "retirado").unwrap();
+        assert!(
+            !esta_vinculado(&carpeta),
+            "retirado: vuelve a pedir el código"
+        );
+
+        guardar(&carpeta, "https://panel.prueba", &par, &vinculado).unwrap();
+        assert!(
+            esta_vinculado(&carpeta),
+            "una vinculación nueva borra la marca"
+        );
+        drop(std::fs::remove_dir_all(carpeta));
     }
 }
