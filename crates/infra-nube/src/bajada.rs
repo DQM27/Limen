@@ -62,17 +62,18 @@ impl Nube {
                 let Some(ultima) = lote.last().map(|entrada| entrada.numero) else {
                     break;
                 };
-                for entrada in lote {
-                    let cambios = entrada
-                        .cambios
-                        .into_iter()
+                // Sólo la última versión de cada fila de la tanda: aplicar las intermedias
+                // escribiría en el equipo algo que ya no es, y esa escritura rebotaría.
+                let cambios = colapsar(
+                    lote.into_iter()
+                        .flat_map(|entrada| entrada.cambios)
                         .filter(|cambio| !de_la_unidad || es_de(cambio, &unidad))
-                        .collect();
-                    cambiadas += almacen
-                        .aplicar_de_la_nube(cambios, inmutable)
-                        .await
-                        .map_err(|e| error(&e))?;
-                }
+                        .collect(),
+                );
+                cambiadas += almacen
+                    .aplicar_de_la_nube(cambios, inmutable)
+                    .await
+                    .map_err(|e| error(&e))?;
                 almacen
                     .anotar_bajado_hasta(tabla, ultima)
                     .await
@@ -121,6 +122,35 @@ impl Nube {
             ))
             .await?
             .take(0)
+    }
+}
+
+/// Deja sólo el último cambio de cada fila, en el orden en que quedaron.
+///
+/// El registro de cambios guarda cada versión por la que pasó una fila. Aplicarlas todas, una
+/// tras otra, escribe versiones intermedias que ya no son las actuales; cada escritura deja una
+/// entrada nueva en el registro del otro lado, y eso vuelve a viajar: el equipo y la nube se
+/// corrigen sin parar. Con sólo la última, lo que ya está igual no se escribe y el vaivén termina.
+pub fn colapsar(cambios: Vec<Cambio>) -> Vec<Cambio> {
+    let mut vistos = std::collections::HashSet::new();
+    let mut ultimos: Vec<Cambio> = cambios
+        .into_iter()
+        .rev()
+        .filter(|cambio| clave_de(cambio).is_none_or(|clave| vistos.insert(clave)))
+        .collect();
+    ultimos.reverse();
+    ultimos
+}
+
+/// Qué fila toca un cambio (sin ella, el cambio se conserva tal cual).
+fn clave_de(cambio: &Cambio) -> Option<String> {
+    match cambio {
+        Cambio::Guardada(Value::Object(campos)) => match campos.get("id") {
+            Some(Value::RecordId(id)) => Some(format!("{id:?}")),
+            _ => None,
+        },
+        Cambio::Guardada(_) => None,
+        Cambio::Borrada(id) => Some(format!("{id:?}")),
     }
 }
 
@@ -284,6 +314,83 @@ mod tests {
             vec!["ANA MORA SOTO".to_owned()],
             "un cambio posterior llega por el registro de cambios"
         );
+    }
+
+    /// Cuántas entradas lleva el registro de cambios de una tabla en la nube.
+    async fn entradas_en_la_nube(nube: &Nube, tabla: &'static str) -> usize {
+        let respuesta = nube.registro_de_la_nube(tabla, 0).await.unwrap();
+        match respuesta {
+            Value::Array(entradas) => entradas.len(),
+            _ => 0,
+        }
+    }
+
+    /// Una fila que cambió dos veces en la nube deja dos entradas en su registro. Al
+    /// sincronizar, el equipo debe quedarse con la versión final y **dejar de escribir**: si
+    /// aplicara la intermedia, cada vuelta escribiría en los dos lados y no pararía nunca.
+    #[tokio::test]
+    async fn una_fila_con_dos_versiones_en_el_historial_no_hace_rebotar_a_nadie() {
+        let nube = nube().await;
+        let equipo = AlmacenSurreal::en_memoria().await.unwrap();
+        for nombre in ["ACME", "ACME SOCIEDAD"] {
+            nube.db
+                .query(
+                    "UPSERT type::record('empresa', <uuid>'0199c7a2-0000-7000-8000-0000000000bb') \
+                     CONTENT { nombre: $nombre, nombre_busqueda: string::lowercase($nombre) };",
+                )
+                .bind(("nombre", nombre.to_owned()))
+                .await
+                .unwrap()
+                .check()
+                .unwrap();
+        }
+
+        // La primera vuelta baja; la segunda devuelve una vez lo que el equipo acaba de escribir
+        // (el eco inicial). A partir de ahí, nadie escribe más.
+        vuelta(&nube, &equipo).await;
+        vuelta(&nube, &equipo).await;
+        let entradas = entradas_en_la_nube(&nube, "empresa").await;
+        for _ in 0..4 {
+            assert_eq!(
+                vuelta(&nube, &equipo).await,
+                0,
+                "pasado el eco inicial, ya no baja nada"
+            );
+        }
+        assert_eq!(
+            entradas_en_la_nube(&nube, "empresa").await,
+            entradas,
+            "y el equipo no vuelve a escribir en la nube"
+        );
+    }
+
+    /// El otro caso real: una presencia que se creó y se borró (alguien entró y salió). El
+    /// último cambio es un borrado y tampoco debe rebotar.
+    #[tokio::test]
+    async fn una_presencia_creada_y_borrada_en_la_nube_no_hace_rebotar_a_nadie() {
+        let nube = nube().await;
+        let equipo = AlmacenSurreal::en_memoria().await.unwrap();
+        nube.db
+            .query(
+                "CREATE type::record('presencia', '603500432') CONTENT                  { unidad: 'BRISAS', via: 'CONTRATISTA', desde: time::now() };                  DELETE type::record('presencia', '603500432');",
+            )
+            .await
+            .unwrap()
+            .check()
+            .unwrap();
+
+        vuelta(&nube, &equipo).await;
+        vuelta(&nube, &equipo).await;
+        let entradas = entradas_en_la_nube(&nube, "presencia").await;
+        for _ in 0..4 {
+            assert_eq!(vuelta(&nube, &equipo).await, 0, "nada que bajar");
+        }
+        assert_eq!(
+            entradas_en_la_nube(&nube, "presencia").await,
+            entradas,
+            "y nada que subir"
+        );
+        assert!(!adentro(&equipo, "603500432").await, "nadie quedó adentro");
     }
 
     #[tokio::test]

@@ -16,6 +16,7 @@
 use limen_infra_surreal::{AlmacenSurreal, Cambio};
 use surrealdb::types::Value;
 
+use crate::bajada::colapsar;
 use crate::{ErrorNube, Nube};
 
 /// Cuántas filas se mandan por consulta.
@@ -91,12 +92,12 @@ impl Nube {
                 let Some(ultima) = entradas.last().map(|entrada| entrada.numero) else {
                     break;
                 };
-                for entrada in entradas {
-                    subidos += entrada.cambios.len();
-                    self.aplicar(tabla, copia, entrada.cambios, almacen)
-                        .await
-                        .map_err(|e| error(&e))?;
-                }
+                // Sólo la última versión de cada fila de la tanda (ver `bajada::colapsar`).
+                let cambios = colapsar(entradas.into_iter().flat_map(|e| e.cambios).collect());
+                subidos += cambios.len();
+                self.aplicar(tabla, copia, cambios, almacen)
+                    .await
+                    .map_err(|e| error(&e))?;
                 almacen
                     .anotar_subido_hasta(tabla, ultima)
                     .await
