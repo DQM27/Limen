@@ -270,3 +270,38 @@ jitter, pero claves, sales y nonces deben salir del generador del sistema operat
 - Un usuario de base de datos no entra con Basic auth: hay que pasar por `/signin` y usar el token.
 - Con `DEFINE USER … ROLES VIEWER` se lee todo (incluida `usuario`), aunque las tablas tengan
   `PERMISSIONS NONE`.
+
+## 13. Aislar las unidades operativas desde la base (decisión y plan)
+
+**Hoy no está hecho.** El equipo entra con un usuario de sistema (`EDITOR`), que se salta los
+permisos de las tablas: la nube le manda el historial de **todas** las unidades y la app descarta
+en el equipo lo que no es suyo. Los datos de otra unidad sí llegan a la PC.
+
+**Qué se comprobó** (pruebas en `crates/infra-nube/tests/aislamiento_por_unidad.rs`, con una base en
+memoria y un equipo con acceso limitado a su unidad):
+
+- Con permisos por fila (`WHERE unidad = $auth.unidad`) el equipo sólo ve y escribe lo de su unidad.
+  Escribir una fila a nombre de otra unidad se rechaza.
+- **La regla A7 se mantiene:** una persona que ya está adentro en otra unidad se sigue rechazando
+  («already exists»), aunque el equipo no pueda verla, porque la clave natural de la presencia
+  (`presencia:⟨cédula⟩`) no lleva la unidad.
+- **`SHOW CHANGES` está prohibido** para ese acceso limitado (tabla y base). Es lo que usa la
+  sincronización hoy, así que no se puede seguir usando tal cual.
+- **Salida elegida: un diario propio.** Una tabla `cambio` (unidad, tabla, registro, tipo, hora) que
+  la base llena sola con un `DEFINE EVENT` en cada tabla compartida, y que el equipo lee con sus
+  permisos de unidad (más lo global). El equipo no puede escribirla; el evento sí. Ocupa mucho
+  menos que el registro de cambios de SurrealDB, que guarda una copia de cada fila.
+
+**Plan** (rama `feat/aislamiento-por-unidad`):
+
+1. El Worker emite un token con la unidad del equipo como dato firmado (`DEFINE ACCESS ... TYPE JWT`),
+   en vez del token del usuario de sistema.
+2. Permisos de unidad en las tablas de la unidad y lectura libre (sólo lectura) en los catálogos
+   globales; los usuarios no se exponen a los equipos más que lo necesario.
+3. Tabla `cambio` y un evento por tabla compartida; la subida y la bajada leen el diario propio con
+   un cursor por equipo (el diario tiene la retención que nosotros decidamos, no los 30 días fijos,
+   y cierra el hueco de un equipo apagado más tiempo que el registro).
+4. Comprobar `LIVE SELECT` con el acceso limitado para el aviso en tiempo real.
+
+**Pendiente de probar:** `LIVE SELECT` con acceso limitado y el cuidado con los eventos en
+ráfagas (la carga inicial escribe miles de filas).
