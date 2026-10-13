@@ -1,0 +1,134 @@
+<header class="cabecera">
+  <h1>Limen</h1>
+  <p>Panel de equipos</p>
+</header>
+
+<main>
+  @if (error(); as mensaje) {
+    <p class="error" role="alert">{{ mensaje }}</p>
+  }
+
+  <section class="tarjeta" aria-labelledby="t-registrar">
+    <h2 id="t-registrar">Registrar un equipo</h2>
+    <form class="formulario" (submit)="registrar($event)">
+      <label>
+        Nombre
+        <input
+          type="text"
+          name="nombre"
+          autocomplete="off"
+          placeholder="PC portería"
+          [value]="nombre()"
+          (input)="escribir('nombre', $event)"
+        />
+      </label>
+      <label>
+        Unidad
+        <input
+          type="text"
+          name="unidad"
+          autocomplete="off"
+          [value]="unidad()"
+          (input)="escribir('unidad', $event)"
+        />
+      </label>
+      <label>
+        Tipo
+        <select name="tipo" [value]="tipo()" (change)="elegirTipo($event)">
+          @for (opcion of tipos; track opcion.valor) {
+            <option [value]="opcion.valor">{{ opcion.etiqueta }}</option>
+          }
+        </select>
+      </label>
+      <button type="submit" [disabled]="enviando()">Registrar y emitir código</button>
+    </form>
+    @if (errorFormulario(); as mensaje) {
+      <p class="error" role="alert">{{ mensaje }}</p>
+    }
+
+    @if (emitido(); as codigo) {
+      <div class="codigo" role="status">
+        <p>Código de vinculación. Se muestra una sola vez.</p>
+        <p class="grande">{{ codigo.codigo }}</p>
+        @if (segundosRestantes() > 0) {
+          <p>Vence en {{ tiempo(segundosRestantes()) }}</p>
+        } @else {
+          <p class="alerta">El código venció. Registre el equipo de nuevo.</p>
+        }
+        <button type="button" (click)="cerrarCodigo()">Listo</button>
+      </div>
+    }
+  </section>
+
+  <section class="tarjeta" aria-labelledby="t-registrados">
+    <h2 id="t-registrados">Equipos registrados</h2>
+    @if (cargando()) {
+      <p>Cargando…</p>
+    } @else if (dispositivos().length === 0) {
+      <p>Todavía no hay equipos registrados.</p>
+    } @else {
+      <div class="tabla">
+        <table>
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Unidad</th>
+              <th>Tipo</th>
+              <th>Estado</th>
+              <th>Registrado</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (d of dispositivos(); track d.id) {
+              <tr>
+                <td>{{ d.nombre }}</td>
+                <td>{{ d.unidad }}</td>
+                <td>{{ d.tipo }}</td>
+                <td [class]="'estado ' + d.estado">{{ etiqueta(d.estado) }}</td>
+                <td>{{ fecha(d.creado) }}</td>
+                <td>
+                  @if (d.estado !== 'retirado') {
+                    <button type="button" class="peligro" (click)="retirar(d)">Retirar</button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+
+  <section class="tarjeta" aria-labelledby="t-conectados">
+    <h2 id="t-conectados">Conectados ahora</h2>
+    @if (equipos().length === 0) {
+      <p>Ningún equipo ha anunciado su conexión.</p>
+    } @else {
+      <div class="tabla">
+        <table>
+          <thead>
+            <tr>
+              <th>Equipo</th>
+              <th>Unidad</th>
+              <th>Estado</th>
+              <th>Visto</th>
+              <th>Conectado desde</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (e of equipos(); track e.equipo) {
+              <tr>
+                <td>{{ e.equipo.slice(0, 8) }}</td>
+                <td>{{ e.unidad }}</td>
+                <td [class]="'estado ' + e.estado">{{ etiqueta(e.estado) }}</td>
+                <td>{{ fecha(e.visto) }}</td>
+                <td>{{ fecha(e.iniciada) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+</main>
