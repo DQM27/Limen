@@ -52,6 +52,10 @@ pub const TABLAS: [(&str, Copia); 14] = [
     ("auditoria", Copia::Agregar),
 ];
 
+/// Lo que el equipo sólo baja y nunca sube: los usuarios son globales y los administra la nube
+/// (el equipo sólo inicia sesión y cambia su propia clave).
+pub const SOLO_BAJADA: [(&str, Copia); 1] = [("usuario", Copia::Reemplazar)];
+
 impl Nube {
     /// Sube lo que cambió en el equipo desde la última vez: las altas, los
     /// cambios y los borrados que anotó el registro de cambios de cada tabla

@@ -167,7 +167,9 @@ DEFINE FIELD OVERWRITE en ON reloj TYPE datetime;
 
 -- Usuarios (bloque L). La clave nunca se guarda: sólo su hash
 -- Argon2id en formato PHC (lleva la sal y los parámetros).
-DEFINE TABLE OVERWRITE usuario SCHEMAFULL;
+-- Los usuarios son globales y los administra la nube: el equipo sólo los **baja** (registro
+-- de cambios para eso) y nunca los sube (`subida::SOLO_BAJADA`).
+DEFINE TABLE OVERWRITE usuario SCHEMAFULL CHANGEFEED 30d;
 DEFINE FIELD OVERWRITE cedula ON usuario TYPE string ASSERT string::len($value) > 0;
 DEFINE FIELD OVERWRITE nombre ON usuario TYPE string ASSERT string::len($value) > 0;
 DEFINE FIELD OVERWRITE activo ON usuario TYPE bool;
