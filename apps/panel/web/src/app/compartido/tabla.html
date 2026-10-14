@@ -1,0 +1,30 @@
+<section class="tabla" role="region" [attr.aria-label]="etiqueta()">
+  <div class="herramientas">
+    <div class="grupo">
+      <ng-content select="[controles]" />
+    </div>
+    <div class="grupo">
+      <ng-content select="[acciones]" />
+      <p class="conteo" role="status" aria-live="polite">{{ conteo() }}</p>
+    </div>
+  </div>
+
+  <div class="rejilla">
+    <ag-grid-angular
+      [theme]="tema"
+      [columnDefs]="columnas()"
+      [defaultColDef]="columnaPorDefecto"
+      [rowData]="filas()"
+      [getRowId]="obtenerIdFila()"
+      [localeText]="textos"
+      [loading]="cargando()"
+      [overlayNoRowsTemplate]="mensajeVacio()"
+      [rowHeight]="36"
+      [headerHeight]="38"
+      [accentedSort]="true"
+      [enableCellTextSelection]="true"
+      tooltipShowMode="whenTruncated"
+      [tooltipShowDelay]="400"
+    />
+  </div>
+</section>

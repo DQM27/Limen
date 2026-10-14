@@ -121,7 +121,7 @@ reconstruir cómo estaba el contratista el día que entró.
 | Código | Regla | Estado |
 |---|---|---|
 | L1 | Un solo rol: Operador. Sin roles especiales. Cada hecho y cada cambio queda a nombre del usuario que tenía la sesión. | ✅ |
-| L2 | Los usuarios son **globales: se crean y se administran en la nube**, nunca en un equipo. Se desactivan, no se borran, y nadie se desactiva a sí mismo. La cédula es su identidad para entrar: nacional o de extranjero (A1 y A3), única y no se edita. En el equipo sólo se inicia sesión, se cambia la propia clave (pidiendo la actual) y se cierra la sesión. | ✅ |
+| L2 | Los usuarios son **globales: se crean y se administran en la nube**, nunca en un equipo. Se desactivan, no se borran, y nadie se desactiva a sí mismo. La cédula es su identidad para entrar: nacional o de extranjero (A1 y A3), única. **Cédula y nombre se pueden editar** (cambio del 14 de octubre de 2026): la cédula se normaliza y sigue siendo única, el nombre va en mayúscula, y el usuario conserva su identificador, así que lo que ya registró sigue a su nombre. La interfaz no normaliza: manda lo escrito y muestra lo que decide el núcleo. En el equipo sólo se inicia sesión, se cambia la propia clave (pidiendo la actual) y se cierra la sesión. | ✅ |
 | L3 | Clave de 8 a 128 caracteres que no puede ser la propia cédula. Se guarda sólo su hash Argon2id (sal aleatoria, formato PHC); nunca va a la auditoría ni a la interfaz. | ✅ |
 | L4 | Login sin conexión con credencial guardada, por un máximo de 24 horas. | ✅ a medias: los usuarios bajan de la nube y el login es local (sin conexión). ⏳ el máximo de 24 horas. Falta crear y administrar usuarios desde el panel. |
 | L5 | Sesión única por equipo; cerrar la app cierra la sesión en la nube. | ⏳ |

@@ -1,6 +1,131 @@
 /* @ts-self-types="./limen_dominio_wasm.d.ts" */
 
 /**
+ * Los datos de un usuario ya en su forma única, tal como el núcleo los decide: la pantalla
+ * no normaliza nada, sólo muestra esto.
+ */
+export class DatosDeUsuario {
+    static __wrap(ptr) {
+        const obj = Object.create(DatosDeUsuario.prototype);
+        obj.__wbg_ptr = ptr;
+        DatosDeUsuarioFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        DatosDeUsuarioFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_datosdeusuario_free(ptr, 0);
+    }
+    /**
+     * @returns {string}
+     */
+    get cedula() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.__wbg_get_datosdeusuario_cedula(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {string}
+     */
+    get nombre() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.__wbg_get_datosdeusuario_nombre(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @param {string} arg0
+     */
+    set cedula(arg0) {
+        const ptr0 = passStringToWasm0(arg0, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.__wbg_set_datosdeusuario_cedula(this.__wbg_ptr, ptr0, len0);
+    }
+    /**
+     * @param {string} arg0
+     */
+    set nombre(arg0) {
+        const ptr0 = passStringToWasm0(arg0, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.__wbg_set_datosdeusuario_nombre(this.__wbg_ptr, ptr0, len0);
+    }
+}
+if (Symbol.dispose) DatosDeUsuario.prototype[Symbol.dispose] = DatosDeUsuario.prototype.free;
+
+/**
+ * De cada pedido (`{ operacion, celda, filtro }`), si la celda cumple el filtro de columna.
+ * @param {string} pedidos
+ * @returns {string}
+ */
+export function celdas_que_cumplen(pedidos) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(pedidos, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.celdas_que_cumplen(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * Una clave temporal con el azar que entrega el Worker (`crypto.getRandomValues`, 10 bytes).
+ * @param {Uint8Array} azar
+ * @param {string} cedula
+ * @returns {string}
+ */
+export function clave_temporal(azar, cedula) {
+    let deferred4_0;
+    let deferred4_1;
+    try {
+        const ptr0 = passArray8ToWasm0(azar, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(cedula, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.clave_temporal(ptr0, len0, ptr1, len1);
+        var ptr3 = ret[0];
+        var len3 = ret[1];
+        if (ret[3]) {
+            ptr3 = 0; len3 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred4_0 = ptr3;
+        deferred4_1 = len3;
+        return getStringFromWasm0(ptr3, len3);
+    } finally {
+        wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
+    }
+}
+
+/**
  * El código como se le muestra a la persona (`XXXXX-XXXXX`).
  * @param {string} texto
  * @returns {string}
@@ -23,6 +148,56 @@ export function codigo_para_mostrar(texto) {
         return getStringFromWasm0(ptr2, len2);
     } finally {
         wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * Valida y normaliza la cédula y el nombre de un usuario (alta o edición). `cedula_en_uso`:
+ * si **otro** usuario ya tiene esa cédula. Si algo no vale, el error es el código de la
+ * regla (`cedula_invalida`, `nombre_vacio`, `usuario_cedula_repetida`…).
+ * @param {string} cedula
+ * @param {string} nombre
+ * @param {boolean} cedula_en_uso
+ * @returns {DatosDeUsuario}
+ */
+export function datos_de_usuario(cedula, nombre, cedula_en_uso) {
+    const ptr0 = passStringToWasm0(cedula, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(nombre, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.datos_de_usuario(ptr0, len0, ptr1, len1, cedula_en_uso);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return DatosDeUsuario.__wrap(ret[0]);
+}
+
+/**
+ * De cada fila (un arreglo de `{ campo, texto }`), si coincide con el buscador.
+ * @param {string} buscado
+ * @param {string} filas
+ * @returns {string}
+ */
+export function filas_que_coinciden(buscado, filas) {
+    let deferred4_0;
+    let deferred4_1;
+    try {
+        const ptr0 = passStringToWasm0(buscado, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(filas, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.filas_que_coinciden(ptr0, len0, ptr1, len1);
+        var ptr3 = ret[0];
+        var len3 = ret[1];
+        if (ret[3]) {
+            ptr3 = 0; len3 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred4_0 = ptr3;
+        deferred4_1 = len3;
+        return getStringFromWasm0(ptr3, len3);
+    } finally {
+        wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
     }
 }
 
@@ -80,6 +255,27 @@ export function leer_codigo(texto) {
 }
 
 /**
+ * El mensaje que el núcleo da a un error de usuario, por su código (vacío si no es de los
+ * suyos). La pantalla recibe sólo el código y muestra esto.
+ * @param {string} codigo
+ * @returns {string}
+ */
+export function mensaje_de_error_de_usuario(codigo) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(codigo, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.mensaje_de_error_de_usuario(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
  * ¿Se puede canjear un código emitido en `emitido_ms`? Vacío si sí; si no, el código
  * de la regla que lo impide.
  * @param {number} emitido_ms
@@ -127,6 +323,165 @@ export function motivo_de_rechazo_del_equipo(vinculado, retirado) {
 }
 
 /**
+ * El nombre como se ve mientras se escribe (mayúscula, sin tocar los espacios).
+ * @param {string} texto
+ * @returns {string}
+ */
+export function nombre_al_escribir(texto) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(texto, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.nombre_al_escribir(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * Parte cada texto en segmentos (`[[{ texto, resaltado }]]`). `campo`: `NOMBRE`,
+ * `IDENTIFICACION` o `EMPRESA`; `textos`: un arreglo JSON de textos.
+ * @param {string} buscado
+ * @param {string} campo
+ * @param {string} textos
+ * @returns {string}
+ */
+export function resaltar_coincidencias(buscado, campo, textos) {
+    let deferred5_0;
+    let deferred5_1;
+    try {
+        const ptr0 = passStringToWasm0(buscado, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(campo, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passStringToWasm0(textos, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ret = wasm.resaltar_coincidencias(ptr0, len0, ptr1, len1, ptr2, len2);
+        var ptr4 = ret[0];
+        var len4 = ret[1];
+        if (ret[3]) {
+            ptr4 = 0; len4 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred5_0 = ptr4;
+        deferred5_1 = len4;
+        return getStringFromWasm0(ptr4, len4);
+    } finally {
+        wasm.__wbindgen_free(deferred5_0, deferred5_1, 1);
+    }
+}
+
+/**
+ * El alta de un usuario. Devuelve un JSON `{ cedula, nombre, cambios }`; si algo no vale, el
+ * error es el código de la regla.
+ * @param {string} cedula
+ * @param {string} nombre
+ * @param {boolean} cedula_en_uso
+ * @returns {string}
+ */
+export function usuario_para_alta(cedula, nombre, cedula_en_uso) {
+    let deferred4_0;
+    let deferred4_1;
+    try {
+        const ptr0 = passStringToWasm0(cedula, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(nombre, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.usuario_para_alta(ptr0, len0, ptr1, len1, cedula_en_uso);
+        var ptr3 = ret[0];
+        var len3 = ret[1];
+        if (ret[3]) {
+            ptr3 = 0; len3 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred4_0 = ptr3;
+        deferred4_1 = len3;
+        return getStringFromWasm0(ptr3, len3);
+    } finally {
+        wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
+    }
+}
+
+/**
+ * La edición de un usuario. Devuelve un JSON `{ cedula, nombre, activo, cambios }`.
+ * @param {string} id
+ * @param {string} antes_cedula
+ * @param {string} antes_nombre
+ * @param {boolean} antes_activo
+ * @param {string} cedula
+ * @param {string} nombre
+ * @param {boolean} activo
+ * @param {boolean} cedula_en_uso
+ * @returns {string}
+ */
+export function usuario_para_edicion(id, antes_cedula, antes_nombre, antes_activo, cedula, nombre, activo, cedula_en_uso) {
+    let deferred7_0;
+    let deferred7_1;
+    try {
+        const ptr0 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(antes_cedula, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passStringToWasm0(antes_nombre, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ptr3 = passStringToWasm0(cedula, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len3 = WASM_VECTOR_LEN;
+        const ptr4 = passStringToWasm0(nombre, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len4 = WASM_VECTOR_LEN;
+        const ret = wasm.usuario_para_edicion(ptr0, len0, ptr1, len1, ptr2, len2, antes_activo, ptr3, len3, ptr4, len4, activo, cedula_en_uso);
+        var ptr6 = ret[0];
+        var len6 = ret[1];
+        if (ret[3]) {
+            ptr6 = 0; len6 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred7_0 = ptr6;
+        deferred7_1 = len6;
+        return getStringFromWasm0(ptr6, len6);
+    } finally {
+        wasm.__wbindgen_free(deferred7_0, deferred7_1, 1);
+    }
+}
+
+/**
+ * Restablecer la clave de un usuario. Devuelve un JSON `{ cambios }`.
+ * @param {string} id
+ * @param {string} cedula
+ * @param {string} nombre
+ * @param {boolean} activo
+ * @param {boolean} debe_cambiar_clave
+ * @returns {string}
+ */
+export function usuario_para_restablecer(id, cedula, nombre, activo, debe_cambiar_clave) {
+    let deferred5_0;
+    let deferred5_1;
+    try {
+        const ptr0 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(cedula, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passStringToWasm0(nombre, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ret = wasm.usuario_para_restablecer(ptr0, len0, ptr1, len1, ptr2, len2, activo, debe_cambiar_clave);
+        var ptr4 = ret[0];
+        var len4 = ret[1];
+        if (ret[3]) {
+            ptr4 = 0; len4 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred5_0 = ptr4;
+        deferred5_1 = len4;
+        return getStringFromWasm0(ptr4, len4);
+    } finally {
+        wasm.__wbindgen_free(deferred5_0, deferred5_1, 1);
+    }
+}
+
+/**
  * Cuántos minutos vale un código.
  * @returns {number}
  */
@@ -137,6 +492,9 @@ export function vigencia_minutos() {
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
+        __wbg___wbindgen_throw_41e9ee4f547fc59a: function(arg0, arg1) {
+            throw new Error(getStringFromWasm0(arg0, arg1));
+        },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
             // Cast intrinsic for `Ref(String) -> Externref`.
             const ret = getStringFromWasm0(arg0, arg1);
@@ -157,6 +515,10 @@ function __wbg_get_imports() {
         "./limen_dominio_wasm_bg.js": import0,
     };
 }
+
+const DatosDeUsuarioFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_datosdeusuario_free(ptr, 1));
 
 function getStringFromWasm0(ptr, len) {
     return decodeText(ptr >>> 0, len);

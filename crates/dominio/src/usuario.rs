@@ -63,6 +63,26 @@ pub enum ErrorUsuario {
 }
 
 impl ErrorUsuario {
+    /// Todos los errores, para poder reconocer uno por su código.
+    pub const TODOS: [Self; 10] = [
+        Self::CedulaVacia,
+        Self::CedulaInvalida,
+        Self::NombreVacio,
+        Self::NombreInvalido,
+        Self::CedulaRepetida,
+        Self::ClaveCorta,
+        Self::ClaveLarga,
+        Self::ClaveIgualALaCedula,
+        Self::ClaveActualIncorrecta,
+        Self::NoSeDesactivaASiMismo,
+    ];
+
+    /// El error que tiene este código, si es uno de los nuestros. Así una pantalla que sólo
+    /// recibe el código (de la nube, de un formulario) muestra el mensaje del núcleo.
+    pub fn desde_codigo(codigo: &str) -> Option<Self> {
+        Self::TODOS.into_iter().find(|e| e.codigo() == codigo)
+    }
+
     pub const fn codigo(self) -> &'static str {
         match self {
             Self::CedulaVacia => "cedula_vacia",
@@ -97,6 +117,37 @@ fn nombre_de(texto: &str) -> Result<NombrePersona, ErrorUsuario> {
     })
 }
 
+/// Lo que se captura de un usuario al darlo de alta o editarlo, ya en su forma
+/// única: la cédula normalizada (A1 y A3) y el nombre en mayúscula. La pantalla
+/// no normaliza nada: manda lo escrito y muestra esto.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DatosUsuario {
+    pub cedula: Cedula,
+    pub nombre: NombrePersona,
+}
+
+/// Valida y normaliza los datos de un usuario. `cedula_en_uso`: si **otro**
+/// usuario ya tiene esa cédula (el caso de uso lo averigua y lo entrega).
+pub fn validar_datos(
+    cedula: &str,
+    nombre: &str,
+    cedula_en_uso: bool,
+) -> Result<DatosUsuario, ErrorUsuario> {
+    let cedula = cedula_de_usuario(cedula)?;
+    let nombre = nombre_de(nombre)?;
+    if cedula_en_uso {
+        return Err(ErrorUsuario::CedulaRepetida);
+    }
+    Ok(DatosUsuario { cedula, nombre })
+}
+
+/// Largo de la clave temporal que se le da a una persona (alta o restablecer).
+pub const LARGO_CLAVE_TEMPORAL: usize = 10;
+
+/// Sin 0, O, 1 ni I: la clave temporal se dicta o se copia a mano una sola vez.
+/// Son 32 símbolos, así que cada byte de azar da uno sin sesgo (256 = 8 × 32).
+const ALFABETO_CLAVE_TEMPORAL: &[u8; 32] = b"23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+
 /// Una clave nueva que ya cumple L3, lista para cifrar. Nunca se
 /// muestra ni se guarda: sólo su hash.
 #[derive(Clone, PartialEq, Eq)]
@@ -116,6 +167,20 @@ impl ClaveNueva {
             return Err(ErrorUsuario::ClaveIgualALaCedula);
         }
         Ok(Self(texto.to_owned()))
+    }
+
+    /// Una clave temporal con el azar que entrega quien llama (el dominio no
+    /// genera azar). Pasa por las mismas reglas L3 que cualquier clave.
+    pub fn temporal(
+        azar: [u8; LARGO_CLAVE_TEMPORAL],
+        cedula: &Cedula,
+    ) -> Result<Self, ErrorUsuario> {
+        let texto: String = azar
+            .iter()
+            .filter_map(|byte| ALFABETO_CLAVE_TEMPORAL.get(usize::from(byte % 32)))
+            .map(|simbolo| char::from(*simbolo))
+            .collect();
+        Self::nueva(&texto, cedula)
     }
 
     pub fn as_str(&self) -> &str {
@@ -202,19 +267,28 @@ impl Usuario {
         })
     }
 
-    /// Cambia el nombre y si está activo (L2). Nadie se desactiva a sí
-    /// mismo. La cédula no se edita: es su identidad para entrar.
+    /// Cambia la cédula, el nombre y si está activo (L2). La cédula sigue
+    /// siendo única: `hechos.cedula_en_uso` dice si **otro** usuario ya la
+    /// tiene (si no cambia, no cuenta). Nadie se desactiva a sí mismo. Cambiar
+    /// la cédula cambia con qué se entra: el usuario conserva su [`OperadorId`],
+    /// así que lo que ya registró sigue a su nombre.
     pub fn editar(
         &mut self,
+        cedula: Cedula,
         nombre: &str,
         activo: bool,
         quien_edita: OperadorId,
+        hechos: HechosUsuario,
     ) -> Result<Vec<CambioCampo>, ErrorUsuario> {
         let nombre = nombre_de(nombre)?;
+        if cedula != self.cedula && hechos.cedula_en_uso {
+            return Err(ErrorUsuario::CedulaRepetida);
+        }
         if !activo && quien_edita == self.id {
             return Err(ErrorUsuario::NoSeDesactivaASiMismo);
         }
         let antes = self.campos_auditables();
+        self.cedula = cedula;
         self.nombre = nombre;
         self.activo = activo;
         Ok(diferencias(antes, self.campos_auditables()))
@@ -534,13 +608,113 @@ mod tests {
     fn nadie_se_desactiva_a_si_mismo() {
         let mut usuario = ana();
         assert_eq!(
-            usuario.editar("ana mora", false, id(1)),
+            usuario.editar(cedula(), "ana mora", false, id(1), libre()),
             Err(ErrorUsuario::NoSeDesactivaASiMismo)
         );
         assert!(usuario.activo(), "no cambió nada");
-        let cambios = usuario.editar("ana mora", false, id(2)).unwrap();
+        let cambios = usuario
+            .editar(cedula(), "ana mora", false, id(2), libre())
+            .unwrap();
         assert_eq!(cambios.len(), 1, "otro sí lo desactiva: {cambios:?}");
         assert!(!usuario.activo());
+    }
+
+    fn libre() -> HechosUsuario {
+        HechosUsuario {
+            cedula_en_uso: false,
+        }
+    }
+
+    fn en_uso() -> HechosUsuario {
+        HechosUsuario {
+            cedula_en_uso: true,
+        }
+    }
+
+    #[test]
+    fn los_datos_se_normalizan_en_el_nucleo_y_la_pantalla_solo_los_muestra() {
+        let datos = validar_datos("1-1111-1111", "  ana   mora ", false).unwrap();
+        assert_eq!(datos.cedula, cedula(), "cédula en su forma única");
+        assert_eq!(datos.nombre.as_str(), "ANA MORA", "nombre en mayúscula");
+        assert_eq!(
+            validar_datos("", "ana", false),
+            Err(ErrorUsuario::CedulaVacia)
+        );
+        assert_eq!(
+            validar_datos("AB123", "ana", false),
+            Err(ErrorUsuario::CedulaInvalida)
+        );
+        assert_eq!(
+            validar_datos("1-1111-1111", " ", false),
+            Err(ErrorUsuario::NombreVacio)
+        );
+        assert_eq!(
+            validar_datos("1-1111-1111", "ana 2", false),
+            Err(ErrorUsuario::NombreInvalido)
+        );
+        assert_eq!(
+            validar_datos("1-1111-1111", "ana", true),
+            Err(ErrorUsuario::CedulaRepetida)
+        );
+    }
+
+    #[test]
+    fn la_cedula_se_puede_editar_pero_sigue_siendo_unica() {
+        let otra = cedula_de_usuario("2-2222-2222").unwrap();
+        let mut usuario = ana();
+        let id_original = usuario.id();
+
+        let cambios = usuario
+            .editar(otra.clone(), "ana mora", true, id(2), libre())
+            .unwrap();
+        assert_eq!(usuario.cedula(), &otra);
+        assert_eq!(usuario.id(), id_original, "es la misma persona");
+        assert_eq!(cambios.len(), 1, "{cambios:?}");
+        assert_eq!(cambios[0].campo, "cedula");
+        assert_eq!(cambios[0].antes, "111111111");
+        assert_eq!(cambios[0].despues, "222222222");
+
+        let tercera = cedula_de_usuario("3-3333-3333").unwrap();
+        assert_eq!(
+            usuario.editar(tercera, "ana mora", true, id(2), en_uso()),
+            Err(ErrorUsuario::CedulaRepetida)
+        );
+        assert_eq!(usuario.cedula(), &otra, "no cambió nada");
+
+        // Si la cédula no cambia, que «otro la tenga» no cuenta: es la suya.
+        assert!(
+            usuario
+                .editar(otra, "ana mora", true, id(2), en_uso())
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn un_error_se_reconoce_por_su_codigo_y_su_mensaje_es_el_del_nucleo() {
+        for error in ErrorUsuario::TODOS {
+            assert_eq!(ErrorUsuario::desde_codigo(error.codigo()), Some(error));
+        }
+        assert_eq!(ErrorUsuario::desde_codigo("no_existe"), None);
+        assert_eq!(
+            ErrorUsuario::desde_codigo("usuario_cedula_repetida").map(|e| e.to_string()),
+            Some("Ya existe un usuario con esa cédula".to_owned())
+        );
+    }
+
+    #[test]
+    fn la_clave_temporal_sale_del_azar_y_cumple_l3() {
+        let azar = [0, 1, 2, 3, 4, 5, 6, 7, 8, 255];
+        let clave = ClaveNueva::temporal(azar, &cedula()).unwrap();
+        assert_eq!(clave.as_str(), "23456789AZ", "determinista dado el azar");
+        assert_eq!(clave.as_str().len(), LARGO_CLAVE_TEMPORAL);
+        for byte in 0..=255u8 {
+            let clave = ClaveNueva::temporal([byte; LARGO_CLAVE_TEMPORAL], &cedula()).unwrap();
+            assert!(
+                clave.as_str().chars().all(|c| !"01OI".contains(c)),
+                "sin símbolos que se confunden: {}",
+                clave.as_str()
+            );
+        }
     }
 
     #[test]
@@ -565,7 +739,9 @@ mod tests {
     #[test]
     fn el_inicio_no_revela_si_la_cedula_existe() {
         let mut desactivado = ana();
-        desactivado.editar("ana mora", false, id(2)).unwrap();
+        desactivado
+            .editar(cedula(), "ana mora", false, id(2), libre())
+            .unwrap();
         let usuario = ana();
         assert_eq!(decidir_inicio(Some(&usuario), true), Ok(&usuario));
         assert_eq!(

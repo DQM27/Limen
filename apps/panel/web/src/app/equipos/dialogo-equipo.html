@@ -1,0 +1,65 @@
+@if (emitido(); as codigo) {
+  <div class="cabecera">
+    <h2 mat-dialog-title>Código de vinculación</h2>
+  </div>
+  <mat-dialog-content>
+    <div class="codigo" role="status">
+      <p class="grande">{{ codigo.codigo }}</p>
+      @if (segundosRestantes() > 0) {
+        <p class="ayuda">Vence en {{ tiempo(segundosRestantes()) }}</p>
+      } @else {
+        <p class="error">El código venció. Registre el equipo de nuevo.</p>
+      }
+    </div>
+    <p class="ayuda">Se muestra una sola vez. Escríbalo en el equipo al abrir la app.</p>
+  </mat-dialog-content>
+  <mat-dialog-actions align="end">
+    <button mat-flat-button type="button" (click)="cerrar()">Listo</button>
+  </mat-dialog-actions>
+} @else {
+  <form (submit)="registrar($event)">
+    <div class="cabecera">
+      <h2 mat-dialog-title>Registrar un equipo</h2>
+    </div>
+    <mat-dialog-content>
+      <mat-form-field appearance="outline" class="campo">
+        <mat-label>Nombre</mat-label>
+        <input
+          matInput
+          name="nombre"
+          autocomplete="off"
+          placeholder="PC del acceso"
+          cdkFocusInitial
+          [value]="nombre()"
+          (input)="escribir($event)"
+        />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="campo">
+        <mat-label>Unidad operativa</mat-label>
+        <mat-select [value]="unidad()" (valueChange)="unidad.set($event)">
+          @for (opcion of unidades; track opcion.codigo) {
+            <mat-option [value]="opcion.codigo">{{ opcion.nombre }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="campo">
+        <mat-label>Tipo</mat-label>
+        <mat-select [value]="tipo()" (valueChange)="tipo.set($event)">
+          @for (opcion of tipos; track opcion.valor) {
+            <mat-option [value]="opcion.valor">{{ opcion.etiqueta }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <p class="error" role="alert">{{ error() }}</p>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button type="button" (click)="cerrar()">Cancelar</button>
+      <button mat-flat-button type="submit" [disabled]="enviando() || unidad() === ''">
+        Registrar y emitir código
+      </button>
+    </mat-dialog-actions>
+  </form>
+}

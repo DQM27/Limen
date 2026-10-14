@@ -1,0 +1,26 @@
+@use '../compartido/dialogo';
+
+@include dialogo.compacto;
+
+.campo {
+  display: block;
+  width: 100%;
+  min-width: 300px;
+}
+
+// El código se escribe a mano en el equipo: grande, de ancho fijo y fácil de leer.
+.codigo {
+  padding: 12px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+  background: var(--mat-sys-surface-container-low);
+  text-align: center;
+}
+
+.grande {
+  margin: 0;
+  font: var(--mat-sys-headline-medium);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  letter-spacing: 0.15em;
+  user-select: all;
+}

@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dominio": "cargo build -p limen-dominio-wasm --target wasm32-unknown-unknown --release && wasm-bindgen --target web --out-dir apps/panel/src/dominio target/wasm32-unknown-unknown/release/limen_dominio_wasm.wasm",
+    "test": "node --import ./test/wasm.mjs --test \"test/*.test.mjs\"",
+    "dominio": "cargo build -p limen-dominio-wasm --target wasm32-unknown-unknown --release && wasm-bindgen --target web --out-dir apps/panel/src/dominio target/wasm32-unknown-unknown/release/limen_dominio_wasm.wasm && wasm-bindgen --target web --out-dir apps/panel/web/src/dominio-wasm target/wasm32-unknown-unknown/release/limen_dominio_wasm.wasm",
     "web": "npm --prefix web ci --no-audit --no-fund && npm --prefix web run build",
     "publicar": "npm run web && wrangler deploy"
   }
