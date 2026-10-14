@@ -267,6 +267,112 @@ export function nombre_al_escribir(texto) {
 }
 
 /**
+ * El alta de un usuario. Devuelve un JSON `{ cedula, nombre, cambios }`; si algo no vale, el
+ * error es el código de la regla.
+ * @param {string} cedula
+ * @param {string} nombre
+ * @param {boolean} cedula_en_uso
+ * @returns {string}
+ */
+export function usuario_para_alta(cedula, nombre, cedula_en_uso) {
+    let deferred4_0;
+    let deferred4_1;
+    try {
+        const ptr0 = passStringToWasm0(cedula, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(nombre, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.usuario_para_alta(ptr0, len0, ptr1, len1, cedula_en_uso);
+        var ptr3 = ret[0];
+        var len3 = ret[1];
+        if (ret[3]) {
+            ptr3 = 0; len3 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred4_0 = ptr3;
+        deferred4_1 = len3;
+        return getStringFromWasm0(ptr3, len3);
+    } finally {
+        wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
+    }
+}
+
+/**
+ * La edición de un usuario. Devuelve un JSON `{ cedula, nombre, activo, cambios }`.
+ * @param {string} id
+ * @param {string} antes_cedula
+ * @param {string} antes_nombre
+ * @param {boolean} antes_activo
+ * @param {string} cedula
+ * @param {string} nombre
+ * @param {boolean} activo
+ * @param {boolean} cedula_en_uso
+ * @returns {string}
+ */
+export function usuario_para_edicion(id, antes_cedula, antes_nombre, antes_activo, cedula, nombre, activo, cedula_en_uso) {
+    let deferred7_0;
+    let deferred7_1;
+    try {
+        const ptr0 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(antes_cedula, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passStringToWasm0(antes_nombre, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ptr3 = passStringToWasm0(cedula, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len3 = WASM_VECTOR_LEN;
+        const ptr4 = passStringToWasm0(nombre, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len4 = WASM_VECTOR_LEN;
+        const ret = wasm.usuario_para_edicion(ptr0, len0, ptr1, len1, ptr2, len2, antes_activo, ptr3, len3, ptr4, len4, activo, cedula_en_uso);
+        var ptr6 = ret[0];
+        var len6 = ret[1];
+        if (ret[3]) {
+            ptr6 = 0; len6 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred7_0 = ptr6;
+        deferred7_1 = len6;
+        return getStringFromWasm0(ptr6, len6);
+    } finally {
+        wasm.__wbindgen_free(deferred7_0, deferred7_1, 1);
+    }
+}
+
+/**
+ * Restablecer la clave de un usuario. Devuelve un JSON `{ cambios }`.
+ * @param {string} id
+ * @param {string} cedula
+ * @param {string} nombre
+ * @param {boolean} activo
+ * @param {boolean} debe_cambiar_clave
+ * @returns {string}
+ */
+export function usuario_para_restablecer(id, cedula, nombre, activo, debe_cambiar_clave) {
+    let deferred5_0;
+    let deferred5_1;
+    try {
+        const ptr0 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(cedula, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passStringToWasm0(nombre, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ret = wasm.usuario_para_restablecer(ptr0, len0, ptr1, len1, ptr2, len2, activo, debe_cambiar_clave);
+        var ptr4 = ret[0];
+        var len4 = ret[1];
+        if (ret[3]) {
+            ptr4 = 0; len4 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred5_0 = ptr4;
+        deferred5_1 = len4;
+        return getStringFromWasm0(ptr4, len4);
+    } finally {
+        wasm.__wbindgen_free(deferred5_0, deferred5_1, 1);
+    }
+}
+
+/**
  * Cuántos minutos vale un código.
  * @returns {number}
  */

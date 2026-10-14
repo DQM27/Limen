@@ -58,6 +58,22 @@ export function motivo_de_rechazo_del_equipo(vinculado: boolean, retirado: boole
 export function nombre_al_escribir(texto: string): string;
 
 /**
+ * El alta de un usuario. Devuelve un JSON `{ cedula, nombre, cambios }`; si algo no vale, el
+ * error es el código de la regla.
+ */
+export function usuario_para_alta(cedula: string, nombre: string, cedula_en_uso: boolean): string;
+
+/**
+ * La edición de un usuario. Devuelve un JSON `{ cedula, nombre, activo, cambios }`.
+ */
+export function usuario_para_edicion(id: string, antes_cedula: string, antes_nombre: string, antes_activo: boolean, cedula: string, nombre: string, activo: boolean, cedula_en_uso: boolean): string;
+
+/**
+ * Restablecer la clave de un usuario. Devuelve un JSON `{ cambios }`.
+ */
+export function usuario_para_restablecer(id: string, cedula: string, nombre: string, activo: boolean, debe_cambiar_clave: boolean): string;
+
+/**
  * Cuántos minutos vale un código.
  */
 export function vigencia_minutos(): number;
@@ -79,6 +95,9 @@ export interface InitOutput {
     readonly motivo_de_rechazo: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly motivo_de_rechazo_del_equipo: (a: number, b: number) => [number, number];
     readonly nombre_al_escribir: (a: number, b: number) => [number, number];
+    readonly usuario_para_alta: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
+    readonly usuario_para_edicion: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => [number, number, number, number];
+    readonly usuario_para_restablecer: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
     readonly vigencia_minutos: () => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;

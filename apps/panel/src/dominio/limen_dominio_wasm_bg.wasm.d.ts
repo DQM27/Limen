@@ -14,6 +14,9 @@ export const leer_codigo: (a: number, b: number) => [number, number, number, num
 export const motivo_de_rechazo: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const motivo_de_rechazo_del_equipo: (a: number, b: number) => [number, number];
 export const nombre_al_escribir: (a: number, b: number) => [number, number];
+export const usuario_para_alta: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
+export const usuario_para_edicion: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => [number, number, number, number];
+export const usuario_para_restablecer: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
 export const vigencia_minutos: () => number;
 export const __wbindgen_externrefs: WebAssembly.Table;
 export const __wbindgen_malloc: (a: number, b: number) => number;
