@@ -72,15 +72,19 @@ async function transaccion(env, sentencias, variables) {
 
 const CAMPOS = 'record::id(id) AS id, cedula, nombre, activo, debe_cambiar_clave';
 
+// El identificador de un usuario es un UUID: así lo guarda y lo lee el escritorio (`uuid_de`).
+// Se busca comparando su texto, que sirve igual si alguna vez quedó guardado de otra forma.
+const POR_ID = '<string>record::id(id) = <string>$id';
+
 async function leer(env, id) {
   exigirId(id);
   const [s] = await consultar(
     env,
     LECTURA,
-    `SELECT ${CAMPOS} FROM ONLY type::record('usuario', <string>$id);`,
+    `SELECT ${CAMPOS} FROM usuario WHERE ${POR_ID} LIMIT 1;`,
     { id },
   );
-  const usuario = resultado(s, null);
+  const usuario = resultado(s)[0];
   if (!usuario) throw new ErrorDeRegla('no_encontrado');
   return usuario;
 }
@@ -121,7 +125,7 @@ export function crear(env, cuerpo) {
     const clave = clave_temporal(crypto.getRandomValues(new Uint8Array(10)), alta.cedula);
     await transaccion(
       env,
-      `CREATE type::record('usuario', <string>$id) SET cedula = $cedula, nombre = $nombre,
+      `CREATE type::record('usuario', <uuid>$id) SET cedula = $cedula, nombre = $nombre,
          activo = true, clave = ${hashDeLaClave}, debe_cambiar_clave = true;
        ${AUDITORIA}`,
       {
@@ -178,7 +182,7 @@ export function editar(env, id, cuerpo) {
     if (edicion.cambios.length > 0) {
       await transaccion(
         env,
-        `UPDATE type::record('usuario', <string>$id) SET cedula = $cedula, nombre = $nombre, activo = $activo;
+        `UPDATE usuario SET cedula = $cedula, nombre = $nombre, activo = $activo WHERE ${POR_ID};
          ${AUDITORIA}`,
         {
           id,
@@ -222,7 +226,7 @@ export function restablecerClave(env, id) {
     const clave = clave_temporal(crypto.getRandomValues(new Uint8Array(10)), actual.cedula);
     await transaccion(
       env,
-      `UPDATE type::record('usuario', <string>$id) SET clave = ${hashDeLaClave}, debe_cambiar_clave = true;
+      `UPDATE usuario SET clave = ${hashDeLaClave}, debe_cambiar_clave = true WHERE ${POR_ID};
        ${AUDITORIA}`,
       { id, clave, accion: 'edicion', cambios, operador: ADMINISTRADOR_DEL_PANEL },
     );

@@ -56,7 +56,7 @@ const escrituras = (llamadas) => llamadas.filter((l) => l.texto.startsWith('BEGI
 const conAna =
   (dueno = []) =>
   (texto) => {
-    if (texto.includes('FROM ONLY')) return [ok(ANA)];
+    if (texto.includes('LIMIT 1') && texto.includes('record::id(id) = ')) return [ok([ANA])];
     if (texto.includes('WHERE cedula')) return [ok(dueno)];
     return [ok([]), ok([])];
   };
@@ -199,7 +199,7 @@ test('editar: un ID mal hecho, un usuario que no existe o un «activo» que no e
     'datos_invalidos',
   );
 
-  baseFalsa(() => [ok(null)]);
+  baseFalsa(() => [ok([])]);
   const ausente = await editar(ENV, ID, { cedula: '111111111', nombre: 'ana', activo: true });
   assert.equal(ausente.estado, 404);
   assert.equal(ausente.cuerpo.error, 'no_encontrado');
@@ -228,4 +228,22 @@ test('listar: trae los usuarios sin su clave', async () => {
     !/\bclave\b\s*[,F]/.test(llamadas[0].texto.replace('debe_cambiar_clave', '')),
     'no pide la clave',
   );
+});
+
+test('el identificador del usuario es un UUID (como lo lee el escritorio) y se busca sin importar c�mo est� guardado', async () => {
+  const llamadas = baseFalsa((texto) =>
+    texto.includes('WHERE cedula') ? [ok([])] : [ok([]), ok([])],
+  );
+  await crear(ENV, { cedula: '1-1111-1111', nombre: 'ana' });
+  const [alta] = escrituras(llamadas);
+  assert.match(alta.texto, /type::record\('usuario', <uuid>\$id\)/, 'se crea con clave UUID');
+
+  const otras = baseFalsa(conAna());
+  await editar(ENV, ID, { cedula: '111111111', nombre: 'ana mora', activo: false });
+  await restablecerClave(ENV, ID);
+  const lecturas = otras.filter((l) => l.texto.includes('record::id(id) = '));
+  assert.ok(lecturas.length >= 2, 'busca por el texto del identificador');
+  for (const escritura of escrituras(otras)) {
+    assert.match(escritura.texto, /WHERE <string>record::id\(id\) = <string>\$id/);
+  }
 });
