@@ -32,6 +32,12 @@ class NucleoFalso extends Nucleo {
   estadoDeConexion(): never {
     throw new Error('no se usa en estas pruebas');
   }
+  empresaAlEscribir(texto: string): string {
+    return texto;
+  }
+  praindVencido(): boolean {
+    return false;
+  }
   mensajeDeError(codigo: string): string {
     return codigo === 'usuario_cedula_repetida' ? 'MENSAJE DEL NÚCLEO: ya existe' : '';
   }

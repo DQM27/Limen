@@ -36,3 +36,9 @@ export function hora24(valor: string | null | undefined): string {
   const fecha = new Date(valor);
   return Number.isNaN(fecha.getTime()) ? '' : SOLO_HORA.format(fecha);
 }
+
+/** Un día (`AAAA-MM-DD`) como se ve en todo el panel: `31/12/2026`. */
+export function soloFecha(valor: string | null | undefined): string {
+  const [año, mes, dia] = (valor ?? '').split('-');
+  return año && mes && dia ? `${dia}/${mes}/${año}` : '';
+}

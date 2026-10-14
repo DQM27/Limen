@@ -81,3 +81,25 @@ la auditoría. La clave se cifra en la propia base con `crypto::argon2::generate
 Rust comprueba que el login de Limen acepta ese hash) y se muestra una sola vez; nunca va a la
 auditoría. Hasta que entre Cloudflare Access, la auditoría anota los cambios del panel con el
 identificador nulo en vez de un usuario con nombre.
+
+## Contratistas (bloque B)
+
+`GET /api/contratistas` (contratistas y empresas), `POST /api/contratistas`, `PATCH
+/api/contratistas/:id` y `POST /api/empresas`. El catálogo es global: el panel lo edita en la nube y
+los equipos lo bajan solos. **El núcleo decide** (`contratista_evaluar` y `empresa_evaluar` en
+`crates/dominio-wasm`, que usan las mismas reglas que el escritorio): qué cédula y nombre valen y
+cómo quedan, que la empresa exista, el PRAIND vigente (se mide con el día de Costa Rica; al editar
+sólo se revisa si cambió la fecha, así a alguien con el PRAIND vencido se le puede quitar el
+acceso), que la cédula sea única, que no se cambie la cédula de quien está adentro, el mensaje y el
+campo de cada problema y qué cambió para la auditoría. Si el formulario no vale, el Worker responde
+`422` con **todos** los problemas a la vez (`{ problemas: [{ codigo, campo, mensaje }] }`) y la
+página marca cada campo. El Worker solo lee lo que la regla necesita saber (¿otro tiene la cédula?,
+¿la empresa existe?, ¿está adentro? —mira `presencia`—) y guarda con la auditoría en una
+transacción. Un contratista **nunca se borra**: se le quita el acceso (interruptor «Acceso») y se le
+puede devolver. En la página, la columna «Vence PRAIND» se pinta según lo que dice el núcleo, la
+empresa se elige entre las que existen (filtradas con la búsqueda N2 del núcleo) y una nueva se crea
+con «+».
+
+Cosas que costaron un tropiezo: SurrealDB lee como UUID todo texto que lo parezca, así que al
+guardar la auditoría (la empresa del alta es un UUID) se devuelve a texto con `<string>`; y la
+auditoría es inmutable, por eso las pruebas contra la nube dejan sus entradas de auditoría.

@@ -152,6 +152,54 @@ export function codigo_para_mostrar(texto) {
 }
 
 /**
+ * La cédula del contratista en su forma única (vacía si no vale).
+ * @param {string} texto
+ * @returns {string}
+ */
+export function contratista_cedula(texto) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(texto, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.contratista_cedula(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * Evalúa el formulario de un contratista. Entrada JSON: `{ id, ahora_ms, anterior, borrador,
+ * hechos }` (`anterior` es `null` en un alta). Salida JSON: `{ problemas }` con todo lo que
+ * impide guardar, o `{ problemas: [], datos, cambios }` con lo que se guarda y se audita.
+ * @param {string} entrada
+ * @returns {string}
+ */
+export function contratista_evaluar(entrada) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(entrada, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.contratista_evaluar(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * Valida y normaliza la cédula y el nombre de un usuario (alta o edición). `cedula_en_uso`:
  * si **otro** usuario ya tiene esa cédula. Si algo no vale, el error es el código de la
  * regla (`cedula_invalida`, `nombre_vacio`, `usuario_cedula_repetida`…).
@@ -170,6 +218,81 @@ export function datos_de_usuario(cedula, nombre, cedula_en_uso) {
         throw takeFromExternrefTable0(ret[1]);
     }
     return DatosDeUsuario.__wrap(ret[0]);
+}
+
+/**
+ * El nombre de empresa como se ve mientras se escribe (mayúscula, sin tocar los espacios).
+ * @param {string} texto
+ * @returns {string}
+ */
+export function empresa_al_escribir(texto) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(texto, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.empresa_al_escribir(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * Evalúa el nombre de una empresa (alta, o renombrar si `anterior` no está vacío). Devuelve
+ * un JSON `{ problema }` o `{ problema: null, nombre, nombre_busqueda, cambios }`.
+ * @param {string} id
+ * @param {string} anterior
+ * @param {string} nombre
+ * @param {boolean} nombre_en_uso
+ * @returns {string}
+ */
+export function empresa_evaluar(id, anterior, nombre, nombre_en_uso) {
+    let deferred5_0;
+    let deferred5_1;
+    try {
+        const ptr0 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(anterior, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passStringToWasm0(nombre, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ret = wasm.empresa_evaluar(ptr0, len0, ptr1, len1, ptr2, len2, nombre_en_uso);
+        var ptr4 = ret[0];
+        var len4 = ret[1];
+        if (ret[3]) {
+            ptr4 = 0; len4 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred5_0 = ptr4;
+        deferred5_1 = len4;
+        return getStringFromWasm0(ptr4, len4);
+    } finally {
+        wasm.__wbindgen_free(deferred5_0, deferred5_1, 1);
+    }
+}
+
+/**
+ * El nombre de empresa en su forma única, vacío si no vale (el nombre se compara así para
+ * saber si ya existe).
+ * @param {string} texto
+ * @returns {string}
+ */
+export function empresa_nombre(texto) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(texto, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.empresa_nombre(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
 }
 
 /**
@@ -367,6 +490,19 @@ export function nombre_al_escribir(texto) {
     } finally {
         wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
     }
+}
+
+/**
+ * ¿Está vencido el PRAIND que vence en `fecha` (`AAAA-MM-DD`)? Hoy es el de Costa Rica.
+ * @param {string} fecha
+ * @param {number} ahora_ms
+ * @returns {boolean}
+ */
+export function praind_esta_vencido(fecha, ahora_ms) {
+    const ptr0 = passStringToWasm0(fecha, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.praind_esta_vencido(ptr0, len0, ahora_ms);
+    return ret !== 0;
 }
 
 /**

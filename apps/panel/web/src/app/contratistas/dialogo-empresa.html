@@ -1,0 +1,23 @@
+<form (submit)="guardar($event)">
+  <div class="cabecera">
+    <h2 mat-dialog-title>Nueva empresa</h2>
+  </div>
+  <mat-dialog-content>
+    <mat-form-field appearance="outline" class="campo">
+      <mat-label>Nombre de la empresa</mat-label>
+      <input
+        matInput
+        name="nombre"
+        autocomplete="off"
+        cdkFocusInitial
+        [value]="nombre()"
+        (input)="escribir($event)"
+      />
+    </mat-form-field>
+    <p class="error" role="alert">{{ error() }}</p>
+  </mat-dialog-content>
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" (click)="cancelar()">Cancelar</button>
+    <button mat-flat-button type="submit" [disabled]="enviando()">Crear empresa</button>
+  </mat-dialog-actions>
+</form>

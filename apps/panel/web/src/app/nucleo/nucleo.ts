@@ -50,4 +50,10 @@ export abstract class Nucleo {
 
   /** El mensaje del núcleo para el código de un error de usuario (vacío si no es suyo). */
   abstract mensajeDeError(codigo: string): string;
+
+  /** El nombre de una empresa como se ve mientras se escribe (mayúscula, sin tocar los espacios). */
+  abstract empresaAlEscribir(texto: string): string;
+
+  /** ¿Está vencido el PRAIND que vence en `fecha` (`AAAA-MM-DD`)? `ahoraMs`: la hora de ahora. */
+  abstract praindVencido(fecha: string, ahoraMs: number): boolean;
 }

@@ -29,11 +29,40 @@ export function clave_temporal(azar: Uint8Array, cedula: string): string;
 export function codigo_para_mostrar(texto: string): string;
 
 /**
+ * La cédula del contratista en su forma única (vacía si no vale).
+ */
+export function contratista_cedula(texto: string): string;
+
+/**
+ * Evalúa el formulario de un contratista. Entrada JSON: `{ id, ahora_ms, anterior, borrador,
+ * hechos }` (`anterior` es `null` en un alta). Salida JSON: `{ problemas }` con todo lo que
+ * impide guardar, o `{ problemas: [], datos, cambios }` con lo que se guarda y se audita.
+ */
+export function contratista_evaluar(entrada: string): string;
+
+/**
  * Valida y normaliza la cédula y el nombre de un usuario (alta o edición). `cedula_en_uso`:
  * si **otro** usuario ya tiene esa cédula. Si algo no vale, el error es el código de la
  * regla (`cedula_invalida`, `nombre_vacio`, `usuario_cedula_repetida`…).
  */
 export function datos_de_usuario(cedula: string, nombre: string, cedula_en_uso: boolean): DatosDeUsuario;
+
+/**
+ * El nombre de empresa como se ve mientras se escribe (mayúscula, sin tocar los espacios).
+ */
+export function empresa_al_escribir(texto: string): string;
+
+/**
+ * Evalúa el nombre de una empresa (alta, o renombrar si `anterior` no está vacío). Devuelve
+ * un JSON `{ problema }` o `{ problema: null, nombre, nombre_busqueda, cambios }`.
+ */
+export function empresa_evaluar(id: string, anterior: string, nombre: string, nombre_en_uso: boolean): string;
+
+/**
+ * El nombre de empresa en su forma única, vacío si no vale (el nombre se compara así para
+ * saber si ya existe).
+ */
+export function empresa_nombre(texto: string): string;
 
 /**
  * Cómo está conectado un equipo: `en_linea`, `caido` (sin señal) o `fuera` (desconectado). Lo
@@ -80,6 +109,11 @@ export function motivo_de_rechazo_del_equipo(vinculado: boolean, retirado: boole
 export function nombre_al_escribir(texto: string): string;
 
 /**
+ * ¿Está vencido el PRAIND que vence en `fecha` (`AAAA-MM-DD`)? Hoy es el de Costa Rica.
+ */
+export function praind_esta_vencido(fecha: string, ahora_ms: number): boolean;
+
+/**
  * Parte cada texto en segmentos (`[[{ texto, resaltado }]]`). `campo`: `NOMBRE`,
  * `IDENTIFICACION` o `EMPRESA`; `textos`: un arreglo JSON de textos.
  */
@@ -118,7 +152,12 @@ export interface InitOutput {
     readonly celdas_que_cumplen: (a: number, b: number) => [number, number, number, number];
     readonly clave_temporal: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly codigo_para_mostrar: (a: number, b: number) => [number, number, number, number];
+    readonly contratista_cedula: (a: number, b: number) => [number, number];
+    readonly contratista_evaluar: (a: number, b: number) => [number, number, number, number];
     readonly datos_de_usuario: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly empresa_al_escribir: (a: number, b: number) => [number, number];
+    readonly empresa_evaluar: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
+    readonly empresa_nombre: (a: number, b: number) => [number, number];
     readonly estado_de_conexion_del_equipo: (a: number, b: number, c: number) => [number, number, number, number];
     readonly filas_que_coinciden: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly generar_codigo: (a: number, b: number) => [number, number, number, number];
@@ -127,6 +166,7 @@ export interface InitOutput {
     readonly motivo_de_rechazo: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly motivo_de_rechazo_del_equipo: (a: number, b: number) => [number, number];
     readonly nombre_al_escribir: (a: number, b: number) => [number, number];
+    readonly praind_esta_vencido: (a: number, b: number, c: number) => number;
     readonly resaltar_coincidencias: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
     readonly usuario_para_alta: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
     readonly usuario_para_edicion: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => [number, number, number, number];

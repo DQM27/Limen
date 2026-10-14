@@ -12,6 +12,12 @@ export const routes: Routes = [
     title: 'Usuarios · Limen',
     loadComponent: () => import('./usuarios/usuarios-pagina').then((m) => m.UsuariosPagina),
   },
+  {
+    path: 'contratistas',
+    title: 'Contratistas · Limen',
+    loadComponent: () =>
+      import('./contratistas/contratistas-pagina').then((m) => m.ContratistasPagina),
+  },
   // Una dirección que no existe vuelve a la primera sección.
   { path: '**', redirectTo: 'equipos' },
 ];

@@ -1,0 +1,9 @@
+@use '../compartido/dialogo';
+
+@include dialogo.compacto;
+
+.campo {
+  display: block;
+  width: 100%;
+  min-width: 320px;
+}

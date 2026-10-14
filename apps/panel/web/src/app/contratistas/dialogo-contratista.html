@@ -1,0 +1,103 @@
+<form (submit)="guardar($event)">
+  <div class="cabecera">
+    <h2 mat-dialog-title>{{ contratista ? 'Editar contratista' : 'Nuevo contratista' }}</h2>
+  </div>
+  <mat-dialog-content>
+    <div class="campos">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-label>Cédula</mat-label>
+        <input
+          matInput
+          name="cedula"
+          autocomplete="off"
+          inputmode="numeric"
+          cdkFocusInitial
+          [value]="cedula()"
+          (input)="escribirCedula($event)"
+        />
+        @if (mensaje('cedula'); as texto) {
+          <mat-hint class="mensaje-error">{{ texto }}</mat-hint>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-label>Nombre</mat-label>
+        <input
+          matInput
+          name="nombre"
+          autocomplete="off"
+          [value]="nombre()"
+          (input)="escribirNombre($event)"
+        />
+        @if (mensaje('nombre'); as texto) {
+          <mat-hint class="mensaje-error">{{ texto }}</mat-hint>
+        }
+      </mat-form-field>
+
+      <div class="empresa">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Empresa</mat-label>
+          <input
+            matInput
+            name="empresa"
+            autocomplete="off"
+            [matAutocomplete]="lista"
+            [value]="empresaTexto()"
+            (input)="escribirEmpresa($event)"
+          />
+          <mat-autocomplete #lista="matAutocomplete" (optionSelected)="elegirEmpresa($event)">
+            @for (empresa of empresasQueCoinciden(); track empresa.id) {
+              <mat-option [value]="empresa">{{ empresa.nombre }}</mat-option>
+            }
+          </mat-autocomplete>
+          @if (mensaje('empresa_id'); as texto) {
+            <mat-hint class="mensaje-error">{{ texto }}</mat-hint>
+          }
+        </mat-form-field>
+        <button
+          mat-icon-button
+          type="button"
+          class="nueva-empresa"
+          aria-label="Crear una empresa nueva"
+          (click)="nuevaEmpresa()"
+        >
+          <mat-icon aria-hidden="true">add</mat-icon>
+        </button>
+      </div>
+
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-label>Tipo de ingreso</mat-label>
+        <mat-select [value]="tipo()" (valueChange)="tipo.set($event)">
+          <mat-option value="PRAIND">{{ etiquetaDeTipo('PRAIND') }}</mat-option>
+          <mat-option value="IN_HOUSE">{{ etiquetaDeTipo('IN_HOUSE') }}</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-label>Vence PRAIND</mat-label>
+        <input
+          matInput
+          type="date"
+          name="fecha"
+          [value]="fecha()"
+          (input)="escribirFecha($event)"
+        />
+        @if (mensaje('fecha_vencimiento_praind'); as texto) {
+          <mat-hint class="mensaje-error">{{ texto }}</mat-hint>
+        }
+      </mat-form-field>
+
+      <mat-slide-toggle [checked]="tieneAcceso()" (change)="tieneAcceso.set($event.checked)">
+        Tiene acceso
+      </mat-slide-toggle>
+    </div>
+
+    <p class="error" role="alert">{{ errorGeneral() }}</p>
+  </mat-dialog-content>
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" (click)="cancelar()">Cancelar</button>
+    <button mat-flat-button type="submit" [disabled]="enviando()">
+      {{ contratista ? 'Guardar cambios' : 'Registrar' }}
+    </button>
+  </mat-dialog-actions>
+</form>

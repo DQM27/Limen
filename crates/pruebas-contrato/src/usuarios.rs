@@ -9,7 +9,9 @@ use limen_aplicacion::puertos::{
 use limen_dominio::cedula::Cedula;
 use limen_dominio::nombre::NombrePersona;
 use limen_dominio::operador::OperadorId;
-use limen_dominio::usuario::{HashClave, IntentosFallidos, Usuario, UsuarioGuardado};
+use limen_dominio::usuario::{
+    HashClave, HechosUsuario, IntentosFallidos, Usuario, UsuarioGuardado,
+};
 use uuid::Uuid;
 
 // --- Datos de ejemplo ---
@@ -86,7 +88,16 @@ pub async fn guarda_y_lee_un_usuario_tal_cual<F: FabricaUnidadDeTrabajo>(fabrica
     drop(uow);
 
     // Guardar de nuevo actualiza (desactivar no borra: L2).
-    ana.editar("ANA MORA", false, id_usuario(9)).unwrap();
+    ana.editar(
+        cedula("111111111"),
+        "ANA MORA",
+        false,
+        id_usuario(9),
+        HechosUsuario {
+            cedula_en_uso: false,
+        },
+    )
+    .unwrap();
     sembrar_usuarios(&fabrica, &[ana.clone()]).await;
     let mut uow = fabrica.nueva();
     assert_eq!(

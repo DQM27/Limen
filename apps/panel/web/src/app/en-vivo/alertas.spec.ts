@@ -20,6 +20,12 @@ class NucleoFalso extends Nucleo {
   mensajeDeError(): string {
     return '';
   }
+  empresaAlEscribir(texto: string): string {
+    return texto;
+  }
+  praindVencido(): boolean {
+    return false;
+  }
   estadoDeConexion(enLinea: boolean, vistoMs: number, ahoraMs: number): EstadoDeConexion {
     if (!enLinea) {
       return 'fuera';

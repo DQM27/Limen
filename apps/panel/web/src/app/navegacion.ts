@@ -14,5 +14,5 @@ export const SECCIONES: readonly Seccion[] = [
   { etiqueta: 'Equipos', icono: 'devices', ruta: '/equipos' },
   { etiqueta: 'Usuarios', icono: 'group', ruta: '/usuarios' },
   { etiqueta: 'Historiales', icono: 'history' },
-  { etiqueta: 'Contratistas', icono: 'engineering' },
+  { etiqueta: 'Contratistas', icono: 'engineering', ruta: '/contratistas' },
 ];

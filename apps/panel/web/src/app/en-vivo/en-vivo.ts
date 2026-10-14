@@ -14,7 +14,14 @@ export type EstadoEnVivo =
   | 'no_disponible';
 
 /** Las tablas que la página sigue en vivo. */
-export const TABLAS_EN_VIVO = ['conexion', 'usuario', 'dispositivo', 'hecho'] as const;
+export const TABLAS_EN_VIVO = [
+  'conexion',
+  'usuario',
+  'dispositivo',
+  'hecho',
+  'contratista',
+  'empresa',
+] as const;
 
 /** Lo que el Worker da para conectarse: un token de sólo lectura de una hora. */
 export interface AccesoEnVivo {

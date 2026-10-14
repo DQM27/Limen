@@ -1,0 +1,17 @@
+<h1 class="solo-lectores">Contratistas</h1>
+
+<app-tabla
+  etiqueta="Contratistas"
+  marcador="Cédula, nombre o empresa…"
+  [columnas]="columnas()"
+  [filas]="filas()"
+  [cargando]="cargando()"
+  [idFila]="idFila"
+  [camposDeBusqueda]="camposDeBusqueda"
+  mensajeVacio="Todavía no hay contratistas."
+>
+  <button controles mat-flat-button type="button" (click)="nuevo()">
+    <mat-icon aria-hidden="true">add</mat-icon>
+    Nuevo contratista
+  </button>
+</app-tabla>

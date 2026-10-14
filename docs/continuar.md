@@ -13,7 +13,7 @@ que está desplegado en `limen.megabrisas.com` sale de esta rama). Detalle en [`
 **Hecho y desplegado**
 
 - **Estructura del panel** (Angular, Material 3 con Tokyo Night claro y oscuro, AG Grid): menú lateral con
-  Equipos, Usuarios, Historiales y Contratistas (las dos últimas apagadas, aún sin pantalla). Cada pantalla:
+  Equipos, Usuarios, Historiales (apagada, aún sin pantalla) y Contratistas. Cada pantalla:
   título, fila de herramientas y tabla (`web/src/app/compartido/tabla.ts`).
 - **El núcleo decide, la página sólo muestra:** la página carga el dominio como WebAssembly
   (`web/src/dominio-wasm`, hecho por `npm --prefix apps/panel run dominio`, que también regenera el del Worker).
@@ -36,8 +36,13 @@ que está desplegado en `limen.megabrisas.com` sale de esta rama). Detalle en [`
 
 **Lo que sigue (lo pidió el dueño)**
 
-1. **Edición de contratistas en el panel** (catálogo global: alta, edición, vencimiento del PRAIND, empresa), con
-   las mismas reglas del núcleo que ya usa el escritorio.
+1. ~~Edición de contratistas en el panel~~ **Hecho en código (sin desplegar)**: pantalla Contratistas (alta,
+   edición, empresa nueva con «+», interruptor de acceso, PRAIND vencido pintado por el núcleo), Worker
+   `apps/panel/src/contratistas.js` + `escritura.js` (lo común), puertas `contratista_evaluar`, `empresa_evaluar` y
+   `praind_esta_vencido` en `dominio-wasm`. Probado con el simulador y contra la nube de desarrollo real. Ver
+   [`panel.md`](panel.md). Pendiente: verlo en el navegador (hay que desplegar) y renombrar empresas (el dominio ya
+   puede; falta la pantalla). Tropiezo: `npm --prefix apps/panel run dominio` falla si no se corre desde la raíz del
+   repositorio con el cwd correcto; si pasa, correr los dos `wasm-bindgen` a mano desde la raíz.
 2. **Acceso denegado por cédula:** quien está vetado no entra por **ninguna** vía (contratista, proveedor o
    correo). El catálogo se mantiene al día en la nube y, si no cuesta, se valida en cada registro. En Lattis fue
    difícil: se puede ver ahí como referencia. Mirar primero qué ya hace `crates/aplicacion/src/casos_de_uso/veto.rs`.

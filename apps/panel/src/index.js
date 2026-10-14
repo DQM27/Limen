@@ -8,6 +8,12 @@ import { estado_de_conexion_del_equipo } from './dominio.js';
 import { enVivo } from './en_vivo.js';
 import { canjear, listar, registrar, retirar, unidades } from './vinculacion.js';
 import {
+  crearEmpresa,
+  editar as editarContratista,
+  listar as listarContratistas,
+  registrar as registrarContratista,
+} from './contratistas.js';
+import {
   crear as crearUsuario,
   editar as editarUsuario,
   listar as listarUsuarios,
@@ -126,6 +132,20 @@ async function atender(request, env) {
     }
     const clave = pathname.match(/^\/api\/usuarios\/([^/]+)\/clave$/);
     if (clave && request.method === 'POST') return json(await restablecerClave(env, clave[1]));
+    // Contratistas y sus empresas: igual, el núcleo decide.
+    if (pathname === '/api/contratistas' && request.method === 'GET') {
+      return json(await listarContratistas(env));
+    }
+    if (pathname === '/api/contratistas' && request.method === 'POST') {
+      return json(await registrarContratista(env, await cuerpoJson()));
+    }
+    const contratista = pathname.match(/^\/api\/contratistas\/([^/]+)$/);
+    if (contratista && request.method === 'PATCH') {
+      return json(await editarContratista(env, contratista[1], await cuerpoJson()));
+    }
+    if (pathname === '/api/empresas' && request.method === 'POST') {
+      return json(await crearEmpresa(env, await cuerpoJson()));
+    }
     if (pathname.startsWith('/api/')) return Response.json({ error: 'no_existe' }, { status: 404 });
     return env.ASSETS.fetch(request);
   } catch (error) {

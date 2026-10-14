@@ -8,15 +8,26 @@
 //! Cada regla vive en una función normal (`regla_*`, que se prueba aquí) y la exportada
 //! sólo convierte el error: `JsValue` no existe fuera de WebAssembly.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 use limen_dominio::auditoria::CambioCampo;
+use limen_dominio::busqueda::plegar;
+use limen_dominio::cedula::Cedula;
 use limen_dominio::conexion_equipo::estado_de_conexion;
+use limen_dominio::contratista::{
+    BorradorContratista, Contratista, ContratistaGuardado, ContratistaId, DatosContratista,
+    ErrorContratista, HechosContratista, cedula_de_contratista, problemas,
+};
+use limen_dominio::empresa::{
+    Empresa, EmpresaId, HechosEmpresa, NombreEmpresa, nombre_empresa_mientras_se_escribe,
+};
 use limen_dominio::filtro_de_tabla::{
     CampoDeFila, Operacion, cumple_filtro_de_columna, fila_coincide,
 };
 use limen_dominio::nombre::{NombrePersona, nombre_mientras_se_escribe};
 use limen_dominio::operador::OperadorId;
+use limen_dominio::praind::praind_vencido;
 use limen_dominio::resaltado::{Campo, resaltar};
+use limen_dominio::tipo_ingreso::TipoIngreso;
 use limen_dominio::usuario::{
     ClaveNueva, ErrorUsuario, HashClave, HechosUsuario, LARGO_CLAVE_TEMPORAL, Usuario,
     UsuarioGuardado, cedula_de_usuario, validar_datos,
@@ -474,6 +485,268 @@ pub fn clave_temporal(azar: &[u8], cedula: &str) -> Result<String, JsValue> {
     regla_clave_temporal(azar, cedula).map_err(a_js)
 }
 
+// --- Contratistas y sus empresas ---
+
+/// El día de hoy en la instalación. Costa Rica va seis horas detrás de UTC todo el año.
+fn hoy_de_costa_rica(ahora_ms: f64) -> Result<NaiveDate, Motivo> {
+    Ok((instante(ahora_ms)? - Duration::hours(6)).date_naive())
+}
+
+fn texto_opcional<'a>(valor: &'a serde_json::Value, clave: &str) -> &'a str {
+    valor
+        .get(clave)
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+}
+
+fn booleano(valor: &serde_json::Value, clave: &str) -> bool {
+    valor
+        .get(clave)
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or_default()
+}
+
+fn uuid_de(texto: &str) -> Result<Uuid, Motivo> {
+    Uuid::parse_str(texto).map_err(|_| "id_invalido")
+}
+
+/// La empresa elegida (su identificador), o ninguna si el formulario no trae.
+fn empresa_elegida(valor: &serde_json::Value) -> Result<Option<EmpresaId>, Motivo> {
+    match texto_opcional(valor, "empresa") {
+        "" => Ok(None),
+        texto => Ok(Some(EmpresaId::desde_uuid(uuid_de(texto)?))),
+    }
+}
+
+/// La fecha escrita (`AAAA-MM-DD`), o ninguna si el formulario no trae.
+fn fecha_escrita(valor: &serde_json::Value) -> Result<Option<NaiveDate>, Motivo> {
+    match texto_opcional(valor, "fecha_vencimiento_praind") {
+        "" => Ok(None),
+        texto => texto.parse().map(Some).map_err(|_| "fecha_invalida"),
+    }
+}
+
+fn tipo_de_ingreso(valor: &serde_json::Value) -> Result<TipoIngreso, Motivo> {
+    TipoIngreso::desde_codigo(texto_opcional(valor, "tipo_ingreso")).map_err(|_| "tipo_invalido")
+}
+
+/// Como estaba un contratista antes de editarlo, tal cual está en la base.
+fn contratista_anterior(valor: &serde_json::Value) -> Result<Contratista, Motivo> {
+    Ok(Contratista::restaurar(ContratistaGuardado {
+        id: ContratistaId::desde_uuid(uuid_de(texto_opcional(valor, "id"))?),
+        cedula: Cedula::normalizar(texto_opcional(valor, "cedula"))
+            .map_err(|_| "cedula_invalida")?,
+        nombre: NombrePersona::nuevo(texto_opcional(valor, "nombre"))
+            .map_err(|_| "nombre_invalido")?,
+        empresa: empresa_elegida(valor)?.ok_or("id_invalido")?,
+        tipo_ingreso: tipo_de_ingreso(valor)?,
+        fecha_vencimiento_praind: fecha_escrita(valor)?.ok_or("fecha_invalida")?,
+        tiene_acceso: booleano(valor, "tiene_acceso"),
+    }))
+}
+
+/// El campo del formulario al que pertenece cada error (los mismos nombres que usa el
+/// escritorio), para que la pantalla muestre el mensaje junto a él.
+const fn campo_de_contratista(error: ErrorContratista) -> &'static str {
+    match error {
+        ErrorContratista::CedulaVacia
+        | ErrorContratista::CedulaInvalida
+        | ErrorContratista::CedulaRepetida
+        | ErrorContratista::CedulaNoEditableAdentro => "cedula",
+        ErrorContratista::NombreVacio | ErrorContratista::NombreInvalido => "nombre",
+        ErrorContratista::EmpresaRequerida | ErrorContratista::EmpresaNoExiste => "empresa_id",
+        ErrorContratista::PraindRequerido | ErrorContratista::PraindVencido => {
+            "fecha_vencimiento_praind"
+        }
+    }
+}
+
+/// Un contratista (nuevo o `anterior`) ya evaluado por el núcleo: todos los problemas del
+/// formulario a la vez o, si no hay ninguno, los datos normalizados y lo que cambió.
+fn regla_contratista(entrada: &str) -> Result<String, Motivo> {
+    let entrada = leer_json(entrada)?;
+    let hoy = hoy_de_costa_rica(
+        entrada
+            .get("ahora_ms")
+            .and_then(serde_json::Value::as_f64)
+            .ok_or("json_invalido")?,
+    )?;
+    let anterior = match entrada.get("anterior").filter(|a| !a.is_null()) {
+        Some(anterior) => Some(contratista_anterior(anterior)?),
+        None => None,
+    };
+    let formulario = entrada.get("borrador").ok_or("json_invalido")?;
+    let hechos_leidos = entrada.get("hechos").ok_or("json_invalido")?;
+    let hechos = HechosContratista {
+        cedula_en_uso: booleano(hechos_leidos, "cedula_en_uso"),
+        empresa_existe: booleano(hechos_leidos, "empresa_existe"),
+        esta_adentro: booleano(hechos_leidos, "esta_adentro"),
+    };
+    let (empresa, fecha) = (empresa_elegida(formulario)?, fecha_escrita(formulario)?);
+    let borrador = BorradorContratista {
+        cedula: texto_opcional(formulario, "cedula"),
+        nombre: texto_opcional(formulario, "nombre"),
+        empresa,
+        fecha_vencimiento_praind: fecha,
+    };
+    let lista = problemas(&borrador, hechos, hoy, anterior.as_ref());
+    if !lista.is_empty() {
+        let lista: Vec<_> = lista
+            .iter()
+            .map(|error| {
+                json!({
+                    "codigo": error.codigo(),
+                    "campo": campo_de_contratista(*error),
+                    "mensaje": error.to_string(),
+                })
+            })
+            .collect();
+        return Ok(json!({ "problemas": lista }).to_string());
+    }
+
+    // Sin problemas, la empresa y la fecha están.
+    let (Some(empresa), Some(fecha)) = (empresa, fecha) else {
+        return Err("json_invalido");
+    };
+    let datos = DatosContratista {
+        cedula: borrador.cedula,
+        nombre: borrador.nombre,
+        empresa,
+        tipo_ingreso: tipo_de_ingreso(formulario)?,
+        fecha_vencimiento_praind: fecha,
+        tiene_acceso: booleano(formulario, "tiene_acceso"),
+    };
+    let (contratista, cambios) = if let Some(mut contratista) = anterior {
+        let cambios = contratista
+            .editar(datos, hechos, hoy)
+            .map_err(ErrorContratista::codigo)?;
+        (contratista, cambios)
+    } else {
+        let id = ContratistaId::desde_uuid(uuid_de(texto_opcional(&entrada, "id"))?);
+        let contratista =
+            Contratista::registrar(id, datos, hechos, hoy).map_err(ErrorContratista::codigo)?;
+        let cambios = contratista.cambios_de_alta();
+        (contratista, cambios)
+    };
+    Ok(json!({
+        "problemas": [],
+        "datos": {
+            "id": contratista.id().to_string(),
+            "cedula": contratista.cedula().as_str(),
+            "nombre": contratista.nombre().as_str(),
+            "nombre_busqueda": plegar(contratista.nombre().as_str()),
+            "empresa": contratista.empresa().to_string(),
+            "tipo_ingreso": contratista.tipo_ingreso().codigo(),
+            "fecha_vencimiento_praind": contratista.fecha_vencimiento_praind().to_string(),
+            "tiene_acceso": contratista.tiene_acceso(),
+        },
+        "cambios": cambios_a_json(&cambios),
+    })
+    .to_string())
+}
+
+/// La cédula de un contratista en su forma única, o vacía si no vale (el formulario ya
+/// informa el motivo): con ella el Worker averigua si otro contratista la tiene.
+fn regla_cedula_de_contratista(texto: &str) -> String {
+    cedula_de_contratista(texto)
+        .map(|cedula| cedula.as_str().to_owned())
+        .unwrap_or_default()
+}
+
+/// Una empresa (nueva, o con `anterior` si se renombra) evaluada por el núcleo: el problema
+/// que impide guardarla o el nombre normalizado y lo que cambió.
+fn regla_empresa(
+    id: &str,
+    anterior: &str,
+    nombre: &str,
+    nombre_en_uso: bool,
+) -> Result<String, Motivo> {
+    let hechos = HechosEmpresa { nombre_en_uso };
+    let id = EmpresaId::desde_uuid(uuid_de(id)?);
+    let resultado = if anterior.is_empty() {
+        Empresa::registrar(id, nombre, hechos).map(|empresa| {
+            let cambios = empresa.cambios_de_alta();
+            (empresa, cambios)
+        })
+    } else {
+        let anterior = NombreEmpresa::nuevo(anterior).map_err(|_| "nombre_invalido")?;
+        let mut empresa = Empresa::restaurar(id, anterior);
+        empresa
+            .renombrar(nombre, hechos)
+            .map(|cambios| (empresa, cambios))
+    };
+    Ok(match resultado {
+        Ok((empresa, cambios)) => json!({
+            "problema": null,
+            "nombre": empresa.nombre().as_str(),
+            "nombre_busqueda": plegar(empresa.nombre().as_str()),
+            "cambios": cambios_a_json(&cambios),
+        }),
+        Err(error) => json!({
+            "problema": {
+                "codigo": error.codigo(),
+                "campo": "nombre",
+                "mensaje": error.to_string(),
+            },
+        }),
+    }
+    .to_string())
+}
+
+/// Evalúa el formulario de un contratista. Entrada JSON: `{ id, ahora_ms, anterior, borrador,
+/// hechos }` (`anterior` es `null` en un alta). Salida JSON: `{ problemas }` con todo lo que
+/// impide guardar, o `{ problemas: [], datos, cambios }` con lo que se guarda y se audita.
+#[wasm_bindgen]
+pub fn contratista_evaluar(entrada: &str) -> Result<String, JsValue> {
+    regla_contratista(entrada).map_err(a_js)
+}
+
+/// La cédula del contratista en su forma única (vacía si no vale).
+#[wasm_bindgen]
+pub fn contratista_cedula(texto: &str) -> String {
+    regla_cedula_de_contratista(texto)
+}
+
+/// Evalúa el nombre de una empresa (alta, o renombrar si `anterior` no está vacío). Devuelve
+/// un JSON `{ problema }` o `{ problema: null, nombre, nombre_busqueda, cambios }`.
+#[wasm_bindgen]
+pub fn empresa_evaluar(
+    id: &str,
+    anterior: &str,
+    nombre: &str,
+    nombre_en_uso: bool,
+) -> Result<String, JsValue> {
+    regla_empresa(id, anterior, nombre, nombre_en_uso).map_err(a_js)
+}
+
+/// El nombre de empresa en su forma única, vacío si no vale (el nombre se compara así para
+/// saber si ya existe).
+#[wasm_bindgen]
+pub fn empresa_nombre(texto: &str) -> String {
+    NombreEmpresa::nuevo(texto)
+        .map(|nombre| nombre.as_str().to_owned())
+        .unwrap_or_default()
+}
+
+fn regla_praind_vencido(fecha: &str, ahora_ms: f64) -> bool {
+    match (fecha.parse::<NaiveDate>(), hoy_de_costa_rica(ahora_ms)) {
+        (Ok(fecha), Ok(hoy)) => praind_vencido(fecha, hoy),
+        _ => false,
+    }
+}
+
+/// ¿Está vencido el PRAIND que vence en `fecha` (`AAAA-MM-DD`)? Hoy es el de Costa Rica.
+#[wasm_bindgen]
+pub fn praind_esta_vencido(fecha: &str, ahora_ms: f64) -> bool {
+    regla_praind_vencido(fecha, ahora_ms)
+}
+
+/// El nombre de empresa como se ve mientras se escribe (mayúscula, sin tocar los espacios).
+#[wasm_bindgen]
+pub fn empresa_al_escribir(texto: &str) -> String {
+    nombre_empresa_mientras_se_escribe(texto)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -710,6 +983,161 @@ mod tests {
             regla_clave_temporal(&[0; 10], "AB123"),
             Err("cedula_invalida")
         );
+    }
+
+    const EMPRESA: &str = "0199c7a2-0000-7000-8000-0000000000aa";
+    const CONTRATISTA: &str = "0199c7a2-0000-7000-8000-0000000000bb";
+    // 2026-10-14T12:00:00Z (en Costa Rica, las 06:00 del mismo día)
+    const AHORA_MS: f64 = 1_791_979_200_000.0;
+
+    fn pedido_de_contratista(extra: &serde_json::Value) -> String {
+        let mut pedido = json!({
+            "id": CONTRATISTA,
+            "ahora_ms": AHORA_MS,
+            "anterior": null,
+            "borrador": {
+                "cedula": "1-1111-1111",
+                "nombre": " josé  peña ",
+                "empresa": EMPRESA,
+                "tipo_ingreso": "PRAIND",
+                "fecha_vencimiento_praind": "2027-01-01",
+                "tiene_acceso": true,
+            },
+            "hechos": { "cedula_en_uso": false, "empresa_existe": true, "esta_adentro": false },
+        });
+        if let (Some(destino), Some(origen)) = (pedido.as_object_mut(), extra.as_object()) {
+            destino.extend(origen.clone());
+        }
+        pedido.to_string()
+    }
+
+    #[test]
+    fn un_contratista_correcto_sale_normalizado_con_su_auditoria() {
+        let respuesta = json_de(&regla_contratista(&pedido_de_contratista(&json!({}))).unwrap());
+        assert_eq!(respuesta["problemas"], json!([]));
+        assert_eq!(respuesta["datos"]["cedula"], "111111111");
+        assert_eq!(respuesta["datos"]["nombre"], "JOSE PEÑA");
+        assert_eq!(respuesta["datos"]["nombre_busqueda"], "JOSE PENA");
+        assert_eq!(respuesta["datos"]["tipo_ingreso"], "PRAIND");
+        assert_eq!(respuesta["cambios"].as_array().unwrap().len(), 6);
+    }
+
+    #[test]
+    fn el_formulario_vacio_marca_cada_campo_con_el_mensaje_del_nucleo() {
+        let pedido = pedido_de_contratista(&json!({
+            "borrador": { "cedula": "", "nombre": "", "empresa": "", "tipo_ingreso": "PRAIND",
+                          "fecha_vencimiento_praind": "", "tiene_acceso": true },
+        }));
+        let respuesta = json_de(&regla_contratista(&pedido).unwrap());
+        let campos: Vec<&str> = respuesta["problemas"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| p["campo"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            campos,
+            ["cedula", "nombre", "empresa_id", "fecha_vencimiento_praind"]
+        );
+        assert_eq!(
+            respuesta["problemas"][0]["mensaje"],
+            "La cédula es obligatoria"
+        );
+    }
+
+    #[test]
+    fn el_praind_vencido_se_mide_con_el_dia_de_costa_rica() {
+        let vence_ayer = json!({ "borrador": {
+            "cedula": "1-1111-1111", "nombre": "ana", "empresa": EMPRESA,
+            "tipo_ingreso": "PRAIND", "fecha_vencimiento_praind": "2026-10-13",
+            "tiene_acceso": true } });
+        let respuesta = json_de(&regla_contratista(&pedido_de_contratista(&vence_ayer)).unwrap());
+        assert_eq!(respuesta["problemas"][0]["codigo"], "praind_vencido");
+
+        let vence_hoy = json!({ "borrador": {
+            "cedula": "1-1111-1111", "nombre": "ana", "empresa": EMPRESA,
+            "tipo_ingreso": "PRAIND", "fecha_vencimiento_praind": "2026-10-14",
+            "tiene_acceso": true } });
+        let respuesta = json_de(&regla_contratista(&pedido_de_contratista(&vence_hoy)).unwrap());
+        assert_eq!(respuesta["problemas"], json!([]));
+    }
+
+    #[test]
+    fn editar_dice_que_cambio_y_respeta_las_reglas_de_la_edicion() {
+        let anterior = json!({
+            "id": CONTRATISTA, "cedula": "111111111", "nombre": "JOSE PEÑA", "empresa": EMPRESA,
+            "tipo_ingreso": "PRAIND", "fecha_vencimiento_praind": "2027-01-01",
+            "tiene_acceso": true,
+        });
+        let cambiar_nombre = json!({ "anterior": anterior, "borrador": {
+            "cedula": "111111111", "nombre": "jose pena", "empresa": EMPRESA,
+            "tipo_ingreso": "PRAIND", "fecha_vencimiento_praind": "2027-01-01",
+            "tiene_acceso": false } });
+        let respuesta =
+            json_de(&regla_contratista(&pedido_de_contratista(&cambiar_nombre)).unwrap());
+        let campos: Vec<&str> = respuesta["cambios"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["campo"].as_str().unwrap())
+            .collect();
+        assert_eq!(campos, ["nombre", "tiene_acceso"]);
+
+        let otra_cedula_adentro = json!({
+            "anterior": anterior,
+            "borrador": { "cedula": "222222222", "nombre": "JOSE PEÑA", "empresa": EMPRESA,
+                          "tipo_ingreso": "PRAIND", "fecha_vencimiento_praind": "2027-01-01",
+                          "tiene_acceso": true },
+            "hechos": { "cedula_en_uso": false, "empresa_existe": true, "esta_adentro": true },
+        });
+        let respuesta =
+            json_de(&regla_contratista(&pedido_de_contratista(&otra_cedula_adentro)).unwrap());
+        assert_eq!(
+            respuesta["problemas"][0]["codigo"],
+            "cedula_no_editable_adentro"
+        );
+    }
+
+    #[test]
+    fn lo_mal_formado_no_llega_a_las_reglas() {
+        assert_eq!(regla_contratista("no es json"), Err("json_invalido"));
+        let sin_id = pedido_de_contratista(&json!({ "id": "x" }));
+        assert_eq!(regla_contratista(&sin_id), Err("id_invalido"));
+        assert_eq!(regla_cedula_de_contratista("1-1111-1111"), "111111111");
+        assert_eq!(regla_cedula_de_contratista("AB1"), "");
+    }
+
+    #[test]
+    fn el_praind_vencido_lo_dice_el_nucleo() {
+        assert!(regla_praind_vencido("2026-10-13", AHORA_MS));
+        assert!(
+            !regla_praind_vencido("2026-10-14", AHORA_MS),
+            "vence hoy: vigente"
+        );
+        assert!(!regla_praind_vencido("no es fecha", AHORA_MS));
+    }
+
+    #[test]
+    fn el_nombre_de_una_empresa_sale_en_mayuscula_y_no_se_repite() {
+        let alta = json_de(&regla_empresa(EMPRESA, "", "  acme   s.a. ", false).unwrap());
+        assert_eq!(alta["nombre"], "ACME S.A.");
+        assert_eq!(alta["cambios"].as_array().unwrap().len(), 1);
+
+        let repetida = json_de(&regla_empresa(EMPRESA, "", "acme", true).unwrap());
+        assert_eq!(repetida["problema"]["codigo"], "empresa_nombre_repetido");
+        assert_eq!(repetida["problema"]["campo"], "nombre");
+        assert_eq!(
+            repetida["problema"]["mensaje"],
+            "Ya existe una empresa con ese nombre"
+        );
+
+        let vacia = json_de(&regla_empresa(EMPRESA, "", " ", false).unwrap());
+        assert_eq!(vacia["problema"]["codigo"], "empresa_nombre_vacio");
+
+        let renombre = json_de(&regla_empresa(EMPRESA, "ACME", "acme norte", false).unwrap());
+        assert_eq!(renombre["cambios"][0]["despues"], "ACME NORTE");
+        assert_eq!(empresa_nombre(" acme  norte"), "ACME NORTE");
+        assert_eq!(empresa_al_escribir("acme "), "ACME ");
     }
 
     #[test]

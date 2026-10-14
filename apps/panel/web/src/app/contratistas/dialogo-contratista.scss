@@ -1,0 +1,29 @@
+@use '../compartido/dialogo';
+
+@include dialogo.compacto;
+
+.campos {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 360px;
+  padding-top: 8px;
+}
+
+.empresa {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+
+  mat-form-field {
+    flex: 1;
+  }
+}
+
+.nueva-empresa {
+  margin-top: 2px;
+}
+
+.mensaje-error {
+  color: var(--mat-sys-error);
+}

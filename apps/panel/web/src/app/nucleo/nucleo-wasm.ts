@@ -1,10 +1,12 @@
 import { Injectable } from '@angular/core';
 import init, {
   datos_de_usuario,
+  empresa_al_escribir,
   estado_de_conexion_del_equipo,
   filas_que_coinciden,
   mensaje_de_error_de_usuario,
   nombre_al_escribir,
+  praind_esta_vencido,
   resaltar_coincidencias,
 } from '../../dominio-wasm/limen_dominio_wasm.js';
 import rutaDelWasm from '../../dominio-wasm/limen_dominio_wasm_bg.wasm';
@@ -56,5 +58,13 @@ export class NucleoWasm extends Nucleo {
 
   mensajeDeError(codigo: string): string {
     return mensaje_de_error_de_usuario(codigo);
+  }
+
+  empresaAlEscribir(texto: string): string {
+    return empresa_al_escribir(texto);
+  }
+
+  praindVencido(fecha: string, ahoraMs: number): boolean {
+    return praind_esta_vencido(fecha, ahoraMs);
   }
 }

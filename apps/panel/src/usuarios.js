@@ -10,65 +10,21 @@ import {
   usuario_para_edicion,
   usuario_para_restablecer,
 } from './dominio.js';
-import { consultar, resultado, LECTURA, ESCRITURA } from './nube.js';
+import { consultar, resultado, LECTURA } from './nube.js';
+import {
+  ADMINISTRADOR_DEL_PANEL,
+  aplicar,
+  ErrorDeRegla,
+  exigirId,
+  texto,
+  transaccion as correr,
+} from './escritura.js';
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/**
- * Quién hizo el cambio en la auditoría. Mientras el panel entre con una clave compartida no
- * hay un usuario con nombre: se anota el identificador nulo. Con Cloudflare Access será
- * quien entró.
- */
-export const ADMINISTRADOR_DEL_PANEL = '00000000-0000-0000-0000-000000000000';
-
-const ESTADO_DE_LA_REGLA = {
-  usuario_cedula_repetida: 409,
-  no_encontrado: 404,
-};
-
-/** Un error con el código de la regla que lo impide (`cedula_invalida`, `nombre_vacio`…). */
-class ErrorDeRegla extends Error {
-  constructor(codigo) {
-    super(codigo);
-    this.codigo = codigo;
-  }
-}
-
-/**
- * Corre una operación y traduce lo que no vale a la respuesta HTTP. El núcleo avisa con el
- * código de la regla como texto; cualquier otra cosa (la nube, un fallo nuestro) sigue de
- * largo y la atiende el manejador general del Worker.
- */
-async function aplicar(operacion) {
-  try {
-    return await operacion();
-  } catch (error) {
-    const codigo =
-      error instanceof ErrorDeRegla ? error.codigo : typeof error === 'string' ? error : null;
-    if (codigo === null) throw error;
-    return { estado: ESTADO_DE_LA_REGLA[codigo] ?? 400, cuerpo: { error: codigo } };
-  }
-}
-
-const texto = (valor) => (typeof valor === 'string' ? valor : '');
-
-function exigirId(id) {
-  if (!UUID.test(String(id ?? ''))) throw new ErrorDeRegla('id_invalido');
-}
+export { ADMINISTRADOR_DEL_PANEL };
 
 /** Corre varias sentencias juntas: si alguna falla, ninguna queda. */
-async function transaccion(env, sentencias, variables) {
-  const resultados = await consultar(env, ESCRITURA, `BEGIN; ${sentencias} COMMIT;`, variables);
-  for (const sentencia of resultados) {
-    if (sentencia.status !== 'OK') {
-      // El índice único de la cédula es la última defensa ante dos altas a la vez.
-      if (String(sentencia.result).includes('usuario_cedula_unica')) {
-        throw new ErrorDeRegla('usuario_cedula_repetida');
-      }
-      throw new Error('consulta');
-    }
-  }
-}
+const transaccion = (env, sentencias, variables) =>
+  correr(env, sentencias, variables, { usuario_cedula_unica: 'usuario_cedula_repetida' });
 
 const CAMPOS = 'record::id(id) AS id, cedula, nombre, activo, debe_cambiar_clave';
 
