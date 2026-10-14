@@ -5,6 +5,12 @@
 import { consultar, resultado, LECTURA } from './nube.js';
 import { acceso } from './acceso.js';
 import { canjear, listar, registrar, retirar, unidades } from './vinculacion.js';
+import {
+  crear as crearUsuario,
+  editar as editarUsuario,
+  listar as listarUsuarios,
+  restablecerClave,
+} from './usuarios.js';
 // Un equipo que lleva más de dos latidos (5 min c/u) sin avisar se da por caído.
 const CAIDO_DESPUES_DE_MS = 10 * 60 * 1000;
 
@@ -108,6 +114,19 @@ async function atender(request, env) {
     }
     const retiro = pathname.match(/^\/api\/dispositivos\/([0-9a-f-]{36})\/retirar$/);
     if (retiro && request.method === 'POST') return json(await retirar(env, retiro[1]));
+    // Usuarios: lo que se decide lo decide el núcleo; aquí sólo se enruta.
+    const cuerpoJson = () => request.json().catch(() => ({}));
+    if (pathname === '/api/usuarios' && request.method === 'GET')
+      return json(await listarUsuarios(env));
+    if (pathname === '/api/usuarios' && request.method === 'POST') {
+      return json(await crearUsuario(env, await cuerpoJson()));
+    }
+    const usuario = pathname.match(/^\/api\/usuarios\/([^/]+)$/);
+    if (usuario && request.method === 'PATCH') {
+      return json(await editarUsuario(env, usuario[1], await cuerpoJson()));
+    }
+    const clave = pathname.match(/^\/api\/usuarios\/([^/]+)\/clave$/);
+    if (clave && request.method === 'POST') return json(await restablecerClave(env, clave[1]));
     if (pathname.startsWith('/api/')) return Response.json({ error: 'no_existe' }, { status: 404 });
     return env.ASSETS.fetch(request);
   } catch (error) {
