@@ -31,15 +31,27 @@ ALTER TABLE ingreso_proveedor PERMISSIONS FOR select, create, update, delete WHE
 ALTER TABLE ingreso_correo PERMISSIONS FOR select, create, update, delete WHERE unidad = $token.unidad;
 ALTER TABLE prestamo_kof PERMISSIONS FOR select, create, update, delete WHERE unidad = $token.unidad;
 ALTER TABLE personal_kof_con_prestamo PERMISSIONS FOR select, create, update, delete WHERE unidad = $token.unidad;
-ALTER TABLE hecho PERMISSIONS FOR select, create WHERE unidad = $token.unidad;
-ALTER TABLE empresa PERMISSIONS FOR select, create, update FULL FOR delete NONE;
-ALTER TABLE empresa_proveedora PERMISSIONS FOR select, create, update FULL FOR delete NONE;
-ALTER TABLE contratista PERMISSIONS FOR select, create, update FULL FOR delete NONE;
-ALTER TABLE personal_kof PERMISSIONS FOR select, create, update FULL FOR delete NONE;
-ALTER TABLE auditoria PERMISSIONS FOR select, create FULL FOR update, delete NONE;
+-- El panel entra con su propio acceso (`panel`, sólo lectura, tiempo real; se define aparte por la
+-- clave de firma, ver docs/nube.md sección 14): ve los hechos de todas las unidades y no escribe
+-- nada. Los permisos «para todos» (FULL) valdrían también para el panel, así que lo que escriben
+-- los equipos se acota a `$access = 'equipo'`.
+ALTER TABLE hecho PERMISSIONS FOR select WHERE unidad = $token.unidad OR $access = 'panel'
+    FOR create WHERE unidad = $token.unidad;
+ALTER TABLE empresa PERMISSIONS FOR select FULL FOR create, update WHERE $access = 'equipo' FOR delete NONE;
+ALTER TABLE empresa_proveedora PERMISSIONS FOR select FULL FOR create, update WHERE $access = 'equipo' FOR delete NONE;
+ALTER TABLE contratista PERMISSIONS FOR select FULL FOR create, update WHERE $access = 'equipo' FOR delete NONE;
+ALTER TABLE personal_kof PERMISSIONS FOR select FULL FOR create, update WHERE $access = 'equipo' FOR delete NONE;
+ALTER TABLE auditoria PERMISSIONS FOR select FULL FOR create WHERE $access = 'equipo' FOR update, delete NONE;
 -- Los usuarios y las unidades los administra la nube: el equipo sólo los lee.
 ALTER TABLE usuario PERMISSIONS FOR select FULL FOR create, update, delete NONE;
 ALTER TABLE unidad_operativa PERMISSIONS FOR select FULL FOR create, update, delete NONE;
+-- La clave (su hash) de un usuario sólo la ve el equipo, que la necesita para iniciar sesión:
+-- el panel ve a los usuarios pero nunca sus claves.
+DEFINE FIELD OVERWRITE clave ON usuario TYPE string ASSERT string::len($value) > 0
+    PERMISSIONS FOR select WHERE $access = 'equipo';
+-- Lo que sólo lee el panel: qué equipos hay y cuáles están conectados.
+ALTER TABLE conexion PERMISSIONS FOR select WHERE $access = 'panel' FOR create, update, delete NONE;
+ALTER TABLE dispositivo PERMISSIONS FOR select WHERE $access = 'panel' FOR create, update, delete NONE;
 
 -- Eventos: anotan en el diario cada alta, cambio y borrado, dentro de la misma transacción.
 DEFINE EVENT OVERWRITE anotar ON TABLE gafete THEN {
