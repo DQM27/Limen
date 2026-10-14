@@ -255,6 +255,27 @@ export function leer_codigo(texto) {
 }
 
 /**
+ * El mensaje que el núcleo da a un error de usuario, por su código (vacío si no es de los
+ * suyos). La pantalla recibe sólo el código y muestra esto.
+ * @param {string} codigo
+ * @returns {string}
+ */
+export function mensaje_de_error_de_usuario(codigo) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(codigo, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.mensaje_de_error_de_usuario(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
  * ¿Se puede canjear un código emitido en `emitido_ms`? Vacío si sí; si no, el código
  * de la regla que lo impide.
  * @param {number} emitido_ms

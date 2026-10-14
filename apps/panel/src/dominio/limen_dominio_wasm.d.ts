@@ -52,6 +52,12 @@ export function generar_codigo(azar: Uint8Array): string;
 export function leer_codigo(texto: string): string;
 
 /**
+ * El mensaje que el núcleo da a un error de usuario, por su código (vacío si no es de los
+ * suyos). La pantalla recibe sólo el código y muestra esto.
+ */
+export function mensaje_de_error_de_usuario(codigo: string): string;
+
+/**
  * ¿Se puede canjear un código emitido en `emitido_ms`? Vacío si sí; si no, el código
  * de la regla que lo impide.
  */
@@ -110,6 +116,7 @@ export interface InitOutput {
     readonly filas_que_coinciden: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly generar_codigo: (a: number, b: number) => [number, number, number, number];
     readonly leer_codigo: (a: number, b: number) => [number, number, number, number];
+    readonly mensaje_de_error_de_usuario: (a: number, b: number) => [number, number];
     readonly motivo_de_rechazo: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly motivo_de_rechazo_del_equipo: (a: number, b: number) => [number, number];
     readonly nombre_al_escribir: (a: number, b: number) => [number, number];

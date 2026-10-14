@@ -425,6 +425,19 @@ pub fn datos_de_usuario(
     regla_datos_de_usuario(cedula, nombre, cedula_en_uso).map_err(a_js)
 }
 
+fn regla_mensaje_de_usuario(codigo: &str) -> String {
+    ErrorUsuario::desde_codigo(codigo)
+        .map(|error| error.to_string())
+        .unwrap_or_default()
+}
+
+/// El mensaje que el núcleo da a un error de usuario, por su código (vacío si no es de los
+/// suyos). La pantalla recibe sólo el código y muestra esto.
+#[wasm_bindgen]
+pub fn mensaje_de_error_de_usuario(codigo: &str) -> String {
+    regla_mensaje_de_usuario(codigo)
+}
+
 /// El nombre como se ve mientras se escribe (mayúscula, sin tocar los espacios).
 #[wasm_bindgen]
 pub fn nombre_al_escribir(texto: &str) -> String {
@@ -621,6 +634,15 @@ mod tests {
             regla_celdas_que_cumplen(r#"[{"operacion":"RARA","celda":"a","filtro":"a"}]"#),
             Err("operacion_invalida")
         );
+    }
+
+    #[test]
+    fn el_mensaje_de_un_error_de_usuario_es_el_del_nucleo() {
+        assert_eq!(
+            regla_mensaje_de_usuario("cedula_invalida"),
+            "La cédula debe tener sólo números, entre 9 y 13 dígitos"
+        );
+        assert_eq!(regla_mensaje_de_usuario("nube"), "", "no es de los suyos");
     }
 
     #[test]

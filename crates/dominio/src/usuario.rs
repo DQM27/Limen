@@ -63,6 +63,26 @@ pub enum ErrorUsuario {
 }
 
 impl ErrorUsuario {
+    /// Todos los errores, para poder reconocer uno por su código.
+    pub const TODOS: [Self; 10] = [
+        Self::CedulaVacia,
+        Self::CedulaInvalida,
+        Self::NombreVacio,
+        Self::NombreInvalido,
+        Self::CedulaRepetida,
+        Self::ClaveCorta,
+        Self::ClaveLarga,
+        Self::ClaveIgualALaCedula,
+        Self::ClaveActualIncorrecta,
+        Self::NoSeDesactivaASiMismo,
+    ];
+
+    /// El error que tiene este código, si es uno de los nuestros. Así una pantalla que sólo
+    /// recibe el código (de la nube, de un formulario) muestra el mensaje del núcleo.
+    pub fn desde_codigo(codigo: &str) -> Option<Self> {
+        Self::TODOS.into_iter().find(|e| e.codigo() == codigo)
+    }
+
     pub const fn codigo(self) -> &'static str {
         match self {
             Self::CedulaVacia => "cedula_vacia",
@@ -666,6 +686,18 @@ mod tests {
             usuario
                 .editar(otra, "ana mora", true, id(2), en_uso())
                 .is_ok()
+        );
+    }
+
+    #[test]
+    fn un_error_se_reconoce_por_su_codigo_y_su_mensaje_es_el_del_nucleo() {
+        for error in ErrorUsuario::TODOS {
+            assert_eq!(ErrorUsuario::desde_codigo(error.codigo()), Some(error));
+        }
+        assert_eq!(ErrorUsuario::desde_codigo("no_existe"), None);
+        assert_eq!(
+            ErrorUsuario::desde_codigo("usuario_cedula_repetida").map(|e| e.to_string()),
+            Some("Ya existe un usuario con esa cédula".to_owned())
         );
     }
 

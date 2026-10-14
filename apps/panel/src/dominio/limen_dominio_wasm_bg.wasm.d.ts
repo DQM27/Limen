@@ -13,6 +13,7 @@ export const datos_de_usuario: (a: number, b: number, c: number, d: number, e: n
 export const filas_que_coinciden: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const generar_codigo: (a: number, b: number) => [number, number, number, number];
 export const leer_codigo: (a: number, b: number) => [number, number, number, number];
+export const mensaje_de_error_de_usuario: (a: number, b: number) => [number, number];
 export const motivo_de_rechazo: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const motivo_de_rechazo_del_equipo: (a: number, b: number) => [number, number];
 export const nombre_al_escribir: (a: number, b: number) => [number, number];
