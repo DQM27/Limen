@@ -17,6 +17,9 @@ surrealdb = { workspace = true, features = ["protocol-ws", "rustls"] }
 # instala `ring` al arrancar (`instalar_cifrado`).
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 limen-dominio.workspace = true
+# El puerto `PresenciaRemota` (regla A9) que este crate implementa.
+limen-aplicacion.workspace = true
+chrono.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
@@ -33,8 +36,6 @@ p256 = { version = "0.13", features = ["ecdsa", "jwk"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 [dev-dependencies]
-limen-aplicacion.workspace = true
-chrono.workspace = true
 # Para firmar, en las pruebas, el token que en producción emite el Worker del panel.
 hmac = "0.12"
 sha2 = "0.10"
