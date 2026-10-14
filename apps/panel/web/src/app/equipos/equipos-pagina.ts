@@ -11,6 +11,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import { Tabla } from '../compartido/tabla';
+import { fechaHora } from '../compartido/fecha';
 import { DialogoConfirmar, type DatosConfirmar } from '../compartido/dialogo-confirmar';
 import {
   ErrorPanel,
@@ -23,6 +24,7 @@ import {
 import { DialogoEquipo, type DatosDialogoEquipo } from './dialogo-equipo';
 import {
   ETIQUETA_CONEXION,
+  EXPLICACION_CONEXION,
   ETIQUETA_REGISTRO,
   ETIQUETA_TIPO,
   unirEquipos,
@@ -47,9 +49,6 @@ const CLASE_CONEXION: Record<NonNullable<FilaEquipo['conexion']>, string> = {
   caido: 'estado-malo',
   fuera: 'estado-neutro',
 };
-
-const fecha = (valor: string | null | undefined): string =>
-  valor ? new Date(valor).toLocaleString('es-CR') : '';
 
 /**
  * Equipos: los registrados en el panel y cómo están conectados ahora, en una sola tabla.
@@ -95,25 +94,37 @@ export class EquiposPagina {
       field: 'conexion',
       headerName: 'Conexión',
       flex: 1,
-      minWidth: 110,
+      minWidth: 120,
       valueFormatter: ({ value }) =>
         value ? ETIQUETA_CONEXION[value as NonNullable<FilaEquipo['conexion']>] : '—',
       cellClass: ({ value }) =>
         value ? CLASE_CONEXION[value as NonNullable<FilaEquipo['conexion']>] : 'estado-neutro',
+      // Qué significa, al pasar el cursor.
+      tooltipValueGetter: ({ value }) =>
+        value
+          ? EXPLICACION_CONEXION[value as NonNullable<FilaEquipo['conexion']>]
+          : 'Este equipo todavía no ha abierto la app.',
+    },
+    {
+      field: 'iniciada',
+      headerName: 'Conectado desde',
+      flex: 1.4,
+      minWidth: 160,
+      valueFormatter: ({ value }) => fechaHora(value as string | null),
     },
     {
       field: 'visto',
-      headerName: 'Visto',
+      headerName: 'Última señal',
       flex: 1.4,
       minWidth: 160,
-      valueFormatter: ({ value }) => fecha(value as string | null),
+      valueFormatter: ({ value }) => fechaHora(value as string | null),
     },
     {
       field: 'creado',
       headerName: 'Registrado',
       flex: 1.4,
       minWidth: 160,
-      valueFormatter: ({ value }) => fecha(value as string | null),
+      valueFormatter: ({ value }) => fechaHora(value as string | null),
     },
     {
       colId: 'acciones',

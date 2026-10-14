@@ -49,7 +49,12 @@ describe('unirEquipos', () => {
     const filas = unirEquipos([dispositivo('a1', 'A1')], [conectado('9df9696d-0000', 'caido')]);
     expect(filas[0]?.registro).toBe('vinculado');
     expect(filas[1]?.registro).toBe('sin_registrar');
-    expect(filas[1]).toMatchObject({ nombre: '9df9696d', conexion: 'caido', creado: null });
+    expect(filas[1]).toMatchObject({
+      nombre: '9df9696d',
+      conexion: 'caido',
+      iniciada: '2026-10-14T14:00:00Z',
+      creado: null,
+    });
   });
 
   it('ordena por unidad y luego por nombre', () => {

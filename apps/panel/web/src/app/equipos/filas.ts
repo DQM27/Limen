@@ -10,6 +10,9 @@ export interface FilaEquipo {
   registro: Dispositivo['estado'] | 'sin_registrar';
   /** `null`: nunca anunció su conexión. */
   conexion: EquipoConectado['estado'] | null;
+  /** Cuándo abrió la app la última vez (se conectó). */
+  iniciada: string | null;
+  /** La última señal de vida: la app avisa cada 5 minutos que sigue abierta. */
   visto: string | null;
   creado: string | null;
 }
@@ -23,8 +26,16 @@ export const ETIQUETA_REGISTRO: Record<FilaEquipo['registro'], string> = {
 
 export const ETIQUETA_CONEXION: Record<NonNullable<FilaEquipo['conexion']>, string> = {
   en_linea: 'En línea',
-  caido: 'Caído',
-  fuera: 'Fuera',
+  caido: 'Sin señal',
+  fuera: 'Desconectado',
+};
+
+/** Qué significa cada estado de conexión, para quien pasa el cursor por encima. */
+export const EXPLICACION_CONEXION: Record<NonNullable<FilaEquipo['conexion']>, string> = {
+  en_linea: 'La app está abierta y avisó hace menos de 10 minutos.',
+  caido:
+    'La app no avisó en más de 10 minutos y no se despidió: se cerró de golpe, el equipo se apagó o perdió internet.',
+  fuera: 'La app se cerró de forma normal y avisó que se iba.',
 };
 
 export const ETIQUETA_TIPO: Record<string, string> = {
@@ -57,6 +68,7 @@ export function unirEquipos(
       tipo: d.tipo,
       registro: d.estado,
       conexion: conexion?.estado ?? null,
+      iniciada: conexion?.iniciada ?? null,
       visto: conexion?.visto ?? null,
       creado: d.creado,
     };
@@ -71,6 +83,7 @@ export function unirEquipos(
       tipo: '',
       registro: 'sin_registrar',
       conexion: c.estado,
+      iniciada: c.iniciada,
       visto: c.visto,
       creado: null,
     }));
