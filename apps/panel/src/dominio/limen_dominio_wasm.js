@@ -71,6 +71,32 @@ export class DatosDeUsuario {
 if (Symbol.dispose) DatosDeUsuario.prototype[Symbol.dispose] = DatosDeUsuario.prototype.free;
 
 /**
+ * De cada pedido (`{ operacion, celda, filtro }`), si la celda cumple el filtro de columna.
+ * @param {string} pedidos
+ * @returns {string}
+ */
+export function celdas_que_cumplen(pedidos) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(pedidos, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.celdas_que_cumplen(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * Una clave temporal con el azar que entrega el Worker (`crypto.getRandomValues`, 10 bytes).
  * @param {Uint8Array} azar
  * @param {string} cedula
@@ -144,6 +170,35 @@ export function datos_de_usuario(cedula, nombre, cedula_en_uso) {
         throw takeFromExternrefTable0(ret[1]);
     }
     return DatosDeUsuario.__wrap(ret[0]);
+}
+
+/**
+ * De cada fila (un arreglo de `{ campo, texto }`), si coincide con el buscador.
+ * @param {string} buscado
+ * @param {string} filas
+ * @returns {string}
+ */
+export function filas_que_coinciden(buscado, filas) {
+    let deferred4_0;
+    let deferred4_1;
+    try {
+        const ptr0 = passStringToWasm0(buscado, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(filas, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.filas_que_coinciden(ptr0, len0, ptr1, len1);
+        var ptr3 = ret[0];
+        var len3 = ret[1];
+        if (ret[3]) {
+            ptr3 = 0; len3 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred4_0 = ptr3;
+        deferred4_1 = len3;
+        return getStringFromWasm0(ptr3, len3);
+    } finally {
+        wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
+    }
 }
 
 /**
@@ -263,6 +318,39 @@ export function nombre_al_escribir(texto) {
         return getStringFromWasm0(ret[0], ret[1]);
     } finally {
         wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * Parte cada texto en segmentos (`[[{ texto, resaltado }]]`). `campo`: `NOMBRE`,
+ * `IDENTIFICACION` o `EMPRESA`; `textos`: un arreglo JSON de textos.
+ * @param {string} buscado
+ * @param {string} campo
+ * @param {string} textos
+ * @returns {string}
+ */
+export function resaltar_coincidencias(buscado, campo, textos) {
+    let deferred5_0;
+    let deferred5_1;
+    try {
+        const ptr0 = passStringToWasm0(buscado, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(campo, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passStringToWasm0(textos, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ret = wasm.resaltar_coincidencias(ptr0, len0, ptr1, len1, ptr2, len2);
+        var ptr4 = ret[0];
+        var len4 = ret[1];
+        if (ret[3]) {
+            ptr4 = 0; len4 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred5_0 = ptr4;
+        deferred5_1 = len4;
+        return getStringFromWasm0(ptr4, len4);
+    } finally {
+        wasm.__wbindgen_free(deferred5_0, deferred5_1, 1);
     }
 }
 

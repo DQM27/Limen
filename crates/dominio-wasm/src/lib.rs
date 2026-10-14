@@ -10,8 +10,12 @@
 
 use chrono::{DateTime, Utc};
 use limen_dominio::auditoria::CambioCampo;
+use limen_dominio::filtro_de_tabla::{
+    CampoDeFila, Operacion, cumple_filtro_de_columna, fila_coincide,
+};
 use limen_dominio::nombre::{NombrePersona, nombre_mientras_se_escribe};
 use limen_dominio::operador::OperadorId;
+use limen_dominio::resaltado::{Campo, resaltar};
 use limen_dominio::usuario::{
     ClaveNueva, ErrorUsuario, HashClave, HechosUsuario, LARGO_CLAVE_TEMPORAL, Usuario,
     UsuarioGuardado, cedula_de_usuario, validar_datos,
@@ -151,6 +155,105 @@ fn regla_clave_temporal(azar: &[u8], cedula: &str) -> Result<String, Motivo> {
     ClaveNueva::temporal(azar, &cedula)
         .map(|clave| clave.as_str().to_owned())
         .map_err(ErrorUsuario::codigo)
+}
+
+/// Las reglas de búsqueda de las tablas (N1 y N2): la pantalla no compara, no pliega ni parte
+/// por palabras; pregunta y aplica lo que responde. Las formas son las mismas que usa la app
+/// de escritorio. Los pedidos y las respuestas viajan como JSON.
+fn leer_json(texto: &str) -> Result<serde_json::Value, Motivo> {
+    serde_json::from_str(texto).map_err(|_| "json_invalido")
+}
+
+fn texto_de<'a>(valor: &'a serde_json::Value, clave: &str) -> Result<&'a str, Motivo> {
+    valor
+        .get(clave)
+        .and_then(serde_json::Value::as_str)
+        .ok_or("json_invalido")
+}
+
+fn lista_de(valor: &serde_json::Value) -> Result<&Vec<serde_json::Value>, Motivo> {
+    valor.as_array().ok_or("json_invalido")
+}
+
+fn campo_resaltable(codigo: &str) -> Result<Campo, Motivo> {
+    Campo::desde_codigo(codigo).ok_or("campo_invalido")
+}
+
+/// Cada texto partido en segmentos, con lo que coincide resaltado (regla N1).
+fn regla_resaltar(buscado: &str, campo: &str, textos: &str) -> Result<String, Motivo> {
+    let campo = campo_resaltable(campo)?;
+    let textos: Vec<String> = lista_de(&leer_json(textos)?)?
+        .iter()
+        .map(|t| t.as_str().map(str::to_owned).ok_or("json_invalido"))
+        .collect::<Result<_, _>>()?;
+    let segmentos: Vec<Vec<serde_json::Value>> = resaltar(buscado, campo, &textos)
+        .iter()
+        .map(|texto| {
+            texto
+                .iter()
+                .map(|s| json!({ "texto": s.texto, "resaltado": s.resaltado }))
+                .collect()
+        })
+        .collect();
+    Ok(json!(segmentos).to_string())
+}
+
+/// De cada fila, si coincide con lo escrito en el buscador de la tabla (regla N2).
+fn regla_filas_que_coinciden(buscado: &str, filas: &str) -> Result<String, Motivo> {
+    let filas = leer_json(filas)?;
+    let respuestas: Vec<bool> = lista_de(&filas)?
+        .iter()
+        .map(|fila| {
+            let campos: Vec<CampoDeFila<'_>> = lista_de(fila)?
+                .iter()
+                .map(|c| {
+                    Ok(CampoDeFila {
+                        campo: campo_resaltable(texto_de(c, "campo")?)?,
+                        texto: texto_de(c, "texto")?,
+                    })
+                })
+                .collect::<Result<_, Motivo>>()?;
+            Ok(fila_coincide(buscado, &campos))
+        })
+        .collect::<Result<_, Motivo>>()?;
+    Ok(json!(respuestas).to_string())
+}
+
+/// De cada celda, si cumple el filtro de columna que se le pide (regla N2).
+fn regla_celdas_que_cumplen(pedidos: &str) -> Result<String, Motivo> {
+    let pedidos = leer_json(pedidos)?;
+    let respuestas: Vec<bool> = lista_de(&pedidos)?
+        .iter()
+        .map(|p| {
+            let operacion =
+                Operacion::desde_codigo(texto_de(p, "operacion")?).ok_or("operacion_invalida")?;
+            Ok(cumple_filtro_de_columna(
+                operacion,
+                texto_de(p, "celda")?,
+                texto_de(p, "filtro")?,
+            ))
+        })
+        .collect::<Result<_, Motivo>>()?;
+    Ok(json!(respuestas).to_string())
+}
+
+/// Parte cada texto en segmentos (`[[{ texto, resaltado }]]`). `campo`: `NOMBRE`,
+/// `IDENTIFICACION` o `EMPRESA`; `textos`: un arreglo JSON de textos.
+#[wasm_bindgen]
+pub fn resaltar_coincidencias(buscado: &str, campo: &str, textos: &str) -> Result<String, JsValue> {
+    regla_resaltar(buscado, campo, textos).map_err(a_js)
+}
+
+/// De cada fila (un arreglo de `{ campo, texto }`), si coincide con el buscador.
+#[wasm_bindgen]
+pub fn filas_que_coinciden(buscado: &str, filas: &str) -> Result<String, JsValue> {
+    regla_filas_que_coinciden(buscado, filas).map_err(a_js)
+}
+
+/// De cada pedido (`{ operacion, celda, filtro }`), si la celda cumple el filtro de columna.
+#[wasm_bindgen]
+pub fn celdas_que_cumplen(pedidos: &str) -> Result<String, JsValue> {
+    regla_celdas_que_cumplen(pedidos).map_err(a_js)
 }
 
 /// Quien hace el cambio desde el panel: todavía no hay un usuario con nombre (llega con
@@ -454,6 +557,69 @@ mod tests {
         assert_eq!(
             regla_usuario_para_restablecer("no-es-un-id", "111111111", "ANA", true, false),
             Err("id_invalido")
+        );
+    }
+
+    #[test]
+    fn el_buscador_encuentra_por_nombre_y_por_cedula_sin_tildes_ni_mayusculas() {
+        let filas = r#"[
+            [{"campo":"IDENTIFICACION","texto":"111111111"},{"campo":"NOMBRE","texto":"JOSÉ PEÑA"}],
+            [{"campo":"IDENTIFICACION","texto":"222222222"},{"campo":"NOMBRE","texto":"ANA MORA"}]
+        ]"#;
+        assert_eq!(
+            regla_filas_que_coinciden("jose", filas),
+            Ok("[true,false]".to_owned())
+        );
+        assert_eq!(
+            regla_filas_que_coinciden("2222", filas),
+            Ok("[false,true]".to_owned())
+        );
+        assert_eq!(
+            regla_filas_que_coinciden("", filas),
+            Ok("[true,true]".to_owned()),
+            "un buscador vacío no excluye a nadie"
+        );
+        assert_eq!(
+            regla_filas_que_coinciden("x", "no es json"),
+            Err("json_invalido")
+        );
+        assert_eq!(
+            regla_filas_que_coinciden("x", r#"[[{"campo":"OTRO","texto":"a"}]]"#),
+            Err("campo_invalido")
+        );
+    }
+
+    #[test]
+    fn el_resaltado_parte_el_texto_y_lo_reconstruye_exacto() {
+        let respuesta = json_de(&regla_resaltar("ana", "NOMBRE", r#"["ANA MORA"]"#).unwrap());
+        let segmentos = respuesta[0].as_array().unwrap();
+        let reconstruido: String = segmentos
+            .iter()
+            .map(|s| s["texto"].as_str().unwrap())
+            .collect();
+        assert_eq!(reconstruido, "ANA MORA");
+        assert!(
+            segmentos.iter().any(|s| s["resaltado"] == true),
+            "algo se resalta: {segmentos:?}"
+        );
+        assert_eq!(regla_resaltar("ana", "RARO", "[]"), Err("campo_invalido"));
+    }
+
+    #[test]
+    fn los_filtros_de_columna_ignoran_mayusculas_y_tildes() {
+        let pedidos = r#"[
+            {"operacion":"CONTIENE","celda":"Carlos Mauricio Sánchez","filtro":"carlos sa"},
+            {"operacion":"IGUAL","celda":"Peña","filtro":"pena"},
+            {"operacion":"NO_CONTIENE","celda":"Ana","filtro":"ana"},
+            {"operacion":"EMPIEZA_CON","celda":"Ana","filtro":""}
+        ]"#;
+        assert_eq!(
+            regla_celdas_que_cumplen(pedidos),
+            Ok("[true,true,false,true]".to_owned())
+        );
+        assert_eq!(
+            regla_celdas_que_cumplen(r#"[{"operacion":"RARA","celda":"a","filtro":"a"}]"#),
+            Err("operacion_invalida")
         );
     }
 

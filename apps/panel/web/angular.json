@@ -19,6 +19,7 @@
             "browser": "src/main.ts",
             "tsConfig": "tsconfig.app.json",
             "assets": [{ "glob": "**/*", "input": "public" }],
+            "loader": { ".wasm": "file" },
             "styles": [
               "node_modules/material-icons/iconfont/material-icons.css",
               "src/styles.scss"

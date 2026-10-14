@@ -14,6 +14,11 @@ export class DatosDeUsuario {
 }
 
 /**
+ * De cada pedido (`{ operacion, celda, filtro }`), si la celda cumple el filtro de columna.
+ */
+export function celdas_que_cumplen(pedidos: string): string;
+
+/**
  * Una clave temporal con el azar que entrega el Worker (`crypto.getRandomValues`, 10 bytes).
  */
 export function clave_temporal(azar: Uint8Array, cedula: string): string;
@@ -29,6 +34,11 @@ export function codigo_para_mostrar(texto: string): string;
  * regla (`cedula_invalida`, `nombre_vacio`, `usuario_cedula_repetida`…).
  */
 export function datos_de_usuario(cedula: string, nombre: string, cedula_en_uso: boolean): DatosDeUsuario;
+
+/**
+ * De cada fila (un arreglo de `{ campo, texto }`), si coincide con el buscador.
+ */
+export function filas_que_coinciden(buscado: string, filas: string): string;
 
 /**
  * Un código nuevo con el azar que entrega el Worker (`crypto.getRandomValues`, 10 bytes).
@@ -56,6 +66,12 @@ export function motivo_de_rechazo_del_equipo(vinculado: boolean, retirado: boole
  * El nombre como se ve mientras se escribe (mayúscula, sin tocar los espacios).
  */
 export function nombre_al_escribir(texto: string): string;
+
+/**
+ * Parte cada texto en segmentos (`[[{ texto, resaltado }]]`). `campo`: `NOMBRE`,
+ * `IDENTIFICACION` o `EMPRESA`; `textos`: un arreglo JSON de textos.
+ */
+export function resaltar_coincidencias(buscado: string, campo: string, textos: string): string;
 
 /**
  * El alta de un usuario. Devuelve un JSON `{ cedula, nombre, cambios }`; si algo no vale, el
@@ -87,14 +103,17 @@ export interface InitOutput {
     readonly __wbg_get_datosdeusuario_nombre: (a: number) => [number, number];
     readonly __wbg_set_datosdeusuario_cedula: (a: number, b: number, c: number) => void;
     readonly __wbg_set_datosdeusuario_nombre: (a: number, b: number, c: number) => void;
+    readonly celdas_que_cumplen: (a: number, b: number) => [number, number, number, number];
     readonly clave_temporal: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly codigo_para_mostrar: (a: number, b: number) => [number, number, number, number];
     readonly datos_de_usuario: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly filas_que_coinciden: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly generar_codigo: (a: number, b: number) => [number, number, number, number];
     readonly leer_codigo: (a: number, b: number) => [number, number, number, number];
     readonly motivo_de_rechazo: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly motivo_de_rechazo_del_equipo: (a: number, b: number) => [number, number];
     readonly nombre_al_escribir: (a: number, b: number) => [number, number];
+    readonly resaltar_coincidencias: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
     readonly usuario_para_alta: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
     readonly usuario_para_edicion: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => [number, number, number, number];
     readonly usuario_para_restablecer: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
