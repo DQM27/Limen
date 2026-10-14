@@ -157,7 +157,8 @@ impl ClaveNueva {
     ) -> Result<Self, ErrorUsuario> {
         let texto: String = azar
             .iter()
-            .map(|byte| char::from(ALFABETO_CLAVE_TEMPORAL[usize::from(byte % 32)]))
+            .filter_map(|byte| ALFABETO_CLAVE_TEMPORAL.get(usize::from(byte % 32)))
+            .map(|simbolo| char::from(*simbolo))
             .collect();
         Self::nueva(&texto, cedula)
     }
