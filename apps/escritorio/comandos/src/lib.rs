@@ -390,6 +390,12 @@ where
         entrada: &EntradaContratistaEntrada,
     ) -> Result<EntradaRegistradaDto, ErrorJson> {
         let comando = entrada.a_comando()?;
+        // A9: con conexión, si ya está adentro en otra unidad no se registra.
+        self.app
+            .otra_unidad
+            .contratista(comando.contratista)
+            .await
+            .map_err(con_campo)?;
         let registrada = self
             .app
             .ingresos
@@ -523,6 +529,12 @@ where
         entrada: &EntradaProveedorEntrada,
     ) -> Result<String, ErrorJson> {
         let comando = entrada.a_comando()?;
+        // A9: con conexión, si ya está adentro en otra unidad no se registra.
+        self.app
+            .otra_unidad
+            .cedula(&comando.cedula)
+            .await
+            .map_err(con_campo)?;
         let id = self
             .app
             .proveedores
@@ -563,6 +575,12 @@ where
         entrada: &EntradaCorreoEntrada,
     ) -> Result<String, ErrorJson> {
         let comando = entrada.a_comando()?;
+        // A9: con conexión, si ya está adentro en otra unidad no se registra.
+        self.app
+            .otra_unidad
+            .cedula(&comando.cedula)
+            .await
+            .map_err(con_campo)?;
         let id = self
             .app
             .correo
@@ -676,6 +694,12 @@ where
         // y eso lo dice el dominio.
         let persona = leer_persona_kof(personal_id)?
             .ok_or_else(|| con_campo(ErrorCaso::Negocio(ErrorPrestamoKof::PersonaRequerida)))?;
+        // A9: con conexión, si ya está adentro en otra unidad no se registra.
+        self.app
+            .otra_unidad
+            .personal_kof(persona)
+            .await
+            .map_err(con_campo)?;
         let id = self
             .app
             .kof

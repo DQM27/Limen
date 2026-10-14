@@ -40,10 +40,14 @@ un usuario de base no entra con Basic auth.
 
 ### Lo que falta, en este orden
 
-0. **Persona adentro en otro lado (regla A9, acordada el 13 de octubre):** con conexión se pregunta a la
-   nube antes de registrar y, si ya está adentro en otra unidad, no se registra y se le dice al guarda
-   dónde; sin conexión se registra y el choque se marca como incidente, que el administrador resuelve
-   en el panel (nada se borra). Hoy la nube ignora en silencio el segundo registro.
+0. **Persona adentro en otro lado (regla A9, acordada el 13 de octubre).** *Hecho (14 de octubre):* con
+   conexión, antes de registrar una entrada (las cuatro vías) se pregunta a la nube por el Worker
+   (`GET /api/presencia/:clave`, `docs/panel.md`) y, si ya está adentro en otra unidad, no se registra
+   y se le dice al guarda dónde; sin respuesta en 3 segundos se registra (el acceso no se bloquea).
+   *Pendiente, a propósito (el dueño lo dejó para después: con internet casi siempre y en
+   desarrollo no urge):* sin conexión se registra y, al sincronizar, el choque debe quedar marcado
+   como incidente, que el administrador resuelve en el panel (nada se borra). Hoy la nube ignora en
+   silencio el segundo registro.
 1. **Usuarios en el panel**: crear, desactivar, clave temporal y desbloqueo (L4 y L5). Hoy se
    siembran a mano en la nube; la app ya los baja sola. Las reglas van en `crates/dominio`
    (compilado a WebAssembly, como la vinculación) y escribir pide un usuario de base propio con
