@@ -1,73 +1,8 @@
 <h1 class="solo-lectores">Ingresos</h1>
 
-<div class="filtros" role="group" aria-label="Filtros de ingresos">
-  <mat-button-toggle-group
-    aria-label="Qué mostrar"
-    hideSingleSelectionIndicator
-    [value]="estado()"
-    (change)="elegirEstado($event.value)"
-  >
-    <mat-button-toggle value="adentro">
-      <mat-icon aria-hidden="true">sensors</mat-icon>
-      Adentro ahora
-    </mat-button-toggle>
-    <mat-button-toggle value="historial">
-      <mat-icon aria-hidden="true">history</mat-icon>
-      Historial
-    </mat-button-toggle>
-  </mat-button-toggle-group>
-
-  <mat-button-toggle-group
-    aria-label="Vía de ingreso"
-    hideSingleSelectionIndicator
-    [value]="via()"
-    (change)="elegirVia($event.value)"
-  >
-    @for (opcion of vias; track opcion.codigo) {
-      <mat-button-toggle [value]="opcion.codigo">{{ opcion.etiqueta }}</mat-button-toggle>
-    }
-  </mat-button-toggle-group>
-
-  <label class="unidad">
-    <span class="solo-lectores">Unidad</span>
-    <select [value]="unidad()" (change)="elegirUnidad($event)">
-      <option value="">Todas las unidades</option>
-      @for (u of unidades(); track u.codigo) {
-        <option [value]="u.codigo" [selected]="u.codigo === unidad()">{{ u.nombre }}</option>
-      }
-    </select>
-  </label>
-</div>
-
-@if (enHistorial()) {
-  <div class="filtros" role="group" aria-label="Rango de fechas">
-    <mat-button-toggle-group
-      aria-label="Rango de fechas"
-      hideSingleSelectionIndicator
-      [value]="atajo()"
-      (change)="elegirAtajo($event.value)"
-    >
-      @for (a of atajos(); track a.codigo) {
-        <mat-button-toggle [value]="a.codigo" [title]="a.etiqueta">{{ a.corta }}</mat-button-toggle>
-      }
-    </mat-button-toggle-group>
-
-    <div class="fechas">
-      <label>
-        Desde
-        <input type="date" [value]="desde()" (change)="escribirDesde($event)" />
-      </label>
-      <label>
-        Hasta
-        <input type="date" [value]="hasta()" (change)="escribirHasta($event)" />
-      </label>
-    </div>
-    @if (errorDeRango(); as mensaje) {
-      <p class="error" role="alert">{{ mensaje }}</p>
-    }
-  </div>
+@if (errorDeRango(); as mensaje) {
+  <p class="error" role="alert">{{ mensaje }}</p>
 }
-
 @if (truncado()) {
   <p class="aviso" role="status">
     Hay más movimientos de los que se muestran (los más recientes). Acote las fechas para ver el
@@ -84,4 +19,125 @@
   [idFila]="idFila"
   [camposDeBusqueda]="camposDeBusqueda"
   [mensajeVacio]="mensajeVacio()"
-/>
+>
+  <!-- Qué mostrar: lo que está pasando o lo que ya pasó. -->
+  <mat-button-toggle-group
+    controles
+    aria-label="Qué mostrar"
+    hideSingleSelectionIndicator
+    [value]="estado()"
+    (change)="elegirEstado($event.value)"
+  >
+    <mat-button-toggle value="adentro">
+      <mat-icon aria-hidden="true">sensors</mat-icon>
+      Adentro ahora
+    </mat-button-toggle>
+    <mat-button-toggle value="historial">
+      <mat-icon aria-hidden="true">history</mat-icon>
+      Historial
+    </mat-button-toggle>
+  </mat-button-toggle-group>
+
+  <!-- El resto de los filtros: cada uno es un solo botón que abre sus opciones. -->
+  <div acciones class="filtros">
+    <button
+      mat-stroked-button
+      type="button"
+      class="filtro"
+      aria-label="Filtrar por vía"
+      [class.activo]="via() !== ''"
+      [matMenuTriggerFor]="menuVia"
+    >
+      <mat-icon aria-hidden="true">badge</mat-icon>
+      {{ textoVia() }}
+      <mat-icon iconPositionEnd aria-hidden="true">arrow_drop_down</mat-icon>
+    </button>
+    <mat-menu #menuVia="matMenu">
+      @for (opcion of vias; track opcion.codigo) {
+        <button mat-menu-item type="button" (click)="elegirVia(opcion.codigo)">
+          <mat-icon aria-hidden="true">{{ opcion.codigo === via() ? 'check' : '' }}</mat-icon>
+          <span>{{ opcion.etiqueta }}</span>
+        </button>
+      }
+    </mat-menu>
+
+    <button
+      mat-stroked-button
+      type="button"
+      class="filtro"
+      aria-label="Filtrar por unidad"
+      [class.activo]="unidad() !== ''"
+      [matMenuTriggerFor]="menuUnidad"
+    >
+      <mat-icon aria-hidden="true">apartment</mat-icon>
+      {{ textoUnidad() }}
+      <mat-icon iconPositionEnd aria-hidden="true">arrow_drop_down</mat-icon>
+    </button>
+    <mat-menu #menuUnidad="matMenu">
+      <button mat-menu-item type="button" (click)="elegirUnidad('')">
+        <mat-icon aria-hidden="true">{{ unidad() === '' ? 'check' : '' }}</mat-icon>
+        <span>Todas las unidades</span>
+      </button>
+      @for (u of unidades(); track u.codigo) {
+        <button mat-menu-item type="button" (click)="elegirUnidad(u.codigo)">
+          <mat-icon aria-hidden="true">{{ u.codigo === unidad() ? 'check' : '' }}</mat-icon>
+          <span>{{ u.nombre }}</span>
+        </button>
+      }
+    </mat-menu>
+
+    @if (enHistorial()) {
+      <!-- El período: el rango corto en el botón; el panel trae los accesos rápidos del núcleo y
+           las fechas a mano. -->
+      <button
+        mat-stroked-button
+        type="button"
+        class="filtro activo"
+        aria-label="Período"
+        #disparadorRango="matMenuTrigger"
+        [matMenuTriggerFor]="menuRango"
+        (menuOpened)="abrirRango()"
+      >
+        <mat-icon aria-hidden="true">calendar_month</mat-icon>
+        {{ textoRango() }}
+        <mat-icon iconPositionEnd aria-hidden="true">arrow_drop_down</mat-icon>
+      </button>
+      <mat-menu #menuRango="matMenu" class="menu-rango">
+        <div class="rango" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
+          <p class="titulo">Acceso rápido</p>
+          <div class="atajos">
+            @for (a of atajos(); track a.codigo) {
+              <button
+                mat-stroked-button
+                type="button"
+                [class.elegido]="a.codigo === atajo()"
+                [title]="a.etiqueta"
+                (click)="elegirAtajo(a.codigo); disparadorRango.closeMenu()"
+              >
+                {{ a.corta }}
+              </button>
+            }
+          </div>
+          <label>
+            Desde
+            <input type="date" [value]="borradorDesde()" (input)="escribirDesde($event)" />
+          </label>
+          <label>
+            Hasta
+            <input type="date" [value]="borradorHasta()" (input)="escribirHasta($event)" />
+          </label>
+          <div class="botones">
+            <button mat-button type="button" (click)="disparadorRango.closeMenu()">Cancelar</button>
+            <button
+              mat-flat-button
+              type="button"
+              (click)="aplicarRango(); disparadorRango.closeMenu()"
+            >
+              Aplicar
+            </button>
+          </div>
+        </div>
+      </mat-menu>
+    }
+  </div>
+</app-tabla>

@@ -8,7 +8,9 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatMenuModule } from '@angular/material/menu';
 import type { ColDef } from 'ag-grid-community';
 import { debounceTime, filter, merge } from 'rxjs';
 import { Avisos } from '../compartido/avisos';
@@ -41,7 +43,7 @@ type Estado = 'adentro' | 'historial';
 @Component({
   selector: 'app-ingresos-pagina',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonToggleModule, MatIconModule, Tabla],
+  imports: [MatButtonModule, MatButtonToggleModule, MatIconModule, MatMenuModule, Tabla],
   templateUrl: './ingresos-pagina.html',
   styleUrl: './ingresos-pagina.scss',
 })
@@ -63,6 +65,9 @@ export class IngresosPagina {
   protected readonly desde = signal('');
   protected readonly hasta = signal('');
   protected readonly errorDeRango = signal<string | null>(null);
+  /** Lo que se escribe en el panel del período; sólo vale al darle «Aplicar». */
+  protected readonly borradorDesde = signal('');
+  protected readonly borradorHasta = signal('');
 
   protected readonly filas = signal<Ingreso[]>([]);
   protected readonly truncado = signal(false);
@@ -72,6 +77,16 @@ export class IngresosPagina {
   private turno = 0;
 
   protected readonly enHistorial = computed(() => this.estado() === 'historial');
+  protected readonly textoVia = computed(
+    () => this.vias.find((v) => v.codigo === this.via())?.etiqueta ?? 'Todas',
+  );
+  protected readonly textoUnidad = computed(
+    () => this.unidades().find((u) => u.codigo === this.unidad())?.nombre ?? 'Todas',
+  );
+  /** El rango corto en el botón del período (lo da el núcleo); a mano, «Personalizado». */
+  protected readonly textoRango = computed(
+    () => this.atajos().find((a) => a.codigo === this.atajo())?.corta ?? 'Personalizado',
+  );
   protected readonly idFila = (ingreso: Ingreso): string => `${ingreso.via}-${ingreso.id}`;
   protected readonly camposDeBusqueda = (ingreso: Ingreso): CampoDeTexto[] => [
     { campo: 'IDENTIFICACION', texto: ingreso.identidad },
@@ -204,11 +219,12 @@ export class IngresosPagina {
     void this.cargar();
   }
 
-  protected elegirUnidad(evento: Event): void {
-    this.unidad.set((evento.target as HTMLSelectElement).value);
+  protected elegirUnidad(unidad: string): void {
+    this.unidad.set(unidad);
     void this.cargar();
   }
 
+  /** Un acceso rápido: el rango lo trae el núcleo. */
   protected elegirAtajo(codigo: string): void {
     this.atajo.set(codigo);
     const atajo = this.atajos().find((a) => a.codigo === codigo);
@@ -219,15 +235,25 @@ export class IngresosPagina {
     void this.cargar();
   }
 
+  /** Al abrir el panel del período, las fechas escritas parten de las vigentes. */
+  protected abrirRango(): void {
+    this.borradorDesde.set(this.desde());
+    this.borradorHasta.set(this.hasta());
+  }
+
   protected escribirDesde(evento: Event): void {
-    this.atajo.set(PERSONALIZADO);
-    this.desde.set((evento.target as HTMLInputElement).value);
-    void this.cargar();
+    this.borradorDesde.set((evento.target as HTMLInputElement).value);
   }
 
   protected escribirHasta(evento: Event): void {
+    this.borradorHasta.set((evento.target as HTMLInputElement).value);
+  }
+
+  /** Un rango escrito a mano; si no vale, el núcleo lo dice al pedirlo. */
+  protected aplicarRango(): void {
     this.atajo.set(PERSONALIZADO);
-    this.hasta.set((evento.target as HTMLInputElement).value);
+    this.desde.set(this.borradorDesde());
+    this.hasta.set(this.borradorHasta());
     void this.cargar();
   }
 
@@ -257,8 +283,9 @@ export class IngresosPagina {
         estado: this.estado(),
         via: this.via(),
         unidad: this.unidad(),
-        desde: this.desde(),
-        hasta: this.hasta(),
+        // Lo que está pasando no mira fechas.
+        desde: this.enHistorial() ? this.desde() : '',
+        hasta: this.enHistorial() ? this.hasta() : '',
       });
       if (mio !== this.turno) {
         return;

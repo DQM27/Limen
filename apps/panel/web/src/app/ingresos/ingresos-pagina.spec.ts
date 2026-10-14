@@ -95,15 +95,21 @@ async function abrir() {
   fixture.detectChanges();
   const raiz = fixture.nativeElement as HTMLElement;
   const boton = (texto: string): HTMLButtonElement => {
-    const todos = [...raiz.querySelectorAll<HTMLButtonElement>('mat-button-toggle button')];
-    const encontrado = todos.find((b) => b.textContent?.includes(texto));
+    const todos = [...document.body.querySelectorAll<HTMLButtonElement>('button')];
+    const encontrado = todos.find((b) => b.textContent?.trim().includes(texto));
     if (!encontrado) {
       throw new Error(`no hay un botón «${texto}»`);
     }
     return encontrado;
   };
+  /** Abre el menú de un filtro (por su etiqueta) y espera a que se pinte. */
+  const abrirMenu = async (etiqueta: string): Promise<void> => {
+    raiz.querySelector<HTMLButtonElement>(`button[aria-label="${etiqueta}"]`)?.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  };
   const filtroPedido = (): FiltroDeIngresos => api.listar.mock.lastCall?.[0] as FiltroDeIngresos;
-  return { fixture, raiz, api, cambios, boton, filtroPedido };
+  return { fixture, raiz, api, cambios, boton, abrirMenu, filtroPedido };
 }
 
 describe('IngresosPagina', () => {
@@ -112,38 +118,49 @@ describe('IngresosPagina', () => {
 
     expect(api.listar).toHaveBeenCalledTimes(1);
     expect(filtroPedido()).toMatchObject({ estado: 'adentro', via: '', unidad: '' });
-    expect(raiz.textContent).not.toContain('Rango de fechas');
+    expect(
+      raiz.querySelector('button[aria-label="Período"]'),
+      'el período es del historial',
+    ).toBeNull();
   });
 
-  it('«Historial» pide el rango por omisión que dio el núcleo y muestra los accesos rápidos', async () => {
+  it('«Historial» pide el rango por omisión del núcleo y muestra el período en un solo botón', async () => {
     const { fixture, boton, filtroPedido, raiz } = await abrir();
 
     boton('Historial').click();
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(filtroPedido()).toMatchObject({
-      estado: 'historial',
-      desde: '2026-04-14',
-      hasta: '',
-    });
-    expect(raiz.textContent).toContain('6 meses');
-    expect(raiz.textContent).toContain('Hoy');
+    expect(filtroPedido()).toMatchObject({ estado: 'historial', desde: '2026-04-14', hasta: '' });
+    const periodo = raiz.querySelector('button[aria-label="Período"]');
+    expect(periodo?.textContent).toContain('6 meses');
   });
 
-  it('elegir un acceso rápido o una vía vuelve a pedir con ese filtro', async () => {
-    const { fixture, boton, filtroPedido } = await abrir();
+  it('un acceso rápido del panel del período vuelve a pedir con ese rango', async () => {
+    const { fixture, boton, abrirMenu, filtroPedido } = await abrir();
     boton('Historial').click();
     await fixture.whenStable();
     fixture.detectChanges();
 
+    await abrirMenu('Período');
     boton('Hoy').click();
     await fixture.whenStable();
-    expect(filtroPedido()).toMatchObject({ desde: '2026-10-14', hasta: '2026-10-14' });
 
+    expect(filtroPedido()).toMatchObject({ desde: '2026-10-14', hasta: '2026-10-14' });
+  });
+
+  it('la vía y la unidad se eligen en su menú y vuelven a pedir con ese filtro', async () => {
+    const { boton, abrirMenu, filtroPedido, fixture } = await abrir();
+
+    await abrirMenu('Filtrar por vía');
     boton('Proveedores').click();
     await fixture.whenStable();
     expect(filtroPedido()).toMatchObject({ via: 'PROVEEDOR' });
+
+    await abrirMenu('Filtrar por unidad');
+    boton('Brisas').click();
+    await fixture.whenStable();
+    expect(filtroPedido()).toMatchObject({ via: 'PROVEEDOR', unidad: 'BRISAS' });
   });
 
   it('cada entrada o salida (un hecho) vuelve a leer al instante', async () => {
@@ -161,7 +178,7 @@ describe('IngresosPagina', () => {
   });
 
   it('el aviso de que hay más movimientos y el error de rango salen de lo que responde el Worker', async () => {
-    const { fixture, api, boton, raiz } = await abrir();
+    const { fixture, api, boton, abrirMenu, raiz } = await abrir();
     api.listar.mockResolvedValueOnce({ ingresos: [ADENTRO], truncado: true });
     boton('Historial').click();
     await fixture.whenStable();
@@ -173,6 +190,7 @@ describe('IngresosPagina', () => {
         { codigo: 'rango_invertido', campo: 'hasta', mensaje: 'MENSAJE DEL NÚCLEO: rango' },
       ]),
     );
+    await abrirMenu('Período');
     boton('Hoy').click();
     await fixture.whenStable();
     fixture.detectChanges();
