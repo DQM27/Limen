@@ -19,14 +19,70 @@
     <div class="grupo">
       <ng-content select="[acciones]" />
       <p class="conteo" role="status" aria-live="polite">{{ conteo() }}</p>
+
+      <!-- Lo que toda grilla trae: filtros, anchos en los dos sentidos y columnas. -->
+      <div class="segmentado" role="group" aria-label="Filtros, anchos y columnas">
+        @if (filtrosPorColumna()) {
+          <button
+            type="button"
+            [attr.aria-pressed]="filtrosVisibles()"
+            [attr.aria-label]="filtrosVisibles() ? 'Ocultar filtros' : 'Mostrar filtros'"
+            [matTooltip]="filtrosVisibles() ? 'Ocultar filtros' : 'Mostrar filtros'"
+            (click)="alternarFiltros()"
+          >
+            <mat-icon aria-hidden="true">filter_alt</mat-icon>
+          </button>
+        }
+        <button
+          type="button"
+          aria-label="Ajustar anchos al contenido"
+          matTooltip="Ajustar anchos al contenido"
+          (click)="ajustarAnchos()"
+        >
+          <mat-icon aria-hidden="true">swap_horiz</mat-icon>
+        </button>
+        <button
+          type="button"
+          aria-label="Restablecer anchos"
+          matTooltip="Restablecer anchos"
+          (click)="restablecerAnchos()"
+        >
+          <mat-icon aria-hidden="true">restart_alt</mat-icon>
+        </button>
+        <button
+          type="button"
+          aria-label="Columnas visibles"
+          matTooltip="Columnas visibles"
+          [matMenuTriggerFor]="menuColumnas"
+        >
+          <mat-icon aria-hidden="true">view_column</mat-icon>
+        </button>
+      </div>
+
+      <mat-menu #menuColumnas="matMenu" class="menu-columnas" aria-label="Columnas visibles">
+        @for (columna of columnasDelMenu(); track columna.clave) {
+          <button
+            mat-menu-item
+            type="button"
+            role="menuitemcheckbox"
+            [attr.aria-checked]="!ocultas().has(columna.clave)"
+            (click)="alternarColumna(columna.clave); $event.stopPropagation()"
+          >
+            <mat-icon aria-hidden="true">{{
+              ocultas().has(columna.clave) ? 'check_box_outline_blank' : 'check_box'
+            }}</mat-icon>
+            <span>{{ columna.titulo }}</span>
+          </button>
+        }
+      </mat-menu>
     </div>
   </div>
 
   <div class="rejilla">
     <ag-grid-angular
       [theme]="tema"
-      [columnDefs]="columnas()"
-      [defaultColDef]="columnaPorDefecto"
+      [columnDefs]="columnasConVisibilidad()"
+      [defaultColDef]="columnaPorDefecto()"
       [rowData]="filas()"
       [getRowId]="obtenerIdFila()"
       [context]="contexto"
@@ -42,7 +98,11 @@
       tooltipShowMode="whenTruncated"
       [tooltipShowDelay]="400"
       (gridReady)="alIniciar($event)"
+      [maintainColumnOrder]="true"
       (modelUpdated)="alActualizarFilas($event)"
+      (columnMoved)="alMoverColumna($event)"
+      (columnResized)="alRedimensionarColumna($event)"
+      (sortChanged)="guardarOrden()"
     />
   </div>
 </section>

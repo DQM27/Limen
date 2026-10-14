@@ -47,8 +47,7 @@ que está desplegado en `limen.megabrisas.com` sale de esta rama). Detalle en [`
 3. ~~Historiales~~ **Ingresos del panel: hecho (sin PR)**, ver [`panel.md`](panel.md) y la regla N4: «Adentro ahora» e «Historial» en una sola vista, con filtros por vía, unidad y fecha, en vivo. Pendiente: que el escritorio use el orden y el calendario del núcleo (`historial::orden_del_historial`, `rango_fechas::inicio_del_dia_en_costa_rica`) en vez de sus copias en los adaptadores; exportar a CSV; alertas con nombre de la persona en los ingresos y,
    más adelante, Cloudflare Access para saber quién hizo cada cambio en el panel (hoy la auditoría anota un
    identificador nulo).
-4. Filtros por columna de AG Grid: están apagados porque compararían por su cuenta; vuelven cuando el núcleo
-   decida también esos (`celdas_que_cumplen` ya está expuesta en el WebAssembly).
+4. ~~Filtros por columna de AG Grid~~ **Hecho**: la tabla central del panel ya trae los filtros por columna (los decide el núcleo), mostrar u ocultar filtros, ajustar y restablecer anchos y el selector de columnas, igual que el escritorio y Lattis, y guarda el diseño por tabla.
 
 **Para trabajar en esta PC (tropiezos ya vividos)**
 

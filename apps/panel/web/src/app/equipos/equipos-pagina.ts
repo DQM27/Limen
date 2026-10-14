@@ -146,6 +146,7 @@ export class EquiposPagina {
       minWidth: 100,
       sortable: false,
       filter: false,
+      lockVisible: true,
       cellRenderer: (parametros: ICellRendererParams<FilaEquipo>) => this.botonRetirar(parametros),
     },
   ]);

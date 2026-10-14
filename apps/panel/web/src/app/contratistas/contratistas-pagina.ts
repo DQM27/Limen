@@ -116,6 +116,8 @@ export class ContratistasPagina {
       cellDataType: false,
       flex: 0.7,
       minWidth: 90,
+      // El interruptor no es texto: se filtra por lo que significa.
+      filterValueGetter: ({ data }) => (data?.tiene_acceso ? 'Con acceso' : 'Sin acceso'),
       cellRenderer: (parametros: ICellRendererParams<Contratista>) => this.interruptor(parametros),
     },
     {
@@ -124,6 +126,8 @@ export class ContratistasPagina {
       flex: 0.8,
       minWidth: 100,
       sortable: false,
+      filter: false,
+      lockVisible: true,
       cellRenderer: (parametros: ICellRendererParams<Contratista>) => this.acciones(parametros),
     },
   ]);

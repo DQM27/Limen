@@ -83,6 +83,8 @@ export class UsuariosPagina {
       cellDataType: false,
       flex: 0.8,
       minWidth: 100,
+      // El interruptor no es texto: se filtra por lo que significa.
+      filterValueGetter: ({ data }) => (data?.activo ? 'Activo' : 'Inactivo'),
       cellRenderer: (parametros: ICellRendererParams<Usuario>) => this.interruptor(parametros),
     },
     {
@@ -100,6 +102,8 @@ export class UsuariosPagina {
       flex: 2.2,
       minWidth: 280,
       sortable: false,
+      filter: false,
+      lockVisible: true,
       cellRenderer: (parametros: ICellRendererParams<Usuario>) => this.acciones(parametros),
     },
   ]);

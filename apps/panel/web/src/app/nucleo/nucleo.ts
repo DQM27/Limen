@@ -32,9 +32,16 @@ export type ResultadoDeDatos =
 /** Cómo está conectado un equipo: lo decide el núcleo (regla de los diez minutos sin avisar). */
 export type EstadoDeConexion = 'en_linea' | 'caido' | 'fuera';
 
+/** Cómo compara el filtro de texto de una columna (regla N2): el código que entiende el núcleo. */
+export type OperacionDeFiltro =
+  'CONTIENE' | 'NO_CONTIENE' | 'IGUAL' | 'DISTINTO' | 'EMPIEZA_CON' | 'TERMINA_CON';
+
 export abstract class Nucleo {
   /** De cada fila, si coincide con lo escrito en el buscador de la tabla (regla N2). */
   abstract filasQueCoinciden(buscado: string, filas: CampoDeTexto[][]): boolean[];
+
+  /** ¿La celda cumple el filtro de texto de su columna? Sin importar mayúsculas ni tildes (N2). */
+  abstract celdaCumple(operacion: OperacionDeFiltro, celda: string, filtro: string): boolean;
 
   /** Cada texto partido en segmentos, con lo que coincide resaltado (regla N1). */
   abstract resaltar(buscado: string, campo: CampoResaltable, textos: string[]): Segmento[][];

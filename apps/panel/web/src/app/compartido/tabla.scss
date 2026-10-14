@@ -40,6 +40,51 @@
   white-space: nowrap;
 }
 
+// Los cuatro botones que toda grilla trae (filtros, anchos, columnas), en una sola pieza.
+.segmentado {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+
+  button {
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    width: 36px;
+    height: 34px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--mat-sys-on-surface);
+    cursor: pointer;
+
+    & + button {
+      border-left: 1px solid var(--mat-sys-outline-variant);
+    }
+
+    &:hover {
+      background: var(--mat-sys-surface-container-high);
+    }
+
+    &[aria-pressed='true'] {
+      background: var(--mat-sys-secondary-container);
+      color: var(--mat-sys-on-secondary-container);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--mat-sys-primary);
+      outline-offset: -2px;
+    }
+
+    mat-icon {
+      width: 20px;
+      height: 20px;
+      font-size: 20px;
+    }
+  }
+}
+
 .rejilla {
   flex: 1;
   min-height: 0;

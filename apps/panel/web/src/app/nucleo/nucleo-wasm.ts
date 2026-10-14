@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import init, {
   buscador_al_escribir,
+  celdas_que_cumplen,
   datos_de_usuario,
   empresa_al_escribir,
   estado_de_conexion_del_equipo,
@@ -17,6 +18,7 @@ import {
   type CampoDeTexto,
   type CampoResaltable,
   type EstadoDeConexion,
+  type OperacionDeFiltro,
   type ResultadoDeDatos,
   type Segmento,
 } from './nucleo';
@@ -29,6 +31,13 @@ export async function iniciarNucleo(): Promise<void> {
 /** El núcleo de verdad: el dominio de Rust compilado a WebAssembly (`npm run dominio`). */
 @Injectable()
 export class NucleoWasm extends Nucleo {
+  celdaCumple(operacion: OperacionDeFiltro, celda: string, filtro: string): boolean {
+    const respuesta = JSON.parse(
+      celdas_que_cumplen(JSON.stringify([{ operacion, celda, filtro }])),
+    ) as boolean[];
+    return respuesta[0] ?? true;
+  }
+
   filasQueCoinciden(buscado: string, filas: CampoDeTexto[][]): boolean[] {
     return JSON.parse(filas_que_coinciden(buscado, JSON.stringify(filas))) as boolean[];
   }

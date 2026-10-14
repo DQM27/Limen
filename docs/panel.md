@@ -65,10 +65,7 @@ paleta Tokyo Night, clara (Day) u oscura (Night) según el sistema, igual que el
 La página no decide nada: carga el núcleo (el dominio de Rust compilado a WebAssembly,
 `web/src/dominio-wasm`, hecho por `npm --prefix apps/panel run dominio`) y le pregunta. El nombre
 se ve en mayúscula al escribir, la cédula se normaliza, los mensajes de error son los del núcleo y
-el buscador y el resaltado de las tablas son sus reglas N1 y N2. Quedan apagados los filtros por
-columna de AG Grid, que compararían por su cuenta: vuelven cuando el núcleo decida también esos
-(`celdas_que_cumplen` ya está expuesta). La actualización en vivo falta: hoy se refresca cada 15
-segundos.
+el buscador y el resaltado de las tablas son sus reglas N1 y N2. **Toda grilla trae lo mismo**, porque lo único que las pantallas usan es la tabla central (`compartido/tabla.ts`): el buscador, los filtros por columna (que también decide el núcleo con `celdas_que_cumplen`, regla N2) con su botón para mostrarlos u ocultarlos, el ajuste de anchos al contenido y su restablecer, y el selector de columnas. Con un `id`, cada persona encuentra la tabla como la dejó (columnas, anchos, orden, filtros), guardado en su navegador. Una pantalla nueva sólo le da columnas y filas; si una columna no es texto (un botón, un interruptor), se marca `filter: false` o se le da un `filterValueGetter`. La actualización en vivo se explica en [`nube.md`](nube.md), sección 14.
 
 ## Usuarios (bloque L)
 

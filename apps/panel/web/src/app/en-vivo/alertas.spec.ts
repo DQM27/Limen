@@ -11,6 +11,9 @@ class NucleoFalso extends Nucleo {
   resaltar(): never[] {
     return [];
   }
+  celdaCumple(): boolean {
+    return true;
+  }
   buscadorAlEscribir(texto: string): string {
     return texto.toUpperCase();
   }
