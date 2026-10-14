@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import init, {
   datos_de_usuario,
+  estado_de_conexion_del_equipo,
   filas_que_coinciden,
   mensaje_de_error_de_usuario,
   nombre_al_escribir,
@@ -11,6 +12,7 @@ import {
   Nucleo,
   type CampoDeTexto,
   type CampoResaltable,
+  type EstadoDeConexion,
   type ResultadoDeDatos,
   type Segmento,
 } from './nucleo';
@@ -46,6 +48,10 @@ export class NucleoWasm extends Nucleo {
       const codigo = typeof error === 'string' ? error : 'desconocido';
       return { ok: false, codigo, mensaje: this.mensajeDeError(codigo) };
     }
+  }
+
+  estadoDeConexion(enLinea: boolean, vistoMs: number, ahoraMs: number): EstadoDeConexion {
+    return estado_de_conexion_del_equipo(enLinea, vistoMs, ahoraMs) as EstadoDeConexion;
   }
 
   mensajeDeError(codigo: string): string {

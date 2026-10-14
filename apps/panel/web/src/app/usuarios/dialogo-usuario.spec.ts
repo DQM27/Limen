@@ -29,6 +29,9 @@ class NucleoFalso extends Nucleo {
       datos: { cedula: cedula.replaceAll('-', ''), nombre: nombre.trim().toUpperCase() },
     };
   }
+  estadoDeConexion(): never {
+    throw new Error('no se usa en estas pruebas');
+  }
   mensajeDeError(codigo: string): string {
     return codigo === 'usuario_cedula_repetida' ? 'MENSAJE DEL NÚCLEO: ya existe' : '';
   }

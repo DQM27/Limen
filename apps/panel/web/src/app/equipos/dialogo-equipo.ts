@@ -12,6 +12,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { Silencio } from '../en-vivo/silencio';
 import {
   ErrorPanel,
   registrarDispositivo,
@@ -57,6 +58,7 @@ const TIPOS = (Object.keys(ETIQUETA_TIPO) as TipoDispositivo[]).map((valor) => (
 })
 export class DialogoEquipo {
   private readonly dialogo = inject<MatDialogRef<DialogoEquipo, boolean>>(MatDialogRef);
+  private readonly silencio = inject(Silencio);
   protected readonly unidades = inject<DatosDialogoEquipo>(MAT_DIALOG_DATA).unidades;
   protected readonly tipos = TIPOS;
 
@@ -100,6 +102,7 @@ export class DialogoEquipo {
     this.enviando.set(true);
     this.error.set(null);
     try {
+      this.silencio.silenciar('dispositivo');
       const codigo = await registrarDispositivo({
         nombre: this.nombre(),
         unidad: this.unidad(),

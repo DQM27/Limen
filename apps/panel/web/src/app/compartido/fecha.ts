@@ -20,3 +20,19 @@ export function fechaHora(valor: string | null | undefined): string {
   }
   return FORMATO.format(fecha).replace(',', '');
 }
+
+const SOLO_HORA = new Intl.DateTimeFormat('es-CR', {
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+});
+
+/** Sólo la hora, en 24 horas: `17:26:20`. */
+export function hora24(valor: string | null | undefined): string {
+  if (!valor) {
+    return '';
+  }
+  const fecha = new Date(valor);
+  return Number.isNaN(fecha.getTime()) ? '' : SOLO_HORA.format(fecha);
+}

@@ -155,3 +155,35 @@ main {
     width: 168px;
   }
 }
+
+// El estado del tiempo real, arriba de «Cerrar sesión».
+.en-vivo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 4px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-label-large);
+
+  mat-icon {
+    width: 20px;
+    height: 20px;
+    font-size: 20px;
+  }
+
+  &[data-estado='en_vivo'] {
+    color: var(--aviso-exito);
+  }
+
+  &[data-estado='conectando'],
+  &[data-estado='sin_conexion'] {
+    color: var(--aviso-advertencia);
+  }
+
+  .reducida & {
+    justify-content: center;
+    padding: 8px 0;
+  }
+}

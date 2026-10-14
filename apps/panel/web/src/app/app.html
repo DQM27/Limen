@@ -61,6 +61,21 @@
       </mat-nav-list>
     </nav>
 
+    <div
+      class="en-vivo"
+      role="status"
+      [attr.data-estado]="enVivo.estado()"
+      [matTooltip]="textoEnVivo[enVivo.estado()].ayuda"
+      matTooltipPosition="right"
+    >
+      <mat-icon aria-hidden="true">{{ textoEnVivo[enVivo.estado()].icono }}</mat-icon>
+      @if (expandida()) {
+        <span>{{ textoEnVivo[enVivo.estado()].etiqueta }}</span>
+      } @else {
+        <span class="solo-lectores">{{ textoEnVivo[enVivo.estado()].etiqueta }}</span>
+      }
+    </div>
+
     <a class="salir" href="/salir" [attr.aria-label]="'Cerrar sesión'">
       <mat-icon aria-hidden="true">logout</mat-icon>
       @if (expandida()) {

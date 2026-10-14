@@ -6,11 +6,16 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
+import { debounceTime, filter, merge } from 'rxjs';
 import { Tabla } from '../compartido/tabla';
+import { EnVivo } from '../en-vivo/en-vivo';
+import { Silencio } from '../en-vivo/silencio';
+import { Nucleo } from '../nucleo/nucleo';
 import { Avisos } from '../compartido/avisos';
 import { fechaHora } from '../compartido/fecha';
 import { DialogoConfirmar, type DatosConfirmar } from '../compartido/dialogo-confirmar';
@@ -33,6 +38,8 @@ import {
 } from './filas';
 
 const CADA_CUANTO_MS = 15_000;
+/** Cada cuánto se recalcula quién perdió la señal (no manda ningún aviso al callar). */
+const RECALCULAR_ESTADOS_MS = 10_000;
 
 const MENSAJE_ERROR: Record<string, string> = {
   nube: 'El panel no pudo hablar con la base de datos. Revise los secretos del Worker.',
@@ -65,6 +72,9 @@ const CLASE_CONEXION: Record<NonNullable<FilaEquipo['conexion']>, string> = {
 })
 export class EquiposPagina {
   private readonly dialogos = inject(MatDialog);
+  private readonly enVivo = inject(EnVivo);
+  private readonly nucleo = inject(Nucleo);
+  private readonly silencio = inject(Silencio);
 
   protected readonly filas = signal<FilaEquipo[]>([]);
   protected readonly cargando = signal(true);
@@ -142,12 +152,47 @@ export class EquiposPagina {
 
   constructor() {
     void this.cargar();
+    let vueltas = 0;
     const refresco = setInterval(() => {
-      if (!document.hidden) {
-        void this.cargar();
+      if (document.hidden) {
+        return;
       }
+      // Con el tiempo real los cambios llegan solos: la lectura periódica sólo es una red de
+      // seguridad (cada minuto). Sin él, se lee cada 15 segundos.
+      if (this.enVivo.estado() === 'en_vivo' && ++vueltas % 4 !== 0) {
+        return;
+      }
+      void this.cargar();
     }, CADA_CUANTO_MS);
-    inject(DestroyRef).onDestroy(() => clearInterval(refresco));
+    // Un equipo que deja de avisar no manda ningún cambio: cada tanto se vuelve a preguntar al núcleo
+    // cómo está cada uno con la hora de ahora.
+    const recalculo = setInterval(() => this.recalcularEstados(), RECALCULAR_ESTADOS_MS);
+    inject(DestroyRef).onDestroy(() => {
+      clearInterval(refresco);
+      clearInterval(recalculo);
+    });
+
+    // Cuando la base avisa que cambió la conexión o el registro de un equipo, se vuelve a leer al instante.
+    merge(
+      this.enVivo.cambios.pipe(
+        filter((cambio) => cambio.tabla === 'conexion' || cambio.tabla === 'dispositivo'),
+      ),
+      this.enVivo.reconectado,
+    )
+      .pipe(debounceTime(200), takeUntilDestroyed())
+      .subscribe(() => void this.cargar());
+  }
+
+  /** Cómo está cada equipo con la hora de ahora: lo decide el núcleo, la tabla sólo lo muestra. */
+  private recalcularEstados(): void {
+    const ahora = Date.now();
+    this.filas.update((filas) =>
+      filas.map((fila) =>
+        fila.visto !== null && (fila.conexion === 'en_linea' || fila.conexion === 'caido')
+          ? { ...fila, conexion: this.nucleo.estadoDeConexion(true, Date.parse(fila.visto), ahora) }
+          : fila,
+      ),
+    );
   }
 
   protected registrar(): void {
@@ -190,6 +235,7 @@ export class EquiposPagina {
 
   private async ejecutarRetiro(fila: FilaEquipo): Promise<void> {
     try {
+      this.silencio.silenciar('dispositivo');
       await retirarDispositivo(fila.id);
       this.avisos.exito(`«${fila.nombre}» ya no tiene acceso a la nube.`, 'Equipo retirado');
       await this.cargar();

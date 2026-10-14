@@ -29,6 +29,9 @@ export interface DatosDeUsuario {
 export type ResultadoDeDatos =
   { ok: true; datos: DatosDeUsuario } | { ok: false; codigo: string; mensaje: string };
 
+/** Cómo está conectado un equipo: lo decide el núcleo (regla de los diez minutos sin avisar). */
+export type EstadoDeConexion = 'en_linea' | 'caido' | 'fuera';
+
 export abstract class Nucleo {
   /** De cada fila, si coincide con lo escrito en el buscador de la tabla (regla N2). */
   abstract filasQueCoinciden(buscado: string, filas: CampoDeTexto[][]): boolean[];
@@ -41,6 +44,9 @@ export abstract class Nucleo {
 
   /** Cómo quedarán la cédula y el nombre, o por qué no valen. La cédula única la decide la nube. */
   abstract datosDeUsuario(cedula: string, nombre: string): ResultadoDeDatos;
+
+  /** Cómo está conectado un equipo, con la hora de su última señal y la de ahora (en milisegundos). */
+  abstract estadoDeConexion(enLinea: boolean, vistoMs: number, ahoraMs: number): EstadoDeConexion;
 
   /** El mensaje del núcleo para el código de un error de usuario (vacío si no es suyo). */
   abstract mensajeDeError(codigo: string): string;

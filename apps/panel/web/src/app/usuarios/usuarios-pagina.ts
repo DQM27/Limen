@@ -6,14 +6,17 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
+import { debounceTime, filter, merge } from 'rxjs';
 import { Avisos } from '../compartido/avisos';
 import { DialogoConfirmar, type DatosConfirmar } from '../compartido/dialogo-confirmar';
 import { celdaResaltada } from '../compartido/resaltado';
 import { Tabla } from '../compartido/tabla';
+import { EnVivo } from '../en-vivo/en-vivo';
 import { Nucleo, type CampoDeTexto } from '../nucleo/nucleo';
 import { ErrorPanel, type Usuario } from '../panel';
 import { ApiUsuarios } from './api-usuarios';
@@ -44,6 +47,7 @@ export class UsuariosPagina {
   private readonly dialogos = inject(MatDialog);
   private readonly nucleo = inject(Nucleo);
   private readonly api = inject(ApiUsuarios);
+  private readonly enVivo = inject(EnVivo);
 
   protected readonly filas = signal<Usuario[]>([]);
   protected readonly cargando = signal(true);
@@ -102,12 +106,27 @@ export class UsuariosPagina {
 
   constructor() {
     void this.cargar();
+    let vueltas = 0;
     const refresco = setInterval(() => {
-      if (!document.hidden) {
-        void this.cargar();
+      if (document.hidden) {
+        return;
       }
+      // Con el tiempo real los cambios llegan solos: la lectura periódica sólo es una red de
+      // seguridad (cada minuto). Sin él, se lee cada 15 segundos.
+      if (this.enVivo.estado() === 'en_vivo' && ++vueltas % 4 !== 0) {
+        return;
+      }
+      void this.cargar();
     }, CADA_CUANTO_MS);
     inject(DestroyRef).onDestroy(() => clearInterval(refresco));
+
+    // Cuando la base avisa que cambió un usuario (aquí o en otra sesión), se vuelve a leer al instante.
+    merge(
+      this.enVivo.cambios.pipe(filter((cambio) => cambio.tabla === 'usuario')),
+      this.enVivo.reconectado,
+    )
+      .pipe(debounceTime(200), takeUntilDestroyed())
+      .subscribe(() => void this.cargar());
   }
 
   protected nuevo(): void {
