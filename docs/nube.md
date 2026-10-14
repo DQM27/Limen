@@ -377,3 +377,7 @@ como administrador de la base (la consola de SurrealDB Cloud), y `limen-nube esq
 - Las alertas sólo ven lo que ocurre mientras la página está abierta: no hay historial de alertas (eso
   será la sección Historiales).
 - Un aviso de un ingreso no lleva todavía el nombre de la persona, sólo la vía, la unidad y la hora.
+
+### Tropiezo: la presencia de un equipo vinculado (14 de octubre)
+
+Los permisos del acceso del panel dejaron `conexion` sin escritura para todos: un equipo **vinculado** (con su token) no podía anunciar que estaba conectado y SurrealDB descartaba la escritura **sin dar error**, así que el panel nunca lo veía en línea. No se notó porque hasta entonces el equipo de desarrollo entraba con las credenciales de la administración (`LIMEN_NUBE_*`), que se saltan los permisos. Ahora cada equipo escribe sólo su propia presencia (`conexion:⟨su equipo⟩`) y en su unidad; lo prueba `tests/panel_en_vivo.rs`. Lección: probar los permisos con el token del equipo, no sólo con el del panel.

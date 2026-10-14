@@ -49,8 +49,12 @@ ALTER TABLE unidad_operativa PERMISSIONS FOR select FULL FOR create, update, del
 -- el panel ve a los usuarios pero nunca sus claves.
 DEFINE FIELD OVERWRITE clave ON usuario TYPE string ASSERT string::len($value) > 0
     PERMISSIONS FOR select WHERE $access = 'equipo';
--- Lo que sólo lee el panel: qué equipos hay y cuáles están conectados.
-ALTER TABLE conexion PERMISSIONS FOR select WHERE $access = 'panel' FOR create, update, delete NONE;
+-- Lo que sólo lee el panel: qué equipos hay y cuáles están conectados. Cada equipo escribe sólo su
+-- propia presencia (`conexion:⟨su equipo⟩`) y en su unidad: es como el panel sabe que está en línea.
+ALTER TABLE conexion PERMISSIONS FOR select WHERE $access = 'panel'
+    FOR create, update WHERE $access = 'equipo'
+        AND id = type::record('conexion', $token.equipo) AND unidad = $token.unidad
+    FOR delete NONE;
 ALTER TABLE dispositivo PERMISSIONS FOR select WHERE $access = 'panel' FOR create, update, delete NONE;
 
 -- Eventos: anotan en el diario cada alta, cambio y borrado, dentro de la misma transacción.

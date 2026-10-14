@@ -212,4 +212,75 @@ mod tests {
             "ni tocar a los usuarios: los administra la nube"
         );
     }
+
+    /// El mismo texto que escribe `Nube::anunciar_conexion` (ver `presencia.rs`).
+    const ANUNCIAR: &str = "UPSERT type::record('conexion', $equipo) MERGE \
+        { unidad: $unidad, equipo: $equipo, en_linea: true, iniciada: time::now(), visto: time::now() }";
+
+    async fn anunciar(db: &Surreal<Db>, equipo: &str, unidad: &str) {
+        db.query(ANUNCIAR)
+            .bind(("equipo", equipo.to_owned()))
+            .bind(("unidad", unidad.to_owned()))
+            .await
+            .unwrap();
+    }
+
+    /// Un equipo vinculado entra con su token (no con las credenciales de la administración) y
+    /// tiene que poder anunciar que está conectado: si no, el panel nunca lo vería en línea.
+    #[tokio::test]
+    async fn un_equipo_vinculado_anuncia_su_presencia_y_el_panel_la_ve() {
+        // Un equipo nuevo (`a2`): todavía no tiene fila de conexión.
+        let db = base(&token(
+            "equipo",
+            CLAVE_EQUIPOS,
+            r#","unidad":"BRISAS","equipo":"a2""#,
+        ))
+        .await;
+        anunciar(&db, "a2", "BRISAS").await;
+
+        db.invalidate().await.unwrap();
+        db.authenticate(token("panel", CLAVE_PANEL, ""))
+            .await
+            .unwrap();
+        let conexion = filas(&db, "SELECT * FROM conexion:a2").await;
+        assert_eq!(conexion.len(), 1, "el panel ve al equipo que se anunció");
+    }
+
+    /// Cada equipo escribe sólo la presencia suya y en su unidad: no puede hacerse pasar por otro
+    /// equipo ni anunciarse en otra unidad.
+    #[tokio::test]
+    async fn un_equipo_no_escribe_la_presencia_de_otro_ni_de_otra_unidad() {
+        let db = equipo_de_brisas().await; // el equipo `a1`, de BRISAS
+        anunciar(&db, "b1", "CARTAGO").await; // el equipo `b1` es de otra unidad
+        anunciar(&db, "a1", "CARTAGO").await; // el suyo, pero diciendo otra unidad
+        let otro_equipo_en_su_unidad = ANUNCIAR.replace("$equipo", "'a9'");
+        db.query(otro_equipo_en_su_unidad)
+            .bind(("equipo", "a1".to_owned()))
+            .bind(("unidad", "BRISAS".to_owned()))
+            .await
+            .unwrap();
+
+        db.invalidate().await.unwrap();
+        db.authenticate(token("panel", CLAVE_PANEL, ""))
+            .await
+            .unwrap();
+        assert_eq!(
+            filas(&db, "SELECT * FROM conexion:b1 WHERE en_linea = false")
+                .await
+                .len(),
+            1,
+            "la presencia de otro equipo no cambia"
+        );
+        assert_eq!(
+            filas(&db, "SELECT * FROM conexion:a1 WHERE unidad = 'BRISAS'")
+                .await
+                .len(),
+            1,
+            "ni su unidad"
+        );
+        assert!(
+            filas(&db, "SELECT * FROM conexion:a9").await.is_empty(),
+            "ni se crea la de otro equipo"
+        );
+    }
 }
