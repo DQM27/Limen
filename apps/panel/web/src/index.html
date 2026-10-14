@@ -2,9 +2,29 @@
 <html lang="es">
   <head>
     <meta charset="utf-8" />
-    <title>Limen · panel</title>
+    <title>Limen · administración</title>
     <base href="/" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" type="image/svg+xml" href="logo.svg" />
+    <style>
+      /* El fondo se pinta antes de que cargue Angular, para que no parpadee en blanco. */
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: #e1e2e7;
+        color: #3760bf;
+        font-family: system-ui, 'Segoe UI', sans-serif;
+      }
+      @media (prefers-color-scheme: dark) {
+        html,
+        body {
+          background: #1a1b26;
+          color: #c0caf5;
+        }
+      }
+    </style>
   </head>
   <body>
     <app-root></app-root>

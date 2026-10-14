@@ -52,3 +52,16 @@ sigue conectÃ¡ndose como antes (desarrollo y herramientas).
 
 **LÃ­mite conocido:** retirar un equipo impide que obtenga un token nuevo, pero la conexiÃ³n que ya
 tiene abierta sigue hasta que se cierre. Cortarla al instante (como Lattis) queda pendiente.
+
+## La página: cómo está ordenada
+
+Angular (`apps/panel/web`), con la misma forma que la app de escritorio: **menú lateral con las
+secciones** (Equipos, Usuarios, Historiales, Contratistas) y, al lado, la pantalla de la sección.
+Las que todavía no existen se ven apagadas en el menú (`navegacion.ts`); cada pantalla nueva sólo
+agrega su ruta. Todas siguen el mismo orden: título, una fila de herramientas (acciones propias a
+la izquierda, conteo a la derecha) y la tabla AG Grid (`compartido/tabla.ts`). Material 3 con la
+paleta Tokyo Night, clara (Day) u oscura (Night) según el sistema, igual que el escritorio.
+
+La página no decide nada: muestra lo que responde el Worker y las reglas son del núcleo. Falta
+todavía el buscador de las tablas, que también es del núcleo (reglas N1 y N2) y se carga en el
+navegador como WebAssembly, y la actualización en vivo (hoy se refresca cada 15 segundos).

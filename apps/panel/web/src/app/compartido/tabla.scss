@@ -1,0 +1,51 @@
+// La tabla ocupa todo el alto y el ancho que le deja su pantalla.
+:host {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.tabla {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+}
+
+// Una sola fila: a la izquierda lo propio de la pantalla; a la derecha el
+// conteo y las acciones.
+.herramientas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.grupo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.conteo {
+  margin: 0 4px;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+  white-space: nowrap;
+}
+
+.rejilla {
+  flex: 1;
+  min-height: 0;
+
+  ag-grid-angular {
+    display: block;
+    height: 100%;
+  }
+}

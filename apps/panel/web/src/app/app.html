@@ -1,138 +1,73 @@
-<header class="cabecera">
-  <h1>Limen</h1>
-  <p>Panel de equipos</p>
-  <a class="salir" href="/salir">Cerrar sesión</a>
-</header>
+<a class="saltar" href="#contenido">Saltar al contenido</a>
 
-<main>
-  @if (error(); as mensaje) {
-    <p class="error" role="alert">{{ mensaje }}</p>
-  }
-
-  <section class="tarjeta" aria-labelledby="t-registrar">
-    <h2 id="t-registrar">Registrar un equipo</h2>
-    <form class="formulario" (submit)="registrar($event)">
-      <label>
-        Nombre
-        <input
-          type="text"
-          name="nombre"
-          autocomplete="off"
-          placeholder="PC portería"
-          [value]="nombre()"
-          (input)="escribir($event)"
-        />
-      </label>
-      <label>
-        Unidad operativa
-        <select name="unidad" [value]="unidad()" (change)="elegirUnidad($event)">
-          <option value="" disabled [selected]="unidad() === ''">Elija una unidad</option>
-          @for (opcion of unidades(); track opcion.codigo) {
-            <option [value]="opcion.codigo" [selected]="opcion.codigo === unidad()">
-              {{ opcion.nombre }}
-            </option>
-          }
-        </select>
-      </label>
-      <label>
-        Tipo
-        <select name="tipo" [value]="tipo()" (change)="elegirTipo($event)">
-          @for (opcion of tipos; track opcion.valor) {
-            <option [value]="opcion.valor">{{ opcion.etiqueta }}</option>
-          }
-        </select>
-      </label>
-      <button type="submit" [disabled]="enviando() || unidad() === ''">
-        Registrar y emitir código
+<div class="carcasa">
+  <aside class="barra" [class.reducida]="!expandida()">
+    <div class="barra-cabecera">
+      @if (expandida()) {
+        <span class="marca">
+          <img src="logo.svg" alt="" width="24" height="24" />
+          Limen
+        </span>
+      }
+      <button
+        type="button"
+        class="alternar"
+        aria-controls="menu-principal"
+        [attr.aria-expanded]="expandida()"
+        [attr.aria-label]="expandida() ? 'Reducir el menú' : 'Expandir el menú'"
+        (click)="alternar()"
+      >
+        <mat-icon aria-hidden="true">{{ expandida() ? 'menu_open' : 'menu' }}</mat-icon>
       </button>
-    </form>
-    @if (errorFormulario(); as mensaje) {
-      <p class="error" role="alert">{{ mensaje }}</p>
-    }
+    </div>
 
-    @if (emitido(); as codigo) {
-      <div class="codigo" role="status">
-        <p>Código de vinculación. Se muestra una sola vez.</p>
-        <p class="grande">{{ codigo.codigo }}</p>
-        @if (segundosRestantes() > 0) {
-          <p>Vence en {{ tiempo(segundosRestantes()) }}</p>
-        } @else {
-          <p class="alerta">El código venció. Registre el equipo de nuevo.</p>
+    <nav id="menu-principal" aria-label="Secciones">
+      <mat-nav-list>
+        @for (seccion of secciones; track seccion.etiqueta) {
+          @if (seccion.ruta) {
+            <a
+              mat-list-item
+              [routerLink]="seccion.ruta"
+              routerLinkActive
+              #activa="routerLinkActive"
+              [activated]="activa.isActive"
+              [attr.aria-current]="activa.isActive ? 'page' : null"
+              [matTooltip]="expandida() ? '' : seccion.etiqueta"
+              matTooltipPosition="right"
+            >
+              <mat-icon matListItemIcon aria-hidden="true">{{ seccion.icono }}</mat-icon>
+              @if (expandida()) {
+                <span matListItemTitle>{{ seccion.etiqueta }}</span>
+              }
+            </a>
+          } @else {
+            <!-- Todavía sin pantalla: se ve para que se note la forma del panel. -->
+            <div
+              mat-list-item
+              class="pendiente"
+              aria-disabled="true"
+              [matTooltip]="expandida() ? 'Próximamente' : seccion.etiqueta + ' (próximamente)'"
+              matTooltipPosition="right"
+            >
+              <mat-icon matListItemIcon aria-hidden="true">{{ seccion.icono }}</mat-icon>
+              @if (expandida()) {
+                <span matListItemTitle>{{ seccion.etiqueta }}</span>
+              }
+            </div>
+          }
         }
-        <button type="button" (click)="cerrarCodigo()">Listo</button>
-      </div>
-    }
-  </section>
+      </mat-nav-list>
+    </nav>
 
-  <section class="tarjeta" aria-labelledby="t-registrados">
-    <h2 id="t-registrados">Equipos registrados</h2>
-    @if (cargando()) {
-      <p>Cargando…</p>
-    } @else if (dispositivos().length === 0) {
-      <p>Todavía no hay equipos registrados.</p>
-    } @else {
-      <div class="tabla">
-        <table>
-          <thead>
-            <tr>
-              <th>Nombre</th>
-              <th>Unidad</th>
-              <th>Tipo</th>
-              <th>Estado</th>
-              <th>Registrado</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (d of dispositivos(); track d.id) {
-              <tr>
-                <td>{{ d.nombre }}</td>
-                <td>{{ d.unidad }}</td>
-                <td>{{ d.tipo }}</td>
-                <td [class]="'estado ' + d.estado">{{ etiqueta(d.estado) }}</td>
-                <td>{{ fecha(d.creado) }}</td>
-                <td>
-                  @if (d.estado !== 'retirado') {
-                    <button type="button" class="peligro" (click)="retirar(d)">Retirar</button>
-                  }
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-    }
-  </section>
+    <a class="salir" href="/salir" [attr.aria-label]="'Cerrar sesión'">
+      <mat-icon aria-hidden="true">logout</mat-icon>
+      @if (expandida()) {
+        <span>Cerrar sesión</span>
+      }
+    </a>
+  </aside>
 
-  <section class="tarjeta" aria-labelledby="t-conectados">
-    <h2 id="t-conectados">Conectados ahora</h2>
-    @if (equipos().length === 0) {
-      <p>Ningún equipo ha anunciado su conexión.</p>
-    } @else {
-      <div class="tabla">
-        <table>
-          <thead>
-            <tr>
-              <th>Equipo</th>
-              <th>Unidad</th>
-              <th>Estado</th>
-              <th>Visto</th>
-              <th>Conectado desde</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (e of equipos(); track e.equipo) {
-              <tr>
-                <td>{{ e.equipo.slice(0, 8) }}</td>
-                <td>{{ e.unidad }}</td>
-                <td [class]="'estado ' + e.estado">{{ etiqueta(e.estado) }}</td>
-                <td>{{ fecha(e.visto) }}</td>
-                <td>{{ fecha(e.iniciada) }}</td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-    }
-  </section>
-</main>
+  <main id="contenido" tabindex="-1">
+    <router-outlet />
+  </main>
+</div>

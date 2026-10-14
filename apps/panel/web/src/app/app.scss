@@ -1,0 +1,157 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+// Enlace para teclado: invisible hasta que recibe el foco.
+.saltar {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1000;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+  transform: translateY(-200%);
+
+  &:focus {
+    transform: translateY(0);
+  }
+}
+
+// El menú y el contenido comparten una fila: cuando el menú cambia de ancho,
+// el contenido ocupa el resto solo. El mismo espacio entre el menú, la
+// pantalla y el borde de la ventana, en los cuatro lados (como en la app de
+// escritorio).
+.carcasa {
+  display: flex;
+  gap: var(--separacion);
+  box-sizing: border-box;
+  height: 100%;
+  padding: var(--separacion);
+  --separacion: 6px;
+}
+
+.barra {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 200px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+  background: var(--mat-sys-surface-container-low);
+  transition: width 150ms ease;
+
+  --mat-list-list-item-container-shape: 8px;
+  --mat-list-active-indicator-shape: 8px;
+  --mat-list-active-indicator-color: var(--mat-sys-secondary-container);
+  --mat-list-list-item-one-line-container-height: 44px;
+  --mat-list-list-item-label-text-size: 13px;
+  --mat-list-list-item-label-text-weight: 400;
+  --mat-list-list-item-leading-icon-size: 22px;
+  --mat-list-list-item-leading-space: 12px;
+  --mat-list-list-item-trailing-space: 8px;
+  --mat-list-list-item-leading-icon-end-space: 10px;
+
+  &.reducida {
+    width: 56px;
+  }
+}
+
+.barra-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 0 4px 0 12px;
+
+  .reducida & {
+    justify-content: center;
+    padding: 0;
+  }
+}
+
+.marca {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: var(--mat-sys-title-medium);
+}
+
+.alternar {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 20px;
+  background: transparent;
+  color: var(--mat-sys-on-surface);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--mat-sys-surface-container-high);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+  }
+}
+
+nav {
+  flex: 1;
+  min-height: 0;
+  padding: 4px;
+  overflow-y: auto;
+}
+
+// Una sección que todavía no tiene pantalla: visible, pero apagada.
+.pendiente {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.salir {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-label-large);
+  text-decoration: none;
+
+  &:hover {
+    background: var(--mat-sys-surface-container-high);
+    color: var(--mat-sys-on-surface);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+  }
+
+  .reducida & {
+    justify-content: center;
+    padding: 10px 0;
+  }
+}
+
+main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  outline: none;
+}
+
+// En pantallas angostas el menú arranca reducido a sólo íconos.
+@media (max-width: 720px) {
+  .barra:not(.reducida) {
+    width: 168px;
+  }
+}

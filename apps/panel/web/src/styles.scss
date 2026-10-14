@@ -1,0 +1,99 @@
+@use '@angular/material' as mat;
+@use 'tokyo-night';
+
+// Tema de Angular Material 3 con la paleta Tokyo Night, igual que la app de
+// escritorio: clara (Day) u oscura (Night) según el sistema. Sin fuentes
+// externas: se usa la del sistema.
+html {
+  color-scheme: light dark;
+  @include mat.theme(
+    (
+      color: (
+        primary: mat.$azure-palette,
+        theme-type: color-scheme,
+      ),
+      typography: system-ui,
+      density: 0,
+    )
+  );
+  @include tokyo-night.paleta;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-large);
+}
+
+// Títulos de página: una sola escala para todas las pantallas.
+h1 {
+  margin: 0;
+  font: var(--mat-sys-headline-small);
+}
+
+// Texto sólo para lectores de pantalla.
+.solo-lectores {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+// Los estados que se repiten en varias tablas (las celdas las dibuja AG Grid,
+// fuera de los componentes, así que el estilo es global).
+.estado-bueno {
+  color: var(--aviso-exito);
+}
+
+.estado-aviso {
+  color: var(--aviso-advertencia);
+}
+
+.estado-malo {
+  color: var(--mat-sys-error);
+}
+
+.estado-neutro {
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// El botón de una celda de acción ("Retirar").
+.boton-celda {
+  height: 26px;
+  padding: 0 12px;
+  border: 1px solid var(--mat-sys-outline);
+  border-radius: 13px;
+  background: transparent;
+  color: var(--mat-sys-primary);
+  font: var(--mat-sys-label-medium);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--mat-sys-secondary-container);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 1px;
+  }
+
+  &.peligro {
+    border-color: var(--mat-sys-error);
+    color: var(--mat-sys-error);
+
+    &:hover {
+      background: var(--mat-sys-error-container);
+    }
+  }
+}
