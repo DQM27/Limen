@@ -7,6 +7,11 @@ export const routes: Routes = [
     title: 'Equipos · Limen',
     loadComponent: () => import('./equipos/equipos-pagina').then((m) => m.EquiposPagina),
   },
+  {
+    path: 'usuarios',
+    title: 'Usuarios · Limen',
+    loadComponent: () => import('./usuarios/usuarios-pagina').then((m) => m.UsuariosPagina),
+  },
   // Una dirección que no existe vuelve a la primera sección.
   { path: '**', redirectTo: 'equipos' },
 ];

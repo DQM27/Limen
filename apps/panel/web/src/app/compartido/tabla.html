@@ -2,6 +2,19 @@
   <div class="herramientas">
     <div class="grupo">
       <ng-content select="[controles]" />
+      @if (camposDeBusqueda()) {
+        <div class="buscador">
+          <mat-icon aria-hidden="true">search</mat-icon>
+          <input
+            type="search"
+            autocomplete="off"
+            [placeholder]="marcador()"
+            [attr.aria-label]="'Buscar en ' + etiqueta()"
+            [value]="buscado()"
+            (input)="escribir($event)"
+          />
+        </div>
+      }
     </div>
     <div class="grupo">
       <ng-content select="[acciones]" />
@@ -16,6 +29,9 @@
       [defaultColDef]="columnaPorDefecto"
       [rowData]="filas()"
       [getRowId]="obtenerIdFila()"
+      [context]="contexto"
+      [isExternalFilterPresent]="hayBusqueda"
+      [doesExternalFilterPass]="pasaLaBusqueda"
       [localeText]="textos"
       [loading]="cargando()"
       [overlayNoRowsTemplate]="mensajeVacio()"
@@ -25,6 +41,8 @@
       [enableCellTextSelection]="true"
       tooltipShowMode="whenTruncated"
       [tooltipShowDelay]="400"
+      (gridReady)="alIniciar($event)"
+      (modelUpdated)="alActualizarFilas($event)"
     />
   </div>
 </section>

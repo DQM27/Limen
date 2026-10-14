@@ -1,0 +1,52 @@
+<form (submit)="guardar($event)">
+  <div class="cabecera">
+    <h2 mat-dialog-title>{{ usuario ? 'Editar usuario' : 'Nuevo usuario' }}</h2>
+  </div>
+  <mat-dialog-content>
+    <mat-form-field appearance="outline" class="campo">
+      <mat-label>Cédula</mat-label>
+      <input
+        matInput
+        name="cedula"
+        autocomplete="off"
+        inputmode="numeric"
+        cdkFocusInitial
+        [value]="cedula()"
+        (input)="escribirCedula($event)"
+      />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="campo">
+      <mat-label>Nombre</mat-label>
+      <input
+        matInput
+        name="nombre"
+        autocomplete="off"
+        [value]="nombre()"
+        (input)="escribirNombre($event)"
+      />
+    </mat-form-field>
+
+    @if (vistaPrevia(); as previa) {
+      <p class="ayuda">
+        Se guardará como cédula <strong>{{ previa.cedula }}</strong> a nombre de
+        <strong>{{ previa.nombre }}</strong
+        >.
+      </p>
+    }
+    @if (!usuario) {
+      <p class="ayuda">
+        Se genera una clave temporal de un solo uso. Se muestra al crear el usuario, para que se la
+        envíe a la persona; la tendrá que cambiar al entrar.
+      </p>
+    }
+
+    <p class="error" role="alert">{{ errorDelServidor() ?? errorDelNucleo() }}</p>
+  </mat-dialog-content>
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" (click)="cancelar()">Cancelar</button>
+    <button mat-flat-button type="submit" [disabled]="enviando()">
+      {{ usuario ? 'Guardar' : 'Crear usuario' }}
+    </button>
+  </mat-dialog-actions>
+</form>

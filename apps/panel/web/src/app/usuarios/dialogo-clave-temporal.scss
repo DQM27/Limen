@@ -1,0 +1,23 @@
+@use '../compartido/dialogo';
+
+@include dialogo.compacto;
+
+.clave {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+  background: var(--mat-sys-surface-container-low);
+}
+
+// Se copia o se dicta a mano: grande, con ancho fijo y fácil de leer.
+.texto {
+  font: var(--mat-sys-headline-small);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  letter-spacing: 0.15em;
+  user-select: all;
+}

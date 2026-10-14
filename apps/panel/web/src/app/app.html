@@ -42,9 +42,11 @@
             </a>
           } @else {
             <!-- Todavía sin pantalla: se ve para que se note la forma del panel. -->
-            <div
+            <a
               mat-list-item
               class="pendiente"
+              role="link"
+              tabindex="-1"
               aria-disabled="true"
               [matTooltip]="expandida() ? 'Próximamente' : seccion.etiqueta + ' (próximamente)'"
               matTooltipPosition="right"
@@ -53,7 +55,7 @@
               @if (expandida()) {
                 <span matListItemTitle>{{ seccion.etiqueta }}</span>
               }
-            </div>
+            </a>
           }
         }
       </mat-nav-list>

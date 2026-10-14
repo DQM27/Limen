@@ -73,3 +73,32 @@ export const registrarDispositivo = (nuevo: NuevoDispositivo): Promise<CodigoEmi
 export const retirarDispositivo = async (id: string): Promise<void> => {
   await pedir<unknown>(`/api/dispositivos/${id}/retirar`, 'POST');
 };
+
+export interface Usuario {
+  id: string;
+  cedula: string;
+  nombre: string;
+  activo: boolean;
+  debe_cambiar_clave: boolean;
+}
+
+/** Lo que el Worker responde al crear un usuario o restablecer su clave: la clave temporal se ve una sola vez. */
+export interface UsuarioCreado {
+  usuario: Usuario;
+  clave_temporal: string;
+}
+
+export const listarUsuarios = async (): Promise<Usuario[]> =>
+  (await pedir<{ usuarios: Usuario[] }>('/api/usuarios')).usuarios;
+
+export const crearUsuario = (datos: { cedula: string; nombre: string }): Promise<UsuarioCreado> =>
+  pedir<UsuarioCreado>('/api/usuarios', 'POST', datos);
+
+export const editarUsuario = async (
+  id: string,
+  datos: { cedula: string; nombre: string; activo: boolean },
+): Promise<Usuario> =>
+  (await pedir<{ usuario: Usuario }>(`/api/usuarios/${id}`, 'PATCH', datos)).usuario;
+
+export const restablecerClaveDeUsuario = async (id: string): Promise<string> =>
+  (await pedir<{ clave_temporal: string }>(`/api/usuarios/${id}/clave`, 'POST')).clave_temporal;
