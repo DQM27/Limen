@@ -139,29 +139,34 @@ importa; con dos, el historial del 25 de Brisas se mezclaría con el del 25 de l
 
 ## 8. Subida continua, como quedó
 
-- Las tablas que se comparten tienen **registro de cambios** (`CHANGEFEED 30d`): cada
-  alta, cambio y borrado queda anotado, en orden, durante 30 días. Es el mismo esquema
-  en el equipo y en la nube.
+- **Bandeja de salida (patrón «outbox», como `cola_salida` en Lattis).** Cada tabla que se
+  comparte tiene un evento (`DEFINE EVENT salir`, en `crates/infra-surreal/src/esquema/equipo.surql`,
+  que sólo se aplica a la base de un equipo) que anota en la tabla local `salida`, **en la misma
+  transacción**, que ese registro hay que mandarlo a la nube. Una fila por registro, con su
+  último estado y una `version`. Lo que **baja** de la nube se escribe marcado `$de_la_nube` y el
+  evento no anota nada: no hay rebote por construcción. Si otro código escribiera en estas tablas
+  sin marcarlo, su cambio sube (lo seguro es subir de más, nunca perder un cambio).
 - **Al arrancar**, si el equipo tiene la nube configurada (las variables
   `LIMEN_NUBE_URL`, `LIMEN_NUBE_USUARIO`, `LIMEN_NUBE_CLAVE` y `LIMEN_NUBE_NIVEL` del
   usuario de Windows), la app lanza la sincronización en segundo plano
   (`infra_nube::sincronizar`). Sin esa configuración trabaja igual que antes, sólo en el
   equipo.
-- **Al instante** (ver sección 10) sube lo anotado desde la última vez, tabla por tabla y en orden:
-  lo guardado se crea o se reemplaza en la nube; lo borrado se borra (hechos y
-  auditoría nunca se borran: se agregan los que faltan). Lo que subió queda anotado en
-  `sincronizacion:⟨tabla⟩`, que es del equipo y no se comparte.
-- **La primera vez** cada tabla se copia entera, porque lo que había antes del registro
-  de cambios no está anotado; después sólo sube lo nuevo. Todo se puede repetir sin
+- **Al instante** (ver sección 10) vacía la bandeja, tabla por tabla (los catálogos antes que lo
+  que los usa) y de a 200: lo guardado se crea o se reemplaza en la nube; lo borrado se borra
+  (hechos y auditoría nunca se borran: se agregan los que faltan). Un lote se quita de la
+  bandeja **después** de confirmarse en la nube, y sólo si la `version` no cambió mientras se
+  mandaba: si algo falla se reintenta, y un cambio hecho durante el envío no se pierde.
+- **La primera vez**, la bandeja recibe lo que el equipo ya tenía antes de que existiera (una
+  base de antes, o lo que se registró sin conexión antes de vincularse): los eventos sólo ven
+  lo que se escribe desde que existen. Se hace una sola vez (`sincronizacion:⟨bandeja-sembrada⟩`).
+  Una instalación nueva no tiene nada local, así que no sube nada. Todo se puede repetir sin
   duplicar nada.
-- **Sin red**, la sincronización sólo lo anota en el registro técnico y reintenta cada 30
-  segundos. Lo registrado mientras tanto sube al volver la conexión. La portería nunca
-  espera.
-- **Límite:** el registro de cambios guarda 30 días. Un equipo que pase más de 30 días
-  sin conexión debe volver a copiarse entero con `limen-nube subir`.
-- **La copia entera nunca borra en la nube**, porque allí también está lo de los demás
-  equipos. Los borrados viajan sólo por el registro de cambios, que dice exactamente qué
-  se borró.
+- **Sin red**, la sincronización sólo lo anota en el registro técnico y reintenta con espera
+  creciente. Lo registrado mientras tanto queda en la bandeja y sube al volver la conexión, **sin
+  límite de tiempo** (ya no depende de los 30 días del registro de cambios de SurrealDB). La
+  portería nunca espera.
+- **Sólo crea o reemplaza en la nube**: nunca borra lo que no esté anotado como borrado,
+  porque allí también está lo de los demás equipos.
 
 ## 9. Bajada, como quedó
 
@@ -173,9 +178,14 @@ importa; con dos, el historial del 25 de Brisas se mezclaría con el del 25 de l
 - Baja los **catálogos completos** y, de lo que es de una unidad, **sólo lo de la suya**
   (filtra por el campo `unidad`).
 - **Equipo nuevo:** la primera vez baja todo lo que le corresponde y arranca al día.
-- **Sin rebotes:** lo que llega y ya está igual no se escribe
-  (`AlmacenSurreal::aplicar_de_la_nube`), así no se anota en el registro del equipo y no
-  vuelve a subir. Hechos y auditoría sólo se agregan.
+- **Sin rebotes, por construcción:** lo que llega y ya está igual no se escribe, y lo que sí se
+  escribe va marcado `$de_la_nube` (`AlmacenSurreal::aplicar_de_la_nube`), así que los eventos de
+  la bandeja de salida no lo anotan y nunca vuelve a subir. El 14 de octubre una instalación
+  nueva bajó el catálogo (5 307 filas) y enseguida lo volvió a subir, porque la subida leía el
+  registro de cambios de SurrealDB, que anota **toda** escritura sin saber de dónde viene: miles
+  de escrituras de rebote que además duplicaron el diario de la nube. La solución no es un
+  filtro: es el patrón de Lattis, una bandeja que sólo llenan las escrituras que nacen en el
+  equipo. Hechos y auditoría sólo se agregan.
 - **Pantallas:** cuando lo que bajó cambió algo, el núcleo manda el evento
   `nube-cambios` y Dentro (con Proveedores, Correo y KOF), Contratistas, Gafetes e
   Historial vuelven a cargar.
@@ -297,8 +307,9 @@ el equipo recibía el historial de todas las unidades y la app descartaba lo aje
    sólo guarda qué fila cambió. La bajada lee el diario desde su cursor (con un margen de 60 s por si
    dos transacciones se anotan en otro orden), toma de cada fila la última anotación y baja la fila
    tal como está. El aviso en tiempo real es un solo `LIVE SELECT` sobre el diario.
-5. **La subida no cambia**: el equipo sigue leyendo su propio registro de cambios local y escribe en
-   la nube con sus permisos.
+5. **La subida** vacía la bandeja de salida del equipo (sección 8) y escribe en la nube con sus
+   permisos. (Hasta el 14 de octubre leía el registro de cambios local de SurrealDB; por eso
+   rebotaba lo que bajaba.)
 
 **Lo que se comprobó** (pruebas en `crates/infra-nube`, con una base en memoria, y contra la nube real):
 

@@ -17,6 +17,9 @@ use crate::registros::AuditoriaRegistro;
 /// El esquema completo, declarativo (`OVERWRITE`): se vuelve a aplicar entero
 /// en cada arranque. Es el mismo en los equipos y en la nube.
 pub const ESQUEMA: &str = include_str!("esquema/esquema.surql");
+
+/// Lo que sólo existe en la base de un equipo, no en la nube: la bandeja de salida y sus eventos.
+const ESQUEMA_DEL_EQUIPO: &str = include_str!("esquema/equipo.surql");
 /// El namespace y la base de Limen, iguales en los equipos y en la nube.
 pub const NAMESPACE: &str = "limen";
 pub const BASE: &str = "principal";
@@ -75,6 +78,10 @@ impl AlmacenSurreal {
     async fn preparar(db: Surreal<Db>, origen: Origen) -> Result<Self, ErrorPersistencia> {
         db.use_ns(NAMESPACE).use_db(BASE).await.map_err(tecnica)?;
         db.query(ESQUEMA)
+            .await
+            .and_then(surrealdb::IndexedResults::check)
+            .map_err(tecnica)?;
+        db.query(ESQUEMA_DEL_EQUIPO)
             .await
             .and_then(surrealdb::IndexedResults::check)
             .map_err(tecnica)?;
