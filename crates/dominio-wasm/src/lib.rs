@@ -9,6 +9,10 @@
 //! sólo convierte el error: `JsValue` no existe fuera de WebAssembly.
 
 use chrono::{DateTime, Utc};
+use limen_dominio::nombre::nombre_mientras_se_escribe;
+use limen_dominio::usuario::{
+    ClaveNueva, ErrorUsuario, LARGO_CLAVE_TEMPORAL, cedula_de_usuario, validar_datos,
+};
 use limen_dominio::vinculacion::{
     CodigoVinculacion, EmisionDeCodigo, ErrorVinculacion, LARGO_CODIGO, VIGENCIA_CODIGO_MINUTOS,
     puede_conectarse,
@@ -114,9 +118,111 @@ pub fn vigencia_minutos() -> f64 {
     f64::from(u32::try_from(VIGENCIA_CODIGO_MINUTOS).unwrap_or(u32::MAX))
 }
 
+/// Los datos de un usuario ya en su forma única, tal como el núcleo los decide: la pantalla
+/// no normaliza nada, sólo muestra esto.
+#[wasm_bindgen(getter_with_clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DatosDeUsuario {
+    pub cedula: String,
+    pub nombre: String,
+}
+
+fn regla_datos_de_usuario(
+    cedula: &str,
+    nombre: &str,
+    cedula_en_uso: bool,
+) -> Result<DatosDeUsuario, Motivo> {
+    validar_datos(cedula, nombre, cedula_en_uso)
+        .map(|datos| DatosDeUsuario {
+            cedula: datos.cedula.as_str().to_owned(),
+            nombre: datos.nombre.as_str().to_owned(),
+        })
+        .map_err(ErrorUsuario::codigo)
+}
+
+fn regla_clave_temporal(azar: &[u8], cedula: &str) -> Result<String, Motivo> {
+    let azar: [u8; LARGO_CLAVE_TEMPORAL] = azar.try_into().map_err(|_| "azar_invalido")?;
+    let cedula = cedula_de_usuario(cedula).map_err(ErrorUsuario::codigo)?;
+    ClaveNueva::temporal(azar, &cedula)
+        .map(|clave| clave.as_str().to_owned())
+        .map_err(ErrorUsuario::codigo)
+}
+
+/// Valida y normaliza la cédula y el nombre de un usuario (alta o edición). `cedula_en_uso`:
+/// si **otro** usuario ya tiene esa cédula. Si algo no vale, el error es el código de la
+/// regla (`cedula_invalida`, `nombre_vacio`, `usuario_cedula_repetida`…).
+#[wasm_bindgen]
+pub fn datos_de_usuario(
+    cedula: &str,
+    nombre: &str,
+    cedula_en_uso: bool,
+) -> Result<DatosDeUsuario, JsValue> {
+    regla_datos_de_usuario(cedula, nombre, cedula_en_uso).map_err(a_js)
+}
+
+/// El nombre como se ve mientras se escribe (mayúscula, sin tocar los espacios).
+#[wasm_bindgen]
+pub fn nombre_al_escribir(texto: &str) -> String {
+    nombre_mientras_se_escribe(texto)
+}
+
+/// Una clave temporal con el azar que entrega el Worker (`crypto.getRandomValues`, 10 bytes).
+#[wasm_bindgen]
+pub fn clave_temporal(azar: &[u8], cedula: &str) -> Result<String, JsValue> {
+    regla_clave_temporal(azar, cedula).map_err(a_js)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn los_datos_de_un_usuario_salen_normalizados() {
+        let datos = regla_datos_de_usuario("1-1111-1111", "  josé  peña ", false).unwrap();
+        assert_eq!(datos.cedula, "111111111");
+        assert_eq!(datos.nombre, "JOSE PEÑA");
+    }
+
+    #[test]
+    fn lo_que_no_vale_llega_como_el_codigo_de_la_regla() {
+        assert_eq!(
+            regla_datos_de_usuario("", "ana", false),
+            Err("cedula_vacia")
+        );
+        assert_eq!(
+            regla_datos_de_usuario("AB123", "ana", false),
+            Err("cedula_invalida")
+        );
+        assert_eq!(
+            regla_datos_de_usuario("1-1111-1111", "", false),
+            Err("nombre_vacio")
+        );
+        assert_eq!(
+            regla_datos_de_usuario("1-1111-1111", "ana", true),
+            Err("usuario_cedula_repetida")
+        );
+    }
+
+    #[test]
+    fn el_nombre_al_escribir_no_toca_los_espacios() {
+        assert_eq!(nombre_al_escribir("ana "), "ANA ");
+    }
+
+    #[test]
+    fn la_clave_temporal_sale_del_azar_y_se_rechaza_si_no_es_de_diez() {
+        assert_eq!(
+            regla_clave_temporal(&[0, 1, 2, 3, 4, 5, 6, 7, 8, 255], "1-1111-1111"),
+            Ok("23456789AZ".to_owned())
+        );
+        assert_eq!(
+            regla_clave_temporal(&[1, 2, 3], "1-1111-1111"),
+            Err("azar_invalido")
+        );
+        assert_eq!(
+            regla_clave_temporal(&[0; 10], "AB123"),
+            Err("cedula_invalida")
+        );
+    }
 
     #[test]
     fn el_azar_de_otro_largo_se_rechaza() {

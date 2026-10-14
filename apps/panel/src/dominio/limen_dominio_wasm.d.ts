@@ -2,9 +2,33 @@
 /* eslint-disable */
 
 /**
+ * Los datos de un usuario ya en su forma única, tal como el núcleo los decide: la pantalla
+ * no normaliza nada, sólo muestra esto.
+ */
+export class DatosDeUsuario {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    cedula: string;
+    nombre: string;
+}
+
+/**
+ * Una clave temporal con el azar que entrega el Worker (`crypto.getRandomValues`, 10 bytes).
+ */
+export function clave_temporal(azar: Uint8Array, cedula: string): string;
+
+/**
  * El código como se le muestra a la persona (`XXXXX-XXXXX`).
  */
 export function codigo_para_mostrar(texto: string): string;
+
+/**
+ * Valida y normaliza la cédula y el nombre de un usuario (alta o edición). `cedula_en_uso`:
+ * si **otro** usuario ya tiene esa cédula. Si algo no vale, el error es el código de la
+ * regla (`cedula_invalida`, `nombre_vacio`, `usuario_cedula_repetida`…).
+ */
+export function datos_de_usuario(cedula: string, nombre: string, cedula_en_uso: boolean): DatosDeUsuario;
 
 /**
  * Un código nuevo con el azar que entrega el Worker (`crypto.getRandomValues`, 10 bytes).
@@ -29,6 +53,11 @@ export function motivo_de_rechazo(emitido_ms: number, usado: boolean, anulado: b
 export function motivo_de_rechazo_del_equipo(vinculado: boolean, retirado: boolean): string;
 
 /**
+ * El nombre como se ve mientras se escribe (mayúscula, sin tocar los espacios).
+ */
+export function nombre_al_escribir(texto: string): string;
+
+/**
  * Cuántos minutos vale un código.
  */
 export function vigencia_minutos(): number;
@@ -37,11 +66,19 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
+    readonly __wbg_datosdeusuario_free: (a: number, b: number) => void;
+    readonly __wbg_get_datosdeusuario_cedula: (a: number) => [number, number];
+    readonly __wbg_get_datosdeusuario_nombre: (a: number) => [number, number];
+    readonly __wbg_set_datosdeusuario_cedula: (a: number, b: number, c: number) => void;
+    readonly __wbg_set_datosdeusuario_nombre: (a: number, b: number, c: number) => void;
+    readonly clave_temporal: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly codigo_para_mostrar: (a: number, b: number) => [number, number, number, number];
+    readonly datos_de_usuario: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly generar_codigo: (a: number, b: number) => [number, number, number, number];
     readonly leer_codigo: (a: number, b: number) => [number, number, number, number];
     readonly motivo_de_rechazo: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly motivo_de_rechazo_del_equipo: (a: number, b: number) => [number, number];
+    readonly nombre_al_escribir: (a: number, b: number) => [number, number];
     readonly vigencia_minutos: () => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
