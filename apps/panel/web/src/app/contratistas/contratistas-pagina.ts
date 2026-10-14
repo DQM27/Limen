@@ -164,11 +164,6 @@ export class ContratistasPagina {
     this.abrirDialogo({ empresas: this.empresas() });
   }
 
-  /** Negar el acceso a una persona que quizá nunca fue contratista: no se le pide el PRAIND. */
-  protected negarAcceso(): void {
-    this.abrirDialogo({ empresas: this.empresas(), sinAcceso: true });
-  }
-
   private editar(contratista: Contratista): void {
     this.abrirDialogo({ contratista, empresas: this.empresas() });
   }
