@@ -18,6 +18,7 @@ use limen_dominio::ingreso_correo::{ErrorIngresoCorreo, ErrorMotivo};
 use limen_dominio::ingreso_proveedor::ErrorIngresoProveedor;
 use limen_dominio::medio::ErrorMedio;
 use limen_dominio::personal_kof::ErrorPersonalKof;
+use limen_dominio::presencia::AdentroEnOtraUnidad;
 use limen_dominio::prestamo_kof::ErrorPrestamoKof;
 use limen_dominio::rango_fechas::ErrorRango;
 use limen_dominio::usuario::ErrorUsuario;
@@ -176,6 +177,13 @@ impl CampoDelError for ErrorIngresoCorreo {
             Self::Gafete(error) => error.campo(),
             Self::YaEstaAdentro(_) | Self::AccesoDenegado(_) => None,
         }
+    }
+}
+
+/// Regla A9: es un aviso general, no de un campo.
+impl CampoDelError for AdentroEnOtraUnidad {
+    fn campo(&self) -> Option<&'static str> {
+        None
     }
 }
 

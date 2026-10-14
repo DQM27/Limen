@@ -49,6 +49,7 @@ use limen_aplicacion::casos_de_uso::kof::{
     DevolverGafeteKof, EditarPersonalKof, EntregarGafeteKof, RegistrarPersonalKof,
     ValidarEntregaKof, ValidarPersonalKof,
 };
+use limen_aplicacion::casos_de_uso::otra_unidad::VerificarOtraUnidad;
 use limen_aplicacion::casos_de_uso::proveedores::{
     RegistrarEmpresaProveedora, RegistrarEntradaProveedor, RegistrarSalidaProveedor,
     RenombrarEmpresaProveedora, ValidarEntradaProveedor,
@@ -59,8 +60,8 @@ use limen_aplicacion::puertos::{
 };
 use limen_aplicacion::sesion::Origen;
 use limen_infra_nube::{
-    ConfigNube, ErrorNube, FuenteDeConfig, config_fija, esta_vinculado, instalar_cifrado,
-    pedir_acceso, sincronizar,
+    ConfigNube, ErrorNube, FuenteDeConfig, PresenciaNube, config_fija, esta_vinculado,
+    instalar_cifrado, pedir_acceso, sincronizar,
 };
 use limen_infra_plataforma::{
     ClavesArgon2, IdsV7, RelojConfiable, SERVIDORES_NTP, leer_desfase, origen_del_equipo,
@@ -215,6 +216,11 @@ pub struct Aplicacion<F, R, G, C = ClavesArgon2> {
     pub correo: Correo<F, R, G>,
     pub kof: Kof<F, R, G>,
     pub usuarios: Usuarios<F, R, G, C>,
+    /// Regla A9: antes de cada entrada, ¿ya está adentro en otra unidad?
+    pub otra_unidad: VerificarOtraUnidad<F, PresenciaNube>,
+    /// La pregunta a la nube de `otra_unidad`: nace sin conexión y `arrancar` la conecta si el
+    /// equipo está vinculado.
+    presencia_nube: PresenciaNube,
     /// Quién está adentro ahora.
     pub quienes_estan_adentro: QuienesEstanAdentro<F, R>,
     /// Qué cambió en un registro, quién y cuándo.
@@ -246,7 +252,14 @@ where
         let r = || reloj.clone();
         let i = || ids.clone();
         let c = || claves.clone();
+        let presencia_nube = PresenciaNube::default();
         Self {
+            otra_unidad: VerificarOtraUnidad::new(
+                a(),
+                presencia_nube.clone(),
+                origen.unidad.clone(),
+            ),
+            presencia_nube,
             empresas: Empresas {
                 registrar: RegistrarEmpresa::new(a(), r(), i()),
                 renombrar: RenombrarEmpresa::new(a(), r(), i()),
@@ -360,6 +373,11 @@ impl AplicacionLimen {
         match fuente_de_configuracion(config) {
             Some(fuente) => {
                 instalar_cifrado();
+                if let Some(carpeta) = config.ruta_equipo.parent() {
+                    aplicacion
+                        .presencia_nube
+                        .conectar(carpeta, std::sync::Arc::clone(&fuente));
+                }
                 tokio::spawn(sincronizar(almacen, fuente, al_llegar));
             }
             None => log::info!("sin sincronización con la nube: el equipo no está vinculado"),

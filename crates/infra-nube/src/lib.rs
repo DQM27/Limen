@@ -14,6 +14,7 @@ mod bajada;
 mod en_vivo;
 mod espera;
 mod presencia;
+mod presencia_remota;
 mod sincronizacion;
 mod subida;
 mod vinculacion;
@@ -30,6 +31,7 @@ use surrealdb::opt::auth::{Database, Namespace, Root};
 
 pub use en_vivo::Escucha;
 pub use presencia::LATIDO;
+pub use presencia_remota::{ESPERA as ESPERA_PRESENCIA_REMOTA, PresenciaNube};
 pub use sincronizacion::{FuenteDeConfig, RED_DE_SEGURIDAD, REINTENTO, config_fija, sincronizar};
 pub use subida::{Copia, TABLAS};
 pub use vinculacion::{

@@ -114,3 +114,34 @@ export async function firmarJwt(secreto, { unidad, equipo }, ahora = Date.now())
   );
   return `${cabecera}.${cuerpo}.${base64url(firma)}`;
 }
+
+/**
+ * ¿Es este token uno que firmamos nosotros y sigue vigente? Devuelve lo que lleva (`unidad`,
+ * `equipo`) o `null`. Es el camino inverso de `firmarJwt`: así un equipo vinculado prueba quién
+ * es ante el Worker sin repetir la firma del desafío en cada pregunta.
+ */
+export async function verificarJwt(secreto, token, ahora = Date.now()) {
+  const partes = String(token ?? '').split('.');
+  if (partes.length !== 3) return null;
+  try {
+    const clave = await crypto.subtle.importKey(
+      'raw',
+      codificador.encode(secreto),
+      { name: 'HMAC', hash: 'SHA-512' },
+      false,
+      ['verify'],
+    );
+    const firmado = await crypto.subtle.verify(
+      'HMAC',
+      clave,
+      bytesDe(partes[2]),
+      codificador.encode(`${partes[0]}.${partes[1]}`),
+    );
+    if (!firmado) return null;
+    const cuerpo = JSON.parse(new TextDecoder().decode(bytesDe(partes[1])));
+    if (!(cuerpo.exp > Math.floor(ahora / 1000)) || cuerpo.ac !== 'equipo') return null;
+    return { unidad: cuerpo.unidad, equipo: cuerpo.equipo };
+  } catch {
+    return null;
+  }
+}

@@ -17,6 +17,7 @@ pub mod gafetes;
 mod hora;
 pub mod ingresos;
 pub mod kof;
+pub mod otra_unidad;
 pub mod proveedores;
 pub mod usuarios;
 mod veto;

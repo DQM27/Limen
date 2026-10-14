@@ -4,6 +4,7 @@
 
 import { consultar, resultado, LECTURA } from './nube.js';
 import { acceso } from './acceso.js';
+import { presencia } from './presencia.js';
 import { canjear, listar, registrar, retirar, unidades } from './vinculacion.js';
 // Un equipo que lleva más de dos latidos (5 min c/u) sin avisar se da por caído.
 const CAIDO_DESPUES_DE_MS = 10 * 60 * 1000;
@@ -91,6 +92,14 @@ async function atender(request, env) {
     // acceso a la nube.
     if (pathname === '/api/token' && request.method === 'POST') {
       return json(await acceso(env, await request.json()));
+    }
+    // A9: el equipo vinculado pregunta si alguien ya está adentro en otra unidad. Va con el token
+    // del equipo, no con la clave del panel.
+    const consulta = pathname.match(/^\/api\/presencia\/([^/]+)$/);
+    if (consulta && request.method === 'GET') {
+      return json(
+        await presencia(env, request.headers.get('Authorization'), decodeURIComponent(consulta[1])),
+      );
     }
     if (!autorizado(request, env)) {
       return new Response('Acceso restringido', {

@@ -8,6 +8,7 @@ import {
   desafioValido,
   firmaValida,
   firmarJwt,
+  verificarJwt,
 } from '../src/token.js';
 
 const EQUIPO = '9df9696d-a2e6-42fb-8359-3325fc844e66';
@@ -97,4 +98,23 @@ test('el token de un equipo es un JWT HS512 con su unidad, firmado y de una hora
     );
   assert.equal(await valida(`${cabecera}.${cuerpo}`), true, 'la firma es del Worker');
   assert.equal(await valida(`${cabecera}.${cuerpo}x`), false, 'y no vale con otro contenido');
+});
+
+test('el token que firmamos se verifica y devuelve su unidad y su equipo', async () => {
+  const token = await firmarJwt(SECRETO, { unidad: 'BRISAS', equipo: EQUIPO });
+  assert.deepEqual(await verificarJwt(SECRETO, token), { unidad: 'BRISAS', equipo: EQUIPO });
+});
+
+test('un token ajeno, alterado, vencido o ilegible no se verifica', async () => {
+  const ahora = Date.now();
+  const token = await firmarJwt(SECRETO, { unidad: 'BRISAS', equipo: EQUIPO }, ahora);
+  assert.equal(await verificarJwt('otro-secreto', token, ahora), null);
+  const [cabecera, cuerpo, firma] = token.split('.');
+  const otro = base64url(
+    JSON.stringify({ ...JSON.parse(Buffer.from(cuerpo, 'base64url')), unidad: 'CARTAGO' }),
+  );
+  assert.equal(await verificarJwt(SECRETO, `${cabecera}.${otro}.${firma}`, ahora), null);
+  assert.equal(await verificarJwt(SECRETO, token, ahora + (VIGENCIA_TOKEN_S + 1) * 1000), null);
+  assert.equal(await verificarJwt(SECRETO, 'basura', ahora), null);
+  assert.equal(await verificarJwt(SECRETO, undefined, ahora), null);
 });

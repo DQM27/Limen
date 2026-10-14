@@ -11,7 +11,10 @@
 
 use std::fmt;
 
+use chrono::{DateTime, Utc};
+
 use crate::cedula::Cedula;
+use crate::origen::UnidadOperativaId;
 use crate::personal_kof::CodigoEmpleado;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -115,9 +118,90 @@ pub const fn verificar_afuera(adentro_por: Option<Via>) -> Result<(), YaEstaAden
     }
 }
 
+/// Regla A9: la nube dice que la persona ya está adentro en otra unidad.
+/// El guarda no la registra aquí: pide la salida allá y después la ingresa.
+/// Cómo se muestra la hora (zona del equipo) lo decide quien lo presenta;
+/// el dominio sólo entrega el instante.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdentroEnOtraUnidad {
+    pub unidad: UnidadOperativaId,
+    pub via: Via,
+    pub desde: DateTime<Utc>,
+}
+
+impl AdentroEnOtraUnidad {
+    pub const fn codigo(&self) -> &'static str {
+        "adentro_en_otra_unidad"
+    }
+}
+
+impl fmt::Display for AdentroEnOtraUnidad {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Esta persona ya está adentro en {} como {}: pida allá su salida y después regístrela aquí",
+            self.unidad.as_str(),
+            self.via
+        )
+    }
+}
+
+impl std::error::Error for AdentroEnOtraUnidad {}
+
+/// A9: `Ok` si la nube no reporta a la persona adentro en otra unidad.
+/// Si la nube no respondió, quien llama pasa `None`: la portería no se
+/// bloquea por la red y el choque, si lo hay, se marca al sincronizar.
+/// Lo que reporta la propia unidad no cuenta: eso lo cubre E1 con la
+/// presencia local.
+pub fn verificar_no_adentro_en_otra_unidad(
+    reportado: Option<AdentroEnOtraUnidad>,
+    unidad_propia: &UnidadOperativaId,
+) -> Result<(), AdentroEnOtraUnidad> {
+    match reportado {
+        Some(otra) if otra.unidad != *unidad_propia => Err(otra),
+        _ => Ok(()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn otra(unidad: &str) -> AdentroEnOtraUnidad {
+        AdentroEnOtraUnidad {
+            unidad: UnidadOperativaId::nueva(unidad).unwrap(),
+            via: Via::Contratista,
+            desde: DateTime::<Utc>::from_timestamp(1_760_000_000, 0).unwrap(),
+        }
+    }
+
+    #[test]
+    fn a9_adentro_en_otra_unidad_bloquea_e_informa_donde() {
+        let propia = UnidadOperativaId::nueva("BRISAS").unwrap();
+        let error = verificar_no_adentro_en_otra_unidad(Some(otra("CARTAGO")), &propia)
+            .expect_err("debe bloquear");
+        assert_eq!(error.unidad.as_str(), "CARTAGO");
+        assert_eq!(error.codigo(), "adentro_en_otra_unidad");
+        assert_eq!(
+            error.to_string(),
+            "Esta persona ya está adentro en CARTAGO como contratista: pida allá su salida y después regístrela aquí"
+        );
+    }
+
+    #[test]
+    fn a9_sin_reporte_de_la_nube_la_porteria_no_se_bloquea() {
+        let propia = UnidadOperativaId::nueva("BRISAS").unwrap();
+        assert_eq!(verificar_no_adentro_en_otra_unidad(None, &propia), Ok(()));
+    }
+
+    #[test]
+    fn a9_lo_de_la_propia_unidad_no_cuenta_porque_lo_cubre_e1() {
+        let propia = UnidadOperativaId::nueva("BRISAS").unwrap();
+        assert_eq!(
+            verificar_no_adentro_en_otra_unidad(Some(otra("BRISAS")), &propia),
+            Ok(())
+        );
+    }
 
     #[test]
     fn afuera_puede_entrar() {
