@@ -298,6 +298,12 @@ pub fn nombre_persona_al_escribir(texto: &str) -> String {
     limen_escritorio_comandos::nombre_persona_al_escribir(texto)
 }
 
+/// Lo que se escribe en el buscador de una tabla, en mayúsculas y sin tildes.
+#[tauri::command]
+pub fn buscador_al_escribir(texto: &str) -> String {
+    limen_escritorio_comandos::buscador_al_escribir(texto)
+}
+
 /// La placa de un vehículo en mayúsculas, como quedará al guardarse.
 #[tauri::command]
 pub fn placa_al_escribir(texto: &str) -> String {

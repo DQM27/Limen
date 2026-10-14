@@ -242,8 +242,28 @@ export class Tabla<T> implements OnInit {
     });
   }
 
-  protected escribirFiltro(evento: Event): void {
-    this.filtro.set((evento.target as HTMLInputElement).value);
+  private turnoDelFiltro = 0;
+
+  /**
+   * Lo escrito en el buscador se ve como lo dice el núcleo (mayúsculas, sin tildes: regla N3).
+   * La búsqueda no distingue mayúsculas, así que arranca con lo escrito y sólo se cambia el
+   * texto cuando llega la respuesta; el cursor se queda donde estaba y sólo vale la última.
+   */
+  protected async escribirFiltro(evento: Event): Promise<void> {
+    const campo = evento.target as HTMLInputElement;
+    const texto = campo.value;
+    const cursor = campo.selectionStart;
+    const mio = ++this.turnoDelFiltro;
+    this.filtro.set(texto);
+    const queda = await this.reglas()
+      .buscadorAlEscribir(texto)
+      .catch(() => texto);
+    if (mio !== this.turnoDelFiltro || queda === texto || campo.value !== texto) {
+      return;
+    }
+    this.filtro.set(queda);
+    campo.value = queda;
+    campo.setSelectionRange(cursor, cursor);
   }
 
   /** Lo guardado se lee al crear la tabla: no depende de que la grilla esté lista. */

@@ -24,6 +24,9 @@ function reglasDePrueba() {
     celdasQueCumplen: vi.fn<ReglasDeBusqueda['celdasQueCumplen']>(async (pedidos) =>
       pedidos.map((p) => p.celda.toLowerCase().includes(p.filtro.toLowerCase())),
     ),
+    buscadorAlEscribir: vi.fn<ReglasDeBusqueda['buscadorAlEscribir']>(async (texto) =>
+      texto.toUpperCase(),
+    ),
   } satisfies ReglasDeBusqueda;
 }
 
@@ -227,7 +230,7 @@ describe('Tabla (la grilla base de toda la app)', () => {
 
       await escribir('ana');
 
-      expect(anfitrion.reglas.filasQueCoinciden).toHaveBeenCalledWith('ana', [
+      expect(anfitrion.reglas.filasQueCoinciden).toHaveBeenCalledWith('ANA', [
         [
           { campo: 'NOMBRE', texto: 'ANA' },
           { campo: 'EMPRESA', texto: 'ACME' },
@@ -242,6 +245,19 @@ describe('Tabla (la grilla base de toda la app)', () => {
         ],
       ]);
       expect(conteo(), 'sólo las que respondió el núcleo').toBe('1 de 3 registros');
+    });
+
+    it('lo escrito en el buscador se ve como lo dice el núcleo (mayúsculas, regla N3)', async () => {
+      const { fixture, anfitrion, escribir, conteo } = await crearConReglas();
+
+      await escribir('ana');
+
+      const buscador = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+        'input[type="search"]',
+      );
+      expect(anfitrion.reglas.buscadorAlEscribir).toHaveBeenCalledWith('ana');
+      expect(buscador?.value).toBe('ANA');
+      expect(conteo(), 'sigue encontrando lo mismo').toBe('1 de 3 registros');
     });
 
     it('sólo busca en las columnas que declararon su campo', async () => {
@@ -274,8 +290,9 @@ describe('Tabla (la grilla base de toda la app)', () => {
       await escribir('ana');
 
       const { resaltar } = anfitrion.reglas;
-      expect(resaltar).toHaveBeenCalledWith('ana', 'NOMBRE', ['ANA']);
-      expect(resaltar).toHaveBeenCalledWith('ana', 'EMPRESA', ['ACME']);
+      // Se resalta con lo que se ve en el buscador: ya en mayúscula (N3).
+      expect(resaltar).toHaveBeenCalledWith('ANA', 'NOMBRE', ['ANA']);
+      expect(resaltar).toHaveBeenCalledWith('ANA', 'EMPRESA', ['ACME']);
       const campos = new Set(vi.mocked(resaltar).mock.calls.map(([, campo]) => campo));
       expect([...campos].sort(), 'la columna Id no se resalta').toEqual(['EMPRESA', 'NOMBRE']);
     });
@@ -300,8 +317,9 @@ describe('Tabla (la grilla base de toda la app)', () => {
         )
         .mockImplementationOnce(async (_buscado, filas) => filas.map((_, i) => i === 2));
 
-      await escribir('a', 250);
-      await escribir('ar', 400);
+      // En mayúscula, como la deja el núcleo (N3): así no se reescribe lo escrito.
+      await escribir('A', 250);
+      await escribir('AR', 400);
       expect(conteo(), 'ganó la segunda pregunta').toBe('1 de 3 registros');
 
       responderLaPrimera([true, true, true]);

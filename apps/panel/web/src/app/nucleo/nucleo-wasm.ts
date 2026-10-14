@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import init, {
+  buscador_al_escribir,
   datos_de_usuario,
   empresa_al_escribir,
   estado_de_conexion_del_equipo,
@@ -35,6 +36,10 @@ export class NucleoWasm extends Nucleo {
     return JSON.parse(
       resaltar_coincidencias(buscado, campo, JSON.stringify(textos)),
     ) as Segmento[][];
+  }
+
+  buscadorAlEscribir(texto: string): string {
+    return buscador_al_escribir(texto);
   }
 
   nombreAlEscribir(texto: string): string {

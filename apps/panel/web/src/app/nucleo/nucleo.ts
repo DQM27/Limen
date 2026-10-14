@@ -39,6 +39,9 @@ export abstract class Nucleo {
   /** Cada texto partido en segmentos, con lo que coincide resaltado (regla N1). */
   abstract resaltar(buscado: string, campo: CampoResaltable, textos: string[]): Segmento[][];
 
+  /** Lo escrito en el buscador de una tabla como se ve: mayúsculas y sin tildes (regla N3). */
+  abstract buscadorAlEscribir(texto: string): string;
+
   /** El nombre como se ve mientras se escribe (mayúscula, sin tocar los espacios). */
   abstract nombreAlEscribir(texto: string): string;
 

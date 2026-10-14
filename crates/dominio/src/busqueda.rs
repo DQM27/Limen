@@ -67,6 +67,14 @@ pub const fn tolerancia(largo: usize) -> usize {
     }
 }
 
+/// Lo que el buscador de una tabla muestra mientras se escribe: mayúsculas y
+/// sin tildes, igual que los nombres que se buscan (regla N3), sin tocar los
+/// espacios. Sólo da forma a lo escrito: qué coincide lo siguen decidiendo
+/// las reglas de arriba, que no distinguen mayúsculas.
+pub fn buscador_mientras_se_escribe(texto: &str) -> String {
+    crate::nombre::nombre_mientras_se_escribe(texto)
+}
+
 /// Mayúsculas, sin tildes ni diéresis, y la Ñ y la Ç como N y C. Es la forma
 /// en que se compara y en que se guarda el texto para buscar.
 pub fn plegar(texto: &str) -> String {
@@ -396,6 +404,13 @@ mod tests {
             Criterio::Identificacion("0111".into()),
             "con menos de 10 dígitos el cero cuenta"
         );
+    }
+
+    #[test]
+    fn el_buscador_se_ve_en_mayuscula_sin_tocar_los_espacios() {
+        assert_eq!(buscador_mientras_se_escribe("josé  peña "), "JOSE  PEÑA ");
+        assert_eq!(buscador_mientras_se_escribe("1-1111"), "1-1111");
+        assert_eq!(buscador_mientras_se_escribe(""), "");
     }
 
     #[test]

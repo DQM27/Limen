@@ -126,6 +126,7 @@ pub fn run() {
             comandos::validar_personal_kof,
             comandos::validar_entrega_gafete_kof,
             comandos::nombre_persona_al_escribir,
+            comandos::buscador_al_escribir,
             comandos::nombre_empresa_al_escribir,
             comandos::placa_al_escribir,
             comandos::registrar_entrada_contratista,

@@ -11,6 +11,9 @@ class NucleoFalso extends Nucleo {
   resaltar(): never[] {
     return [];
   }
+  buscadorAlEscribir(texto: string): string {
+    return texto.toUpperCase();
+  }
   nombreAlEscribir(texto: string): string {
     return texto;
   }

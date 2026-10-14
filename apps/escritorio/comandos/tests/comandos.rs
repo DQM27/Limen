@@ -17,8 +17,9 @@ mod tests {
     use limen_dominio::tipo_ingreso::TipoIngreso;
     use limen_escritorio_comandos::{
         CampoDeTextoEntrada, Comandos, ContratistaEntrada, EntradaContratistaEntrada,
-        EntradaCorreoEntrada, ErrorJson, PedidoDeFiltroEntrada, TipoErrorJson, campos,
-        nombre_empresa_al_escribir, nombre_persona_al_escribir, placa_al_escribir,
+        EntradaCorreoEntrada, ErrorJson, PedidoDeFiltroEntrada, TipoErrorJson,
+        buscador_al_escribir, campos, nombre_empresa_al_escribir, nombre_persona_al_escribir,
+        placa_al_escribir,
     };
     use limen_infra_memoria::{
         AlmacenMemoria, ClavesFalsas, IdsSecuenciales, RelojFijo, origen_de_pruebas,
@@ -695,6 +696,12 @@ mod tests {
         assert_eq!(nombre_persona_al_escribir("josé peña "), "JOSE PEÑA ");
         assert_eq!(nombre_empresa_al_escribir("acme s.a. "), "ACME S.A. ");
         assert_eq!(placa_al_escribir("abc-123 "), "ABC-123 ");
+    }
+
+    #[test]
+    fn el_buscador_se_ve_en_mayusculas_mientras_se_escribe() {
+        assert_eq!(buscador_al_escribir("josé peña "), "JOSE PEÑA ");
+        assert_eq!(buscador_al_escribir("1-1111"), "1-1111");
     }
 
     #[tokio::test]

@@ -58,6 +58,12 @@ pub fn nombre_persona_al_escribir(texto: &str) -> String {
     limen_dominio::nombre::nombre_mientras_se_escribe(texto)
 }
 
+/// Lo que se escribe en el buscador de una tabla como se ve (mayúsculas, sin
+/// tildes; regla N3). Sólo da forma al texto: no necesita sesión ni base.
+pub fn buscador_al_escribir(texto: &str) -> String {
+    limen_dominio::busqueda::buscador_mientras_se_escribe(texto)
+}
+
 /// La placa de un vehículo en mayúsculas, como quedará al guardarse.
 pub fn placa_al_escribir(texto: &str) -> String {
     limen_dominio::medio::placa_mientras_se_escribe(texto)

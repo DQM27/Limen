@@ -154,7 +154,16 @@ export class Tabla<T> {
   };
 
   protected escribir(evento: Event): void {
-    this.buscado.set((evento.target as HTMLInputElement).value);
+    // Lo escrito se ve como lo dice el núcleo (mayúsculas, sin tildes: regla N3); el cursor se
+    // queda donde estaba.
+    const campo = evento.target as HTMLInputElement;
+    const cursor = campo.selectionStart;
+    const queda = this.nucleo.buscadorAlEscribir(campo.value);
+    if (queda !== campo.value) {
+      campo.value = queda;
+      campo.setSelectionRange(cursor, cursor);
+    }
+    this.buscado.set(queda);
   }
 
   protected alIniciar(evento: GridReadyEvent<T>): void {

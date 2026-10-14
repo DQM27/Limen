@@ -10,7 +10,7 @@
 
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use limen_dominio::auditoria::CambioCampo;
-use limen_dominio::busqueda::plegar;
+use limen_dominio::busqueda::{buscador_mientras_se_escribe, plegar};
 use limen_dominio::cedula::Cedula;
 use limen_dominio::conexion_equipo::estado_de_conexion;
 use limen_dominio::contratista::{
@@ -471,6 +471,12 @@ fn regla_mensaje_de_usuario(codigo: &str) -> String {
 #[wasm_bindgen]
 pub fn mensaje_de_error_de_usuario(codigo: &str) -> String {
     regla_mensaje_de_usuario(codigo)
+}
+
+/// Lo escrito en el buscador de una tabla como se ve (mayúsculas, sin tildes; regla N3).
+#[wasm_bindgen]
+pub fn buscador_al_escribir(texto: &str) -> String {
+    buscador_mientras_se_escribe(texto)
 }
 
 /// El nombre como se ve mientras se escribe (mayúscula, sin tocar los espacios).
@@ -962,6 +968,11 @@ mod tests {
             regla_estado_de_conexion(true, f64::MAX, minutos(1.0)),
             Err("fecha_invalida")
         );
+    }
+
+    #[test]
+    fn el_buscador_se_ve_en_mayuscula() {
+        assert_eq!(buscador_al_escribir("josé peña "), "JOSE PEÑA ");
     }
 
     #[test]

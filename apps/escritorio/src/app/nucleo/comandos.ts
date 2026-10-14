@@ -65,6 +65,11 @@ export function celdasQueCumplen(pedidos: PedidoDeFiltro[]): Promise<boolean[]> 
   return invocar<boolean[]>('celdas_que_cumplen', { pedidos });
 }
 
+/** Lo que se escribe en el buscador de una tabla como se ve: mayúsculas, sin tildes (regla N3). */
+export function buscadorAlEscribir(texto: string): Promise<string> {
+  return invocar<string>('buscador_al_escribir', { texto });
+}
+
 /** Empresas de contratistas cuyo nombre coincide, de la mejor a la peor. */
 export function buscarEmpresas(texto: string, limite: number): Promise<Empresa[]> {
   return invocar<Empresa[]>('buscar_empresas', { texto, limite });

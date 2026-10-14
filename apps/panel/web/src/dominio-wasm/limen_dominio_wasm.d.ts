@@ -14,6 +14,11 @@ export class DatosDeUsuario {
 }
 
 /**
+ * Lo escrito en el buscador de una tabla como se ve (mayúsculas, sin tildes; regla N3).
+ */
+export function buscador_al_escribir(texto: string): string;
+
+/**
  * De cada pedido (`{ operacion, celda, filtro }`), si la celda cumple el filtro de columna.
  */
 export function celdas_que_cumplen(pedidos: string): string;
@@ -149,6 +154,7 @@ export interface InitOutput {
     readonly __wbg_get_datosdeusuario_nombre: (a: number) => [number, number];
     readonly __wbg_set_datosdeusuario_cedula: (a: number, b: number, c: number) => void;
     readonly __wbg_set_datosdeusuario_nombre: (a: number, b: number, c: number) => void;
+    readonly buscador_al_escribir: (a: number, b: number) => [number, number];
     readonly celdas_que_cumplen: (a: number, b: number) => [number, number, number, number];
     readonly clave_temporal: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly codigo_para_mostrar: (a: number, b: number) => [number, number, number, number];
@@ -175,8 +181,8 @@ export interface InitOutput {
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
-    readonly __externref_table_dealloc: (a: number) => void;
     readonly __wbindgen_free: (a: number, b: number, c: number) => void;
+    readonly __externref_table_dealloc: (a: number) => void;
     readonly __wbindgen_start: () => void;
 }
 
