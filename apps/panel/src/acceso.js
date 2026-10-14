@@ -2,11 +2,13 @@
 //   1. el equipo manda su ID y recibe un desafío;
 //   2. lo devuelve firmado con su clave privada; si la firma es suya y el dominio dice que
 //      puede conectarse (vinculado y no retirado, regla M2), recibe un token de la base.
-// La clave de la base nunca sale del Worker. Aquí sólo se orquesta: las reglas son del dominio.
+// Lo que recibe el equipo es un token firmado con su unidad (`TOKEN_SECRETO`, que sólo conocen el
+// Worker y la base): la base lo acepta y sólo le deja ver y escribir lo de esa unidad (`DEFINE ACCESS
+// equipo`, docs/nube.md sección 13). Ninguna clave de la base sale del Worker. Aquí sólo se orquesta: las reglas son del dominio.
 
 import { motivo_de_rechazo_del_equipo } from './dominio/limen_dominio_wasm.js';
-import { consultar, resultado, tokenNuevo, ESCRITURA, LECTURA } from './nube.js';
-import { crearDesafio, desafioValido, firmaValida } from './token.js';
+import { consultar, resultado, LECTURA } from './nube.js';
+import { crearDesafio, desafioValido, firmaValida, firmarJwt } from './token.js';
 import { registrarEvento } from './vinculacion.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -28,7 +30,7 @@ export async function acceso(env, { equipo, desafio, firma } = {}) {
   const [leido] = await consultar(
     env,
     LECTURA,
-    `SELECT clave_publica, vinculado, retirado FROM ONLY type::record('dispositivo', <string>$id);`,
+    `SELECT clave_publica, unidad, vinculado, retirado FROM ONLY type::record('dispositivo', <string>$id);`,
     { id: equipo },
   );
   const dispositivo = resultado(leido, null);
@@ -48,7 +50,10 @@ export async function acceso(env, { equipo, desafio, firma } = {}) {
   return {
     estado: 200,
     cuerpo: {
-      token: await tokenNuevo(env, ESCRITURA),
+      token: await firmarJwt(env.TOKEN_SECRETO, {
+        unidad: dispositivo.unidad,
+        equipo,
+      }),
       url: env.SURREAL_URL.replace(/^http/, 'ws'),
     },
   };

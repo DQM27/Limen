@@ -75,3 +75,42 @@ export async function firmaValida(jwk, desafio, firma) {
     return false;
   }
 }
+
+/** Cuánto vale el token de un equipo, en segundos: pasado ese tiempo hay que pedir otro. */
+export const VIGENCIA_TOKEN_S = 3600;
+
+/**
+ * El token con que un equipo entra a la base: un JWT firmado con HMAC-SHA512 que lleva su unidad
+ * (la base sólo le deja ver y escribir lo de esa unidad) y su ID. Como dura una hora, un equipo
+ * retirado pierde el acceso a más tardar en ese tiempo, al no poder renovarlo.
+ */
+export async function firmarJwt(secreto, { unidad, equipo }, ahora = Date.now()) {
+  const iat = Math.floor(ahora / 1000);
+  const cabecera = base64url(codificador.encode(JSON.stringify({ alg: 'HS512', typ: 'JWT' })));
+  const cuerpo = base64url(
+    codificador.encode(
+      JSON.stringify({
+        ns: 'limen',
+        db: 'principal',
+        ac: 'equipo',
+        unidad,
+        equipo,
+        iat,
+        exp: iat + VIGENCIA_TOKEN_S,
+      }),
+    ),
+  );
+  const clave = await crypto.subtle.importKey(
+    'raw',
+    codificador.encode(secreto),
+    { name: 'HMAC', hash: 'SHA-512' },
+    false,
+    ['sign'],
+  );
+  const firma = await crypto.subtle.sign(
+    'HMAC',
+    clave,
+    codificador.encode(`${cabecera}.${cuerpo}`),
+  );
+  return `${cabecera}.${cuerpo}.${base64url(firma)}`;
+}

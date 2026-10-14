@@ -14,7 +14,6 @@ use surrealdb::types::Value;
 use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 
-use crate::subida::{SOLO_BAJADA, TABLAS};
 use crate::{ErrorNube, Nube};
 
 /// Cuántas veces se intenta suscribirse antes de rendirse.
@@ -40,8 +39,7 @@ impl Drop for Escucha {
 }
 
 impl Nube {
-    /// Se suscribe a las tablas que le importan a este equipo: los catálogos
-    /// completos y, de lo que es de una unidad, sólo lo de `unidad`. Cada
+    /// Se suscribe al diario de cambios: lo de `unidad` y lo global. Cada
     /// aviso de la nube despierta a `avisos`. Si la suscripción se corta,
     /// también lo despierta, para que la sincronización note el corte.
     ///
@@ -66,20 +64,12 @@ impl Nube {
         unidad: &str,
         avisos: Arc<Notify>,
     ) -> Result<Escucha, ErrorNube> {
-        let sentencias: Vec<String> = SOLO_BAJADA
-            .iter()
-            .chain(TABLAS.iter())
-            .map(|(tabla, _)| {
-                if crate::bajada::es_de_la_unidad(tabla) {
-                    format!("LIVE SELECT * FROM {tabla} WHERE unidad = $unidad;")
-                } else {
-                    format!("LIVE SELECT * FROM {tabla};")
-                }
-            })
-            .collect();
+        // Un solo aviso para todo: el diario de cambios (`cambio`). Cada alta, cambio o borrado de
+        // una tabla compartida deja una anotación, y cada equipo sólo recibe las de su unidad (los
+        // permisos de la tabla) y las globales.
         let mut respuesta = self
             .db
-            .query(sentencias.join("\n"))
+            .query("LIVE SELECT * FROM cambio WHERE unidad = $unidad OR unidad = '';")
             .bind(("unidad", unidad.to_owned()))
             .await
             .map_err(|e| ErrorNube::Conexion(e.to_string()))?;

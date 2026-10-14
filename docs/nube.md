@@ -270,3 +270,65 @@ jitter, pero claves, sales y nonces deben salir del generador del sistema operat
 - Un usuario de base de datos no entra con Basic auth: hay que pasar por `/signin` y usar el token.
 - Con `DEFINE USER … ROLES VIEWER` se lee todo (incluida `usuario`), aunque las tablas tengan
   `PERMISSIONS NONE`.
+
+## 13. Aislar las unidades operativas desde la base (hecho)
+
+Cada equipo ve y escribe **sólo lo de su unidad** y lo global; lo decide la base, no la app. Antes
+el equipo recibía el historial de todas las unidades y la app descartaba lo ajeno.
+
+**Cómo funciona**
+
+1. El Worker del panel firma un token (JWT HS512, una hora) con la **unidad** del equipo y su ID,
+   con el secreto `TOKEN_SECRETO` (sólo lo conocen el Worker y la base). Un equipo retirado no puede
+   renovarlo: pierde el acceso a más tardar en una hora.
+2. La base lo acepta con `DEFINE ACCESS equipo ... TYPE RECORD WITH JWT ... AUTHENTICATE { RETURN
+   type::record('equipo', $token.equipo) }`. Con `TYPE JWT` a secas la sesión **no** se trata como
+   usuario con permisos por fila y ve todo: hace falta `RECORD WITH JWT` y `AUTHENTICATE`.
+   Esa definición lleva la clave de firma, así que **no está en el repositorio**: se define aparte
+   (SurrealQL de abajo).
+3. `crates/infra-nube/src/esquema_nube.surql` (se aplica después de `esquema.surql`, siempre juntos
+   con `limen-nube esquema`) pone los permisos: lo de la unidad `WHERE unidad = $token.unidad`; los
+   catálogos globales se leen, se agregan y se editan pero no se borran; los hechos y la auditoría
+   sólo se agregan; los usuarios sólo se leen.
+4. **El diario de cambios** es una tabla propia, `cambio` (unidad, tabla, registro, tipo, hora), que
+   la base llena sola con un `DEFINE EVENT anotar` en cada tabla compartida, en la misma transacción.
+   El equipo la lee con sus permisos (su unidad y lo global). `SHOW CHANGES` de SurrealDB **está
+   prohibido** para un equipo con acceso limitado, y además guarda una copia de cada fila; el diario
+   sólo guarda qué fila cambió. La bajada lee el diario desde su cursor (con un margen de 60 s por si
+   dos transacciones se anotan en otro orden), toma de cada fila la última anotación y baja la fila
+   tal como está. El aviso en tiempo real es un solo `LIVE SELECT` sobre el diario.
+5. **La subida no cambia**: el equipo sigue leyendo su propio registro de cambios local y escribe en
+   la nube con sus permisos.
+
+**Lo que se comprobó** (pruebas en `crates/infra-nube`, con una base en memoria, y contra la nube real):
+
+- Con el token de su unidad el equipo sólo ve y escribe lo suyo (los tokens de otra unidad ven 0
+  hechos y 0 ingresos, y crear algo a nombre de otra unidad se rechaza).
+- **Regla A7:** una persona adentro en otra unidad no se puede registrar en la tuya, aunque el
+  equipo no la vea: la clave natural de la presencia no lleva la unidad. La nube ignora ese registro
+  sin romper la subida de lo demás. **Pendiente:** anotarlo como incidente (paso 5 de la sección 6).
+- Un token alterado no entra. Un equipo con token sube lo suyo, baja lo global y lo de su unidad, y
+  de otra unidad no recibe nada. El aviso en vivo le llega con su token y sólo avisa lo suyo.
+
+**Para activarlo en una nube** (una sola vez, como administrador; la clave sale de `TOKEN_SECRETO`):
+
+```sql
+DEFINE ACCESS OVERWRITE equipo ON DATABASE TYPE RECORD WITH JWT ALGORITHM HS512
+    KEY '<TOKEN_SECRETO>'
+    AUTHENTICATE { RETURN type::record('equipo', $token.equipo) }
+    DURATION FOR SESSION 1h;
+```
+
+y `limen-nube esquema` con un usuario `EDITOR` o superior. Después, en el Worker:
+`wrangler secret put TOKEN_SECRETO` y `npm run publicar`.
+
+**Lo que falta**
+
+- Los cambios que haya en la nube **antes** de aplicar los eventos no están en el diario: un equipo
+  que ya estaba instalado y no hizo su carga inicial de esa tabla se la perdería. Los equipos
+  nuevos hacen su carga completa, así que no les afecta.
+- El diario no se purga: crece con cada cambio (anotaciones pequeñas). Decidir una retención y
+  purgar lo que todos los equipos ya leyeron.
+- Un equipo sin conexión por más tiempo que el diario retenga debería volver a hacer su carga
+  completa (cuando exista la purga).
+- Las tablas de los equipos (`dispositivo`, `conexion`, …) las lee sólo el panel.

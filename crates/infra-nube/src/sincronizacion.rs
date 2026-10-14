@@ -96,7 +96,13 @@ where
 
 async fn conectar(config: &ConfigNube, aplicar_esquema: bool) -> Result<Nube, ErrorNube> {
     let nube = Nube::conectar(config).await?;
-    if aplicar_esquema {
+    // Un equipo con token no define el esquema de la nube (no puede ni debe): lo aplica quien
+    // administra, con `limen-nube esquema`. Redefinirlo le quitaría los permisos por unidad.
+    let con_token = config
+        .credenciales
+        .as_ref()
+        .is_some_and(|c| c.nivel == crate::Nivel::Token);
+    if aplicar_esquema && !con_token {
         nube.aplicar_esquema().await?;
     }
     Ok(nube)

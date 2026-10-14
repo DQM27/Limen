@@ -34,8 +34,16 @@ medio (ahora hay un solo cursor para toda la base), cada versión de una fila re
 equipo y la nube (ahora sólo se aplica la última), un texto con forma de UUID se vuelve `uuid`, y
 un usuario de base no entra con Basic auth.
 
+- **Cada equipo ve sólo lo de su unidad, y lo decide la base** (rama `feat/aislamiento-por-unidad`, `nube.md`
+  sección 13): token del Worker con la unidad, permisos por fila, y un diario de cambios propio
+  (`cambio`) que reemplaza a `SHOW CHANGES`, que está prohibido para un acceso limitado.
+
 ### Lo que falta, en este orden
 
+0. **Persona adentro en otro lado (regla A9, acordada el 13 de octubre):** con conexión se pregunta a la
+   nube antes de registrar y, si ya está adentro en otra unidad, no se registra y se le dice al guarda
+   dónde; sin conexión se registra y el choque se marca como incidente, que el administrador resuelve
+   en el panel (nada se borra). Hoy la nube ignora en silencio el segundo registro.
 1. **Usuarios en el panel**: crear, desactivar, clave temporal y desbloqueo (L4 y L5). Hoy se
    siembran a mano en la nube; la app ya los baja sola. Las reglas van en `crates/dominio`
    (compilado a WebAssembly, como la vinculación) y escribir pide un usuario de base propio con

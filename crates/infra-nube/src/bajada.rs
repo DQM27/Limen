@@ -10,14 +10,16 @@
 //! (`AlmacenSurreal::aplicar_de_la_nube`): por eso un cambio no rebota entre
 //! los equipos y la nube.
 
-use limen_infra_surreal::{AlmacenSurreal, Cambio, TABLAS_DE_LA_UNIDAD, entradas, tabla_de};
-use surrealdb::types::Value;
+use limen_infra_surreal::{AlmacenSurreal, Cambio, TABLAS_DE_LA_UNIDAD, tabla_de};
+use surrealdb::types::{Number, RecordId, Value};
 
 use crate::subida::{Copia, SOLO_BAJADA, TABLAS, copia_de};
 use crate::{ErrorNube, Nube};
 
 /// Cuántas entradas del registro de la nube se piden por consulta.
 const POR_LOTE: usize = 200;
+/// Cuánto se vuelve a leer del diario antes del último cursor (microsegundos): 60 segundos.
+const MARGEN_DEL_DIARIO: i64 = 60_000_000;
 
 impl Nube {
     /// Baja al equipo lo que cambió en la nube desde la última vez y
@@ -58,26 +60,29 @@ impl Nube {
                     .map_err(|e| error(&e))?;
             }
         }
-        // 2. Después, el registro de toda la base de la nube desde el último cursor: uno solo
-        //    para todas las tablas (ver `AlmacenSurreal::subido_hasta_en_la_base`).
+        // 2. Después, el diario de cambios de la nube (`cambio`): qué filas cambiaron desde la
+        //    última vez. Un equipo con token sólo recibe las anotaciones de su unidad y las
+        //    globales (los permisos de la tabla); el registro de cambios de SurrealDB le está
+        //    prohibido. Ver `docs/nube.md`, sección 13.
         let error = |e: &dyn std::fmt::Display| ErrorNube::Bajada(e.to_string());
         let nombres: Vec<&'static str> = tablas.iter().map(|(tabla, _)| *tabla).collect();
-        let mut desde = almacen
-            .bajado_hasta_en_la_base()
+        let hasta_ahora = almacen
+            .bajado_hasta_en_el_diario()
             .await
-            .map_err(|e| error(&e))?
-            .map_or(0, |hasta| hasta + 1);
+            .map_err(|e| error(&e))?;
+        // Se vuelve a leer un margen antes del cursor: dos transacciones que confirman casi a la
+        // vez pueden anotarse en el diario en otro orden que su hora, y lo que ya está igual no
+        // se escribe, así que repasar un poco es gratis.
+        let mut desde = hasta_ahora.map_or(0, |hasta| (hasta - MARGEN_DEL_DIARIO).max(0));
+        let mut mayor = hasta_ahora.unwrap_or(0);
         loop {
-            let crudo = self
-                .registro_de_la_base(desde)
-                .await
-                .map_err(|e| error(&e))?;
-            let lote = entradas(crudo).map_err(|e| error(&e))?;
-            let Some(ultima) = lote.last().map(|entrada| entrada.numero) else {
+            let anotaciones = self.diario_desde(desde).await.map_err(|e| error(&e))?;
+            let Some(ultima) = anotaciones.iter().map(|a| a.micros).max() else {
                 break;
             };
-            let todos = lote.into_iter().flat_map(|e| e.cambios).collect();
-            for (tabla, cambios) in por_tabla(todos, &nombres) {
+            let completa = anotaciones.len() >= POR_LOTE;
+            let cambios = self.cambios_de(anotaciones).await.map_err(|e| error(&e))?;
+            for (tabla, cambios) in por_tabla(cambios, &nombres) {
                 let de_la_unidad = es_de_la_unidad(tabla);
                 let cambios: Vec<Cambio> = cambios
                     .into_iter()
@@ -89,11 +94,17 @@ impl Nube {
                     .await
                     .map_err(|e| ErrorNube::Bajada(format!("{tabla}: {e}")))?;
             }
+            mayor = mayor.max(ultima);
+            if !completa {
+                break;
+            }
+            desde = ultima + 1;
+        }
+        if hasta_ahora != Some(mayor) {
             almacen
-                .anotar_bajado_hasta_en_la_base(ultima)
+                .anotar_bajado_hasta_en_el_diario(mayor)
                 .await
                 .map_err(|e| error(&e))?;
-            desde = ultima + 1;
         }
         Ok(cambiadas)
     }
@@ -123,18 +134,90 @@ impl Nube {
         respuesta.take(0)
     }
 
-    /// Las entradas del registro de cambios de **toda la base** de la nube desde `desde`,
-    /// a lo sumo [`POR_LOTE`]. Trae las de todas las tablas, así que el cursor siempre avanza
-    /// (con uno por tabla, `SurrealDB` corta el escaneo antes de filtrar por tabla y una tabla
-    /// tranquila dejaba de ver sus entradas nuevas).
-    async fn registro_de_la_base(&self, desde: i64) -> Result<Value, surrealdb::Error> {
-        // `SINCE` y `LIMIT` sólo aceptan literales: son números.
-        self.db
-            .query(format!(
-                "SHOW CHANGES FOR DATABASE SINCE {desde} LIMIT {POR_LOTE}"
-            ))
-            .await?
-            .take(0)
+    /// Las anotaciones del diario de la nube desde `desde` (microsegundos, incluida), en orden,
+    /// a lo sumo [`POR_LOTE`].
+    async fn diario_desde(&self, desde: i64) -> Result<Vec<Anotacion>, surrealdb::Error> {
+        let mut respuesta = self
+            .db
+            .query(
+                "SELECT time::micros(en) AS micros, tabla, registro, tipo FROM cambio \
+                 WHERE en >= time::from_micros($desde) ORDER BY en LIMIT $limite",
+            )
+            .bind(("desde", desde))
+            .bind(("limite", i64::try_from(POR_LOTE).unwrap_or(i64::MAX)))
+            .await?;
+        let filas: Vec<Value> = respuesta.take(0)?;
+        Ok(filas.into_iter().filter_map(Anotacion::de).collect())
+    }
+
+    /// Lo que cambió en cada fila anotada: de cada una sólo cuenta la última anotación. Un
+    /// borrado se aplica como borrado; lo demás, con la fila tal como está ahora (si ya no
+    /// existe o no es de esta unidad, no hay nada que aplicar).
+    async fn cambios_de(
+        &self,
+        anotaciones: Vec<Anotacion>,
+    ) -> Result<Vec<Cambio>, surrealdb::Error> {
+        let mut ultimas: Vec<Anotacion> = Vec::new();
+        for anotacion in anotaciones.into_iter().rev() {
+            if !ultimas
+                .iter()
+                .any(|vista| vista.registro == anotacion.registro)
+            {
+                ultimas.push(anotacion);
+            }
+        }
+        ultimas.reverse();
+        let mut cambios = Vec::new();
+        let mut vigentes = Vec::new();
+        for anotacion in ultimas {
+            if anotacion.tipo == "DELETE" {
+                cambios.push(Cambio::Borrada(anotacion.registro));
+            } else {
+                vigentes.push(anotacion.registro);
+            }
+        }
+        if !vigentes.is_empty() {
+            let mut respuesta = self
+                .db
+                .query("SELECT * FROM $registros")
+                .bind(("registros", vigentes))
+                .await?;
+            let filas: Vec<Value> = respuesta.take(0)?;
+            cambios.extend(filas.into_iter().map(Cambio::Guardada));
+        }
+        Ok(cambios)
+    }
+}
+
+/// Una anotación del diario: qué fila cambió y cómo.
+struct Anotacion {
+    micros: i64,
+    registro: RecordId,
+    tipo: String,
+}
+
+impl Anotacion {
+    fn de(fila: Value) -> Option<Self> {
+        let Value::Object(campos) = fila else {
+            return None;
+        };
+        let (
+            Some(Value::Number(Number::Int(micros))),
+            Some(Value::RecordId(registro)),
+            Some(Value::String(tipo)),
+        ) = (
+            campos.get("micros"),
+            campos.get("registro"),
+            campos.get("tipo"),
+        )
+        else {
+            return None;
+        };
+        Some(Self {
+            micros: *micros,
+            registro: registro.clone(),
+            tipo: tipo.clone(),
+        })
     }
 }
 
@@ -344,23 +427,20 @@ mod tests {
         assert_eq!(
             nombres_de_usuarios(&equipo).await,
             vec!["ANA MORA SOTO".to_owned()],
-            "un cambio posterior llega por el registro de cambios"
+            "un cambio posterior llega por el diario"
         );
     }
 
-    /// Cuántas entradas lleva el registro de cambios de una tabla en la nube.
+    /// Cuántas anotaciones lleva el diario de la nube de una tabla.
     async fn entradas_en_la_nube(nube: &Nube, tabla: &str) -> usize {
-        let crudo = nube.registro_de_la_base(0).await.unwrap();
-        entradas(crudo)
-            .unwrap()
-            .iter()
-            .filter(|entrada| {
-                entrada
-                    .cambios
-                    .iter()
-                    .any(|cambio| tabla_de(cambio) == Some(tabla))
-            })
-            .count()
+        let mut respuesta = nube
+            .db
+            .query("SELECT VALUE id FROM cambio WHERE tabla = $tabla")
+            .bind(("tabla", tabla.to_owned()))
+            .await
+            .unwrap();
+        let ids: Vec<RecordId> = respuesta.take(0).unwrap();
+        ids.len()
     }
 
     /// Una fila que cambió dos veces en la nube deja dos entradas en su registro. Al
@@ -457,7 +537,7 @@ mod tests {
 
     async fn hechos_en_la_nube(nube: &Nube) -> usize {
         let mut respuesta = nube.db.query("SELECT VALUE id FROM hecho").await.unwrap();
-        let ids: Vec<surrealdb::types::RecordId> = respuesta.take(0).unwrap();
+        let ids: Vec<RecordId> = respuesta.take(0).unwrap();
         ids.len()
     }
 
@@ -528,6 +608,204 @@ mod tests {
             2,
             "el hecho nuevo llegó a la nube aunque 250 transacciones de gafetes lo separaran del cursor"
         );
+    }
+
+    // --- Un equipo con token limitado a su unidad ---
+
+    const ACCESO_DE_PRUEBA: &str = "
+        DEFINE ACCESS OVERWRITE equipo ON DATABASE TYPE RECORD WITH JWT ALGORITHM HS512
+            KEY 'clave-de-prueba-que-solo-conocen-el-worker-y-la-base'
+            AUTHENTICATE { RETURN type::record('equipo', $token.equipo) }
+            DURATION FOR SESSION 1h;
+    ";
+
+    /// El token que en producción emite el Worker del panel, para la unidad de las pruebas.
+    fn token_de_pruebas() -> String {
+        use base64::Engine as _;
+        use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+        use hmac::{Hmac, Mac};
+        use sha2::Sha512;
+
+        let cabecera = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS512","typ":"JWT"}"#);
+        let datos = format!(
+            r#"{{"ns":"limen","db":"principal","ac":"equipo","unidad":"{}","equipo":"equipo-1","iat":1700000000,"exp":4000000000}}"#,
+            limen_infra_surreal::UNIDAD_DE_PRUEBAS
+        );
+        let cuerpo = format!("{cabecera}.{}", URL_SAFE_NO_PAD.encode(datos));
+        let mut firma =
+            Hmac::<Sha512>::new_from_slice(b"clave-de-prueba-que-solo-conocen-el-worker-y-la-base")
+                .unwrap();
+        firma.update(cuerpo.as_bytes());
+        format!(
+            "{cuerpo}.{}",
+            URL_SAFE_NO_PAD.encode(firma.finalize().into_bytes())
+        )
+    }
+
+    /// La nube tal como la ve un equipo con token (otra sesión sobre la misma base) y la nube del
+    /// administrador, que siembra y revisa sin pasar por los permisos.
+    async fn nube_con_token_de_un_equipo() -> (Nube, Nube) {
+        let administrador = nube().await;
+        administrador
+            .db
+            .query(ACCESO_DE_PRUEBA)
+            .await
+            .unwrap()
+            .check()
+            .unwrap();
+        let sesion = administrador.db.clone();
+        sesion.authenticate(token_de_pruebas()).await.unwrap();
+        (administrador, Nube { db: sesion })
+    }
+
+    async fn cuantas_presencias(nube: &Nube) -> usize {
+        let mut respuesta = nube
+            .db
+            .query("SELECT VALUE id FROM presencia")
+            .await
+            .unwrap();
+        let ids: Vec<RecordId> = respuesta.take(0).unwrap();
+        ids.len()
+    }
+
+    /// El equipo entra con su token (no con una clave de administrador): sube lo suyo, baja lo
+    /// global y lo de su unidad, y de otra unidad no recibe nada.
+    #[tokio::test]
+    async fn un_equipo_con_token_sube_y_baja_solo_lo_de_su_unidad() {
+        let (administrador, nube_del_equipo) = nube_con_token_de_un_equipo().await;
+        administrador
+            .db
+            .query(
+                "CREATE presencia:`222222222` CONTENT { unidad: 'OTRA', via: 'PROVEEDOR', \
+                 desde: d'2026-10-09T08:00:00Z' }; \
+                 CREATE empresa:u'0199c7a2-0000-7000-8000-0000000000cc' \
+                 CONTENT { nombre: 'ACME', nombre_busqueda: 'acme' };",
+            )
+            .await
+            .unwrap()
+            .check()
+            .unwrap();
+        let equipo = AlmacenSurreal::en_memoria().await.unwrap();
+        entra(&equipo, "111111111").await;
+
+        nube_del_equipo.subir_cambios(&equipo).await.unwrap();
+        nube_del_equipo.bajar_cambios(&equipo).await.unwrap();
+
+        assert_eq!(
+            cuantas_presencias(&administrador).await,
+            2,
+            "lo del equipo llegó a la nube, junto a lo de la otra unidad"
+        );
+        assert!(
+            !adentro(&equipo, "222222222").await,
+            "lo de otra unidad no baja"
+        );
+        assert_eq!(
+            equipo.filas("empresa").await.unwrap().len(),
+            1,
+            "los catálogos globales sí bajan"
+        );
+        assert!(adentro(&equipo, "111111111").await);
+    }
+
+    /// Una persona que ya está adentro en otra unidad (regla A7): la nube rechaza el segundo
+    /// registro aunque el equipo no pueda verla. Eso no debe frenar lo demás: se anota y se sigue.
+    #[tokio::test]
+    async fn un_choque_con_otra_unidad_no_frena_el_resto_de_la_subida() {
+        let (administrador, nube_del_equipo) = nube_con_token_de_un_equipo().await;
+        administrador
+            .db
+            .query(
+                "CREATE presencia:`111111111` CONTENT { unidad: 'OTRA', via: 'PROVEEDOR', \
+                 desde: d'2026-10-09T08:00:00Z' }",
+            )
+            .await
+            .unwrap()
+            .check()
+            .unwrap();
+        let equipo = AlmacenSurreal::en_memoria().await.unwrap();
+        entra(&equipo, "111111111").await;
+        entra(&equipo, "333333333").await;
+
+        nube_del_equipo
+            .subir_cambios(&equipo)
+            .await
+            .expect("el choque no debe cortar la subida");
+
+        assert_eq!(
+            cuantas_presencias(&administrador).await,
+            2,
+            "la de la otra unidad sigue siendo suya y la otra persona sí subió"
+        );
+        let mut respuesta = administrador
+            .db
+            .query("SELECT VALUE unidad FROM presencia:`111111111`")
+            .await
+            .unwrap();
+        let unidades: Vec<String> = respuesta.take(0).unwrap();
+        assert_eq!(
+            unidades,
+            vec!["OTRA".to_owned()],
+            "no se la quitó a la otra unidad"
+        );
+    }
+
+    /// El aviso en tiempo real también funciona con el token de un equipo: le llega lo de su
+    /// unidad y lo global, y de otra unidad no le avisa nada.
+    #[tokio::test]
+    async fn el_aviso_en_vivo_funciona_con_el_token_de_un_equipo() {
+        use std::sync::Arc;
+        use std::time::Duration;
+
+        use tokio::sync::Notify;
+
+        let (administrador, nube_del_equipo) = nube_con_token_de_un_equipo().await;
+        let avisos = Arc::new(Notify::new());
+        let _escucha = nube_del_equipo
+            .escuchar(limen_infra_surreal::UNIDAD_DE_PRUEBAS, Arc::clone(&avisos))
+            .await
+            .unwrap();
+        let avisa = |avisos: Arc<Notify>| async move {
+            tokio::time::timeout(Duration::from_secs(2), avisos.notified())
+                .await
+                .is_ok()
+        };
+
+        administrador
+            .db
+            .query(
+                "CREATE presencia:`555555555` CONTENT { unidad: 'OTRA', via: 'PROVEEDOR', \
+                 desde: d'2026-10-09T08:00:00Z' }",
+            )
+            .await
+            .unwrap()
+            .check()
+            .unwrap();
+        assert!(
+            !avisa(Arc::clone(&avisos)).await,
+            "lo de otra unidad no le avisa nada"
+        );
+
+        administrador
+            .db
+            .query(
+                "CREATE presencia:`444444444` CONTENT { unidad: 'PRUEBAS', via: 'PROVEEDOR', \
+                 desde: d'2026-10-09T08:00:00Z' }",
+            )
+            .await
+            .unwrap()
+            .check()
+            .unwrap();
+        assert!(avisa(Arc::clone(&avisos)).await, "lo de su unidad sí");
+
+        administrador
+            .db
+            .query("CREATE empresa:dos CONTENT { nombre: 'ACME', nombre_busqueda: 'acme' }")
+            .await
+            .unwrap()
+            .check()
+            .unwrap();
+        assert!(avisa(avisos).await, "y lo global, que es de todos");
     }
 
     #[tokio::test]

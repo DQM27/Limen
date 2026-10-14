@@ -21,6 +21,9 @@ mod vinculacion;
 use std::fmt;
 
 use limen_infra_surreal::{BASE, ESQUEMA, NAMESPACE};
+
+/// Lo que sólo vive en la nube: permisos por unidad, el diario de cambios y sus eventos.
+const ESQUEMA_NUBE: &str = include_str!("esquema_nube.surql");
 use surrealdb::Surreal;
 use surrealdb::engine::any::{Any, connect};
 use surrealdb::opt::auth::{Database, Namespace, Root};
@@ -202,8 +205,13 @@ impl Nube {
     /// Aplica el esquema completo de Limen. Es declarativo (`OVERWRITE`):
     /// aplicarlo otra vez no cambia los datos, sólo deja el esquema al día.
     pub async fn aplicar_esquema(&self) -> Result<(), ErrorNube> {
+        // Siempre juntos y en este orden: volver a definir una tabla con `OVERWRITE` le quita los
+        // permisos que pone el esquema de la nube.
         self.db
-            .query(ESQUEMA)
+            .query(format!(
+                "{ESQUEMA}
+{ESQUEMA_NUBE}"
+            ))
             .await
             .and_then(surrealdb::IndexedResults::check)
             .map(drop)
