@@ -14,6 +14,7 @@ pub mod auditoria;
 pub mod busqueda;
 pub mod cedula;
 mod coincidencia;
+pub mod conexion_equipo;
 pub mod contratista;
 pub mod empresa;
 pub mod empresa_proveedora;

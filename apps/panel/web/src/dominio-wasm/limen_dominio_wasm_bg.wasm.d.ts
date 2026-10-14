@@ -10,6 +10,7 @@ export const celdas_que_cumplen: (a: number, b: number) => [number, number, numb
 export const clave_temporal: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const codigo_para_mostrar: (a: number, b: number) => [number, number, number, number];
 export const datos_de_usuario: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+export const estado_de_conexion_del_equipo: (a: number, b: number, c: number) => [number, number, number, number];
 export const filas_que_coinciden: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const generar_codigo: (a: number, b: number) => [number, number, number, number];
 export const leer_codigo: (a: number, b: number) => [number, number, number, number];

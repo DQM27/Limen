@@ -10,6 +10,7 @@
 
 use chrono::{DateTime, Utc};
 use limen_dominio::auditoria::CambioCampo;
+use limen_dominio::conexion_equipo::estado_de_conexion;
 use limen_dominio::filtro_de_tabla::{
     CampoDeFila, Operacion, cumple_filtro_de_columna, fila_coincide,
 };
@@ -119,6 +120,29 @@ pub fn motivo_de_rechazo(
 #[wasm_bindgen]
 pub fn motivo_de_rechazo_del_equipo(vinculado: bool, retirado: bool) -> String {
     regla_motivo_de_conexion(vinculado, retirado)
+}
+
+fn regla_estado_de_conexion(
+    anuncia_en_linea: bool,
+    visto_ms: f64,
+    ahora_ms: f64,
+) -> Result<String, Motivo> {
+    Ok(
+        estado_de_conexion(anuncia_en_linea, instante(visto_ms)?, instante(ahora_ms)?)
+            .codigo()
+            .to_owned(),
+    )
+}
+
+/// Cómo está conectado un equipo: `en_linea`, `caido` (sin señal) o `fuera` (desconectado). Lo
+/// decide el núcleo; el Worker y la página sólo muestran el código.
+#[wasm_bindgen]
+pub fn estado_de_conexion_del_equipo(
+    anuncia_en_linea: bool,
+    visto_ms: f64,
+    ahora_ms: f64,
+) -> Result<String, JsValue> {
+    regla_estado_de_conexion(anuncia_en_linea, visto_ms, ahora_ms).map_err(a_js)
 }
 
 /// Cuántos minutos vale un código.
@@ -643,6 +667,28 @@ mod tests {
             "La cédula debe tener sólo números, entre 9 y 13 dígitos"
         );
         assert_eq!(regla_mensaje_de_usuario("nube"), "", "no es de los suyos");
+    }
+
+    #[test]
+    fn el_estado_de_un_equipo_lo_decide_el_nucleo() {
+        let visto = 1_760_450_400_000.0; // 2025-10-14T14:00:00Z
+        let minutos = |n: f64| visto + n * 60_000.0;
+        assert_eq!(
+            regla_estado_de_conexion(true, visto, minutos(3.0)),
+            Ok("en_linea".to_owned())
+        );
+        assert_eq!(
+            regla_estado_de_conexion(true, visto, minutos(11.0)),
+            Ok("caido".to_owned())
+        );
+        assert_eq!(
+            regla_estado_de_conexion(false, visto, minutos(1.0)),
+            Ok("fuera".to_owned())
+        );
+        assert_eq!(
+            regla_estado_de_conexion(true, f64::MAX, minutos(1.0)),
+            Err("fecha_invalida")
+        );
     }
 
     #[test]

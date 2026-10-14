@@ -4,6 +4,8 @@
 
 import { consultar, resultado, LECTURA } from './nube.js';
 import { acceso } from './acceso.js';
+import { estado_de_conexion_del_equipo } from './dominio.js';
+import { enVivo } from './en_vivo.js';
 import { canjear, listar, registrar, retirar, unidades } from './vinculacion.js';
 import {
   crear as crearUsuario,
@@ -11,8 +13,6 @@ import {
   listar as listarUsuarios,
   restablecerClave,
 } from './usuarios.js';
-// Un equipo que lleva más de dos latidos (5 min c/u) sin avisar se da por caído.
-const CAIDO_DESPUES_DE_MS = 10 * 60 * 1000;
 
 function autorizado(request, env) {
   const cabecera = request.headers.get('Authorization') ?? '';
@@ -34,11 +34,8 @@ async function equipos(env) {
     unidad: f.unidad,
     iniciada: f.iniciada,
     visto: f.visto,
-    estado: !f.en_linea
-      ? 'fuera'
-      : ahora - Date.parse(f.visto) > CAIDO_DESPUES_DE_MS
-        ? 'caido'
-        : 'en_linea',
+    // Cómo está conectado lo decide el núcleo (en línea, sin señal o desconectado).
+    estado: estado_de_conexion_del_equipo(Boolean(f.en_linea), Date.parse(f.visto), ahora),
   }));
 }
 
@@ -105,6 +102,8 @@ async function atender(request, env) {
       });
     }
     if (pathname === '/api/equipos') return Response.json({ equipos: await equipos(env) });
+    // El token con que la página se conecta en vivo a la base (sólo lectura, una hora).
+    if (pathname === '/api/en-vivo' && request.method === 'POST') return json(await enVivo(env));
     if (pathname === '/api/unidades') return Response.json({ unidades: await unidades(env) });
     if (pathname === '/api/dispositivos' && request.method === 'GET') {
       return Response.json({ dispositivos: await listar(env) });

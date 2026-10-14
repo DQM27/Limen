@@ -84,7 +84,21 @@ export const VIGENCIA_TOKEN_S = 3600;
  * (la base sólo le deja ver y escribir lo de esa unidad) y su ID. Como dura una hora, un equipo
  * retirado pierde el acceso a más tardar en ese tiempo, al no poder renovarlo.
  */
-export async function firmarJwt(secreto, { unidad, equipo }, ahora = Date.now()) {
+export function firmarJwt(secreto, { unidad, equipo }, ahora = Date.now()) {
+  return firmarHs512(secreto, { ac: 'equipo', unidad, equipo }, ahora);
+}
+
+/**
+ * El token con que la página del panel se conecta en vivo a la base: de sólo lectura y de una
+ * hora. Lo que puede ver y hacer lo deciden los permisos de la base para el acceso `panel`; el
+ * token sólo dice que es del panel. Se pide con la clave del panel y se renueva antes de vencer.
+ */
+export function firmarJwtPanel(secreto, ahora = Date.now()) {
+  return firmarHs512(secreto, { ac: 'panel' }, ahora);
+}
+
+/** Un JWT de la base de Limen firmado con HMAC-SHA512 y de una hora. */
+async function firmarHs512(secreto, datos, ahora) {
   const iat = Math.floor(ahora / 1000);
   const cabecera = base64url(codificador.encode(JSON.stringify({ alg: 'HS512', typ: 'JWT' })));
   const cuerpo = base64url(
@@ -92,9 +106,7 @@ export async function firmarJwt(secreto, { unidad, equipo }, ahora = Date.now())
       JSON.stringify({
         ns: 'limen',
         db: 'principal',
-        ac: 'equipo',
-        unidad,
-        equipo,
+        ...datos,
         iat,
         exp: iat + VIGENCIA_TOKEN_S,
       }),

@@ -36,6 +36,12 @@ export function codigo_para_mostrar(texto: string): string;
 export function datos_de_usuario(cedula: string, nombre: string, cedula_en_uso: boolean): DatosDeUsuario;
 
 /**
+ * Cómo está conectado un equipo: `en_linea`, `caido` (sin señal) o `fuera` (desconectado). Lo
+ * decide el núcleo; el Worker y la página sólo muestran el código.
+ */
+export function estado_de_conexion_del_equipo(anuncia_en_linea: boolean, visto_ms: number, ahora_ms: number): string;
+
+/**
  * De cada fila (un arreglo de `{ campo, texto }`), si coincide con el buscador.
  */
 export function filas_que_coinciden(buscado: string, filas: string): string;
@@ -113,6 +119,7 @@ export interface InitOutput {
     readonly clave_temporal: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly codigo_para_mostrar: (a: number, b: number) => [number, number, number, number];
     readonly datos_de_usuario: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly estado_de_conexion_del_equipo: (a: number, b: number, c: number) => [number, number, number, number];
     readonly filas_que_coinciden: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly generar_codigo: (a: number, b: number) => [number, number, number, number];
     readonly leer_codigo: (a: number, b: number) => [number, number, number, number];

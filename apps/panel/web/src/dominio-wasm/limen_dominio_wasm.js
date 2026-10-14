@@ -173,6 +173,33 @@ export function datos_de_usuario(cedula, nombre, cedula_en_uso) {
 }
 
 /**
+ * Cómo está conectado un equipo: `en_linea`, `caido` (sin señal) o `fuera` (desconectado). Lo
+ * decide el núcleo; el Worker y la página sólo muestran el código.
+ * @param {boolean} anuncia_en_linea
+ * @param {number} visto_ms
+ * @param {number} ahora_ms
+ * @returns {string}
+ */
+export function estado_de_conexion_del_equipo(anuncia_en_linea, visto_ms, ahora_ms) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ret = wasm.estado_de_conexion_del_equipo(anuncia_en_linea, visto_ms, ahora_ms);
+        var ptr1 = ret[0];
+        var len1 = ret[1];
+        if (ret[3]) {
+            ptr1 = 0; len1 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred2_0 = ptr1;
+        deferred2_1 = len1;
+        return getStringFromWasm0(ptr1, len1);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
  * De cada fila (un arreglo de `{ campo, texto }`), si coincide con el buscador.
  * @param {string} buscado
  * @param {string} filas
