@@ -1,0 +1,27 @@
+<section class="avisos" aria-label="Avisos">
+  @for (aviso of servicio.avisos(); track aviso.id) {
+    <article
+      class="aviso"
+      [class.saliendo]="aviso.saliendo"
+      [attr.data-tipo]="aviso.tipo"
+      [attr.role]="aviso.tipo === 'error' ? 'alert' : 'status'"
+      (click)="servicio.cerrar(aviso.id)"
+    >
+      <span class="insignia" aria-hidden="true">
+        <mat-icon>{{ iconos[aviso.tipo] }}</mat-icon>
+      </span>
+      <div class="cuerpo">
+        <strong class="titulo">{{ aviso.titulo }}</strong>
+        <span class="mensaje">{{ aviso.mensaje }}</span>
+      </div>
+      <button
+        type="button"
+        class="cerrar"
+        aria-label="Cerrar el aviso"
+        (click)="servicio.cerrar(aviso.id); $event.stopPropagation()"
+      >
+        <mat-icon aria-hidden="true">close</mat-icon>
+      </button>
+    </article>
+  }
+</section>

@@ -3,6 +3,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { AvisosPanel } from './compartido/avisos';
 import { SECCIONES } from './navegacion';
 
 /**
@@ -14,6 +15,7 @@ import { SECCIONES } from './navegacion';
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    AvisosPanel,
     MatIconModule,
     MatListModule,
     MatTooltipModule,

@@ -10,6 +10,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
+import { Avisos } from '../compartido/avisos';
 import { DialogoConfirmar, type DatosConfirmar } from '../compartido/dialogo-confirmar';
 import { celdaResaltada } from '../compartido/resaltado';
 import { Tabla } from '../compartido/tabla';
@@ -46,7 +47,9 @@ export class UsuariosPagina {
 
   protected readonly filas = signal<Usuario[]>([]);
   protected readonly cargando = signal(true);
-  protected readonly error = signal<string | null>(null);
+  private readonly avisos = inject(Avisos);
+  /** El último error que se avisó: si sigue igual (el refresco cada 15 s) no se repite. */
+  private ultimoError: string | null = null;
 
   protected readonly idFila = (usuario: Usuario): string => usuario.id;
   protected readonly camposDeBusqueda = (usuario: Usuario): CampoDeTexto[] => [
@@ -123,8 +126,15 @@ export class UsuariosPagina {
       })
       .afterClosed()
       .subscribe((resultado) => {
+        if (resultado?.tipo === 'editado') {
+          this.avisos.exito(`Se guardaron los cambios de ${resultado.usuario.nombre}.`);
+        }
         if (resultado?.tipo === 'creado') {
           const { usuario, clave_temporal } = resultado.creado;
+          this.avisos.exito(
+            `${usuario.nombre} ya puede iniciar sesión con su clave temporal.`,
+            'Usuario creado',
+          );
           this.mostrarClave({
             cedula: usuario.cedula,
             nombre: usuario.nombre,
@@ -150,6 +160,10 @@ export class UsuariosPagina {
       },
       async () => {
         const clave = await this.api.restablecerClave(usuario.id);
+        this.avisos.exito(
+          `${usuario.nombre} tiene una clave temporal nueva.`,
+          'Clave restablecida',
+        );
         this.mostrarClave({ cedula: usuario.cedula, nombre: usuario.nombre, clave });
         await this.cargar();
       },
@@ -168,10 +182,16 @@ export class UsuariosPagina {
         nombre: usuario.nombre,
         activo,
       });
+      this.avisos.exito(
+        activo
+          ? `${usuario.nombre} puede iniciar sesión otra vez.`
+          : `${usuario.nombre} ya no puede iniciar sesión.`,
+        activo ? 'Usuario activado' : 'Usuario desactivado',
+      );
       await this.cargar();
     };
     if (activo) {
-      guardar().catch((error: unknown) => this.error.set(this.mensaje(error)));
+      guardar().catch((error: unknown) => this.fallo(this.mensaje(error)));
       return;
     }
     this.confirmar(
@@ -190,7 +210,7 @@ export class UsuariosPagina {
       .afterClosed()
       .subscribe((confirmado) => {
         if (confirmado) {
-          accion().catch((error: unknown) => this.error.set(this.mensaje(error)));
+          accion().catch((error: unknown) => this.fallo(this.mensaje(error)));
         }
       });
   }
@@ -239,12 +259,19 @@ export class UsuariosPagina {
   private async cargar(): Promise<void> {
     try {
       this.filas.set(await this.api.listar());
-      this.error.set(null);
+      this.ultimoError = null;
     } catch (error) {
-      this.error.set(this.mensaje(error));
+      this.fallo(this.mensaje(error));
     } finally {
       this.cargando.set(false);
     }
+  }
+
+  private fallo(mensaje: string): void {
+    if (mensaje !== this.ultimoError) {
+      this.avisos.error(mensaje);
+    }
+    this.ultimoError = mensaje;
   }
 
   private mensaje(error: unknown): string {

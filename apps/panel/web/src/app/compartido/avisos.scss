@@ -1,0 +1,163 @@
+// Los avisos al estilo de las notificaciones de macOS: arriba a la derecha,
+// translúcidos, con esquinas redondeadas; entran deslizándose desde el borde
+// derecho (con un pequeño rebote) y salen hacia el mismo lado.
+
+// El panel no estorba: sólo los avisos reciben el ratón.
+.avisos {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(360px, calc(100vw - 24px));
+  pointer-events: none;
+}
+
+.aviso {
+  --color: var(--mat-sys-primary);
+
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  padding: 10px 10px 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--mat-sys-outline-variant) 70%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--mat-sys-surface-container-high) 82%, transparent);
+  backdrop-filter: blur(24px) saturate(1.5);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 35%);
+  color: var(--mat-sys-on-surface);
+  cursor: pointer;
+  pointer-events: auto;
+  animation: entrar 460ms cubic-bezier(0.2, 0.9, 0.25, 1.08) both;
+
+  &[data-tipo='exito'] {
+    --color: var(--aviso-exito);
+  }
+
+  &[data-tipo='error'] {
+    --color: var(--mat-sys-error);
+  }
+
+  &.saliendo {
+    animation: salir 260ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  }
+}
+
+// El ícono, en un cuadrito redondeado teñido del color del tipo, como el de
+// la app en una notificación de macOS.
+.insignia {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color) 20%, transparent);
+  color: var(--color);
+}
+
+.cuerpo {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.titulo {
+  font: var(--mat-sys-label-large);
+  font-weight: 600;
+}
+
+.mensaje {
+  overflow-wrap: anywhere;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+  line-height: 1.35;
+}
+
+// La cruz sólo se ve al pasar por encima o al llegar con el teclado.
+.cerrar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--mat-sys-on-surface-variant);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease;
+
+  mat-icon {
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+  }
+
+  &:hover {
+    background: color-mix(in srgb, var(--mat-sys-on-surface) 12%, transparent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    opacity: 1;
+  }
+}
+
+.aviso:hover .cerrar {
+  opacity: 1;
+}
+
+@keyframes entrar {
+  from {
+    opacity: 0;
+    transform: translateX(calc(100% + 24px));
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes salir {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(calc(100% + 24px));
+  }
+}
+
+// Quien pide menos movimiento ve que aparece y se desvanece, sin deslizarse.
+@media (prefers-reduced-motion: reduce) {
+  .aviso {
+    animation: aparecer 160ms ease both;
+
+    &.saliendo {
+      animation: desaparecer 160ms ease forwards;
+    }
+  }
+
+  @keyframes aparecer {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes desaparecer {
+    to {
+      opacity: 0;
+    }
+  }
+}

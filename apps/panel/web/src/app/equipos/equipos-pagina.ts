@@ -11,6 +11,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import { Tabla } from '../compartido/tabla';
+import { Avisos } from '../compartido/avisos';
 import { fechaHora } from '../compartido/fecha';
 import { DialogoConfirmar, type DatosConfirmar } from '../compartido/dialogo-confirmar';
 import {
@@ -67,7 +68,9 @@ export class EquiposPagina {
 
   protected readonly filas = signal<FilaEquipo[]>([]);
   protected readonly cargando = signal(true);
-  protected readonly error = signal<string | null>(null);
+  private readonly avisos = inject(Avisos);
+  /** El último error que se avisó: si sigue igual (el refresco cada 15 s) no se repite. */
+  private ultimoError: string | null = null;
   private readonly unidades = signal<Unidad[]>([]);
 
   protected readonly idFila = (fila: FilaEquipo): string => fila.id;
@@ -188,9 +191,10 @@ export class EquiposPagina {
   private async ejecutarRetiro(fila: FilaEquipo): Promise<void> {
     try {
       await retirarDispositivo(fila.id);
+      this.avisos.exito(`«${fila.nombre}» ya no tiene acceso a la nube.`, 'Equipo retirado');
       await this.cargar();
     } catch (error) {
-      this.error.set(this.mensaje(error));
+      this.fallo(this.mensaje(error));
     }
   }
 
@@ -203,12 +207,19 @@ export class EquiposPagina {
       ]);
       this.filas.set(unirEquipos(dispositivos, conectados));
       this.unidades.set(unidades);
-      this.error.set(null);
+      this.ultimoError = null;
     } catch (error) {
-      this.error.set(this.mensaje(error));
+      this.fallo(this.mensaje(error));
     } finally {
       this.cargando.set(false);
     }
+  }
+
+  private fallo(mensaje: string): void {
+    if (mensaje !== this.ultimoError) {
+      this.avisos.error(mensaje);
+    }
+    this.ultimoError = mensaje;
   }
 
   private mensaje(error: unknown): string {

@@ -1,9 +1,5 @@
 <h1 class="solo-lectores">Equipos</h1>
 
-@if (error(); as mensaje) {
-  <p class="error" role="alert">{{ mensaje }}</p>
-}
-
 <app-tabla
   etiqueta="Equipos"
   [columnas]="columnas()"
