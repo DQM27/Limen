@@ -4,7 +4,66 @@ Lee primero [`AGENTS.md`](../AGENTS.md) (reglas del dueño y de arquitectura) y,
 falta el detalle, [`arquitectura.md`](arquitectura.md), [`reglas.md`](reglas.md) y
 [`operacion-sin-conexion.md`](operacion-sin-conexion.md).
 
-## Estado al 13 de octubre de 2026 (lo último)
+## Estado al 14 de octubre de 2026 (lo más reciente: el panel)
+
+Rama `feat/panel-estructura` (PR #24 abierto, **sin mezclar: el dueño dice cuándo se hace el PR**; el panel
+que está desplegado en `limen.megabrisas.com` sale de esta rama). Detalle en [`panel.md`](panel.md) y
+[`nube.md`](nube.md) sección 14.
+
+**Hecho y desplegado**
+
+- **Estructura del panel** (Angular, Material 3 con Tokyo Night claro y oscuro, AG Grid): menú lateral con
+  Equipos, Usuarios, Historiales y Contratistas (las dos últimas apagadas, aún sin pantalla). Cada pantalla:
+  título, fila de herramientas y tabla (`web/src/app/compartido/tabla.ts`).
+- **El núcleo decide, la página sólo muestra:** la página carga el dominio como WebAssembly
+  (`web/src/dominio-wasm`, hecho por `npm --prefix apps/panel run dominio`, que también regenera el del Worker).
+  Nombre en mayúscula al escribir, cédula normalizada, mensajes de error, buscador y resaltado (N1 y N2) y
+  cómo está conectado un equipo salen del núcleo.
+- **Usuarios** (bloque L): crear (clave temporal de un solo uso), editar **cédula y nombre** (la cédula es
+  editable y sigue única; regla L2 actualizada), activar o desactivar con un interruptor (**nunca se borra
+  a nadie**; no se dice «dar de baja») y restablecer la clave. El Worker (`apps/panel/src/usuarios.js`) sólo
+  orquesta; el identificador de un usuario es un **UUID** (como lo lee el escritorio).
+- **Tiempo real:** la página se conecta directo a la base con un token de sólo lectura de una hora
+  (`POST /api/en-vivo`, acceso `panel` de SurrealDB, secreto `PANEL_VIVO_SECRETO`). Tablas y avisos al instante
+  y toasts iguales a los del escritorio: usuario activado o desactivado, equipo que se conecta, se desconecta
+  o pierde la señal, equipo registrado, vinculado o retirado, cada ingreso y salida. Indicador En vivo abajo
+  del menú. Los permisos (el panel no ve la clave de un usuario y no escribe) los pone la base
+  (`esquema_nube.surql`, probados en `tests/panel_en_vivo.rs`).
+- **Horas en 24 horas** en todo el panel; estados de conexión En línea, **Sin señal** (antes «Caído») y
+  Desconectado.
+- **Regla A9** (persona adentro en otra unidad, antes de cada entrada): PR #23, rama `feat/continuar-pendiente`,
+  también abierto. Pendiente a propósito: marcar el choque como incidente al sincronizar.
+
+**Lo que sigue (lo pidió el dueño)**
+
+1. **Edición de contratistas en el panel** (catálogo global: alta, edición, vencimiento del PRAIND, empresa), con
+   las mismas reglas del núcleo que ya usa el escritorio.
+2. **Acceso denegado por cédula:** quien está vetado no entra por **ninguna** vía (contratista, proveedor o
+   correo). El catálogo se mantiene al día en la nube y, si no cuesta, se valida en cada registro. En Lattis fue
+   difícil: se puede ver ahí como referencia. Mirar primero qué ya hace `crates/aplicacion/src/casos_de_uso/veto.rs`.
+3. Historiales (sólo lectura, con filtros por unidad y fecha), alertas con nombre de la persona en los ingresos y,
+   más adelante, Cloudflare Access para saber quién hizo cada cambio en el panel (hoy la auditoría anota un
+   identificador nulo).
+4. Filtros por columna de AG Grid: están apagados porque compararían por su cuenta; vuelven cuando el núcleo
+   decida también esos (`celdas_que_cumplen` ya está expuesta en el WebAssembly).
+
+**Para trabajar en esta PC (tropiezos ya vividos)**
+
+- **Compilar Rust:** `$env:RUSTUP_TOOLCHAIN='1.99.0-x86_64-pc-windows-gnu'` (el `link` de Git Bash rompe MSVC). No
+  tocar `rust-toolchain.toml`. Para el WebAssembly hizo falta el destino `wasm32-unknown-unknown` y
+  `wasm-bindgen-cli 0.2.129` (ya instalados).
+- **Acentos:** lo que se escribe con un heredoc de Bash o con Python por stdin pierde la codificación (queda
+  fuera de UTF-8). Escribir archivos con las herramientas de edición; después de usar la terminal, comprobar con
+  `iconv -f UTF-8 -t UTF-8 archivo`.
+- **Nube de DESARROLLO** (no producción): se puede consultar con las variables `LIMEN_NUBE_*` (el usuario es de
+  nivel base: entrar por `/signin` y usar el token). Crear accesos (`DEFINE ACCESS`) lo hace sólo el dueño de la
+  base en la consola de SurrealDB Cloud; la sentencia del panel está en `datos-privados/panel-en-vivo.surql`
+  (git la ignora porque lleva la clave de firma).
+- **Pruebas:** `npm --prefix apps/panel test` (Worker, usa el WebAssembly real) y `npx ng test --watch=false`
+  en `apps/panel/web`. La página se puede probar en Chrome real con Playwright contra una base de mentira.
+- **Desplegar el panel:** `npm run publicar` en `apps/panel` (el dueño lo pide o lo autoriza cada vez).
+
+## Estado al 13 de octubre de 2026
 
 **Funciona de punta a punta, probado con una PC real y la nube** (detalle en [`nube.md`](nube.md) y
 [`panel.md`](panel.md)):
