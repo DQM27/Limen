@@ -41,7 +41,9 @@ interface Notificacion {
   result?: Record<string, unknown>;
 }
 
-const SOCKET_REAL: FabricaDeSocket = (url) => new WebSocket(url) as unknown as SocketMinimo;
+// El formato (`json`) se dice al conectar: sin él SurrealDB lo infiere y avisa en sus registros
+// que esa inferencia está obsoleta.
+const SOCKET_REAL: FabricaDeSocket = (url) => new WebSocket(url, 'json') as unknown as SocketMinimo;
 
 export class ErrorDeSurreal extends Error {}
 
