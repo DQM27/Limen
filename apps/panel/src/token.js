@@ -116,9 +116,9 @@ export async function firmarJwt(secreto, { unidad, equipo }, ahora = Date.now())
 }
 
 /**
- * ¿Es este token uno que firmamos nosotros y sigue vigente? Devuelve lo que lleva (`unidad`,
- * `equipo`) o `null`. Es el camino inverso de `firmarJwt`: así un equipo vinculado prueba quién
- * es ante el Worker sin repetir la firma del desafío en cada pregunta.
+ * Â¿Es este token uno que firmamos nosotros y sigue vigente? Devuelve lo que lleva (`unidad`,
+ * `equipo`) o `null`. Es el camino inverso de `firmarJwt`: asÃ­ un equipo vinculado prueba quiÃ©n
+ * es ante el Worker sin repetir la firma del desafÃ­o en cada pregunta.
  */
 export async function verificarJwt(secreto, token, ahora = Date.now()) {
   const partes = String(token ?? '').split('.');

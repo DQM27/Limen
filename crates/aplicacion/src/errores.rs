@@ -21,6 +21,7 @@ use limen_dominio::ingreso_correo::ErrorIngresoCorreo;
 use limen_dominio::ingreso_proveedor::ErrorIngresoProveedor;
 use limen_dominio::movimiento::ErrorSalida;
 use limen_dominio::personal_kof::ErrorPersonalKof;
+use limen_dominio::presencia::AdentroEnOtraUnidad;
 use limen_dominio::prestamo_kof::{ErrorDevolucionKof, ErrorPrestamoKof};
 use limen_dominio::rango_fechas::ErrorRango;
 use limen_dominio::usuario::{ErrorInicioSesion, ErrorUsuario};
@@ -120,6 +121,12 @@ impl ErrorDeNegocio for ErrorIngresoProveedor {
 impl ErrorDeNegocio for ErrorUsuario {
     fn codigo(&self) -> &'static str {
         Self::codigo(*self)
+    }
+}
+
+impl ErrorDeNegocio for AdentroEnOtraUnidad {
+    fn codigo(&self) -> &'static str {
+        Self::codigo(self)
     }
 }
 

@@ -1,12 +1,12 @@
-// Regla A9: antes de registrar una entrada, el equipo pregunta si esa persona ya está adentro en
-// otra unidad. Un equipo sólo ve lo de su unidad en la base, así que la pregunta pasa por el
-// Worker, que sí puede mirar todas. Sólo responde dónde está y desde cuándo, nada más de la
-// persona. Quién decide qué hacer con la respuesta es el dominio (`presencia.rs`).
+// Regla A9: antes de registrar una entrada, el equipo pregunta si esa persona ya estÃ¡ adentro en
+// otra unidad. Un equipo sÃ³lo ve lo de su unidad en la base, asÃ­ que la pregunta pasa por el
+// Worker, que sÃ­ puede mirar todas. SÃ³lo responde dÃ³nde estÃ¡ y desde cuÃ¡ndo, nada mÃ¡s de la
+// persona. QuiÃ©n decide quÃ© hacer con la respuesta es el dominio (`presencia.rs`).
 
 import { consultar, resultado, LECTURA } from './nube.js';
 import { verificarJwt } from './token.js';
 
-// Una cédula, o `KOF-` y el código de empleado: la misma clave que usa la tabla `presencia`.
+// Una cÃ©dula, o `KOF-` y el cÃ³digo de empleado: la misma clave que usa la tabla `presencia`.
 const CLAVE = /^[A-Za-z0-9-]{1,40}$/;
 
 const rechazo = (estado, error) => ({ estado, cuerpo: { error } });

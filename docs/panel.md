@@ -55,9 +55,9 @@ tiene abierta sigue hasta que se cierre. Cortarla al instante (como Lattis) qued
 
 ## Persona adentro en otra unidad (regla A9)
 
-`GET /api/presencia/:clave` (la clave es la cÈdula, o `KOF-` y el cÛdigo de empleado). Va con
+`GET /api/presencia/:clave` (la clave es la c√©dula, o `KOF-` y el c√≥digo de empleado). Va con
 el token del equipo como Bearer, no con la clave del panel: el Worker lo verifica
 (`verificarJwt`) y mira la presencia de **todas** las unidades, cosa que un equipo no puede
-hacer por sÌ solo (la base sÛlo le deja ver la suya). Responde `{ adentro: null }` o
-`{ adentro: { unidad, via, desde } }`: nada m·s de la persona. QuÈ hacer con la respuesta lo
+hacer por s√≠ solo (la base s√≥lo le deja ver la suya). Responde `{ adentro: null }` o
+`{ adentro: { unidad, via, desde } }`: nada m√°s de la persona. Qu√© hacer con la respuesta lo
 decide el dominio (`presencia::verificar_no_adentro_en_otra_unidad`).

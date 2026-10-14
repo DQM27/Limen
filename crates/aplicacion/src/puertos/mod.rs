@@ -10,6 +10,7 @@ mod claves;
 mod consultas;
 mod hechos;
 mod persistencia;
+mod presencia_remota;
 mod reloj;
 
 pub use auditoria::{AccionAuditada, EntradaAuditoria, RegistroAuditado, RegistroAuditoria};
@@ -26,4 +27,5 @@ pub use persistencia::{
     RepositorioPersonalKof, RepositorioPresencias, RepositorioPrestamosKof, RepositorioReloj,
     RepositorioUsuarios, Restriccion, UnidadDeTrabajo,
 };
+pub use presencia_remota::PresenciaRemota;
 pub use reloj::{GeneradorIds, Reloj};
