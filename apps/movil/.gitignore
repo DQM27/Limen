@@ -1,0 +1,15 @@
+# Dependencias y compilados: se regeneran, no se versionan.
+node_modules/
+dist/
+target/
+.gradle/
+build/
+*.apk
+*.aab
+*.zip
+.angular/
+*.so
+# Salida de `ng build` copiada para Tauri
+web/
+# Generado por `tauri android init`
+src-tauri/gen/
