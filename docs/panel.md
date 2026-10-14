@@ -53,15 +53,31 @@ sigue conectándose como antes (desarrollo y herramientas).
 **Límite conocido:** retirar un equipo impide que obtenga un token nuevo, pero la conexión que ya
 tiene abierta sigue hasta que se cierre. Cortarla al instante (como Lattis) queda pendiente.
 
-## La p�gina: c�mo est� ordenada
+## La página: cómo está ordenada
 
-Angular (`apps/panel/web`), con la misma forma que la app de escritorio: **men� lateral con las
-secciones** (Equipos, Usuarios, Historiales, Contratistas) y, al lado, la pantalla de la secci�n.
-Las que todav�a no existen se ven apagadas en el men� (`navegacion.ts`); cada pantalla nueva s�lo
-agrega su ruta. Todas siguen el mismo orden: t�tulo, una fila de herramientas (acciones propias a
+Angular (`apps/panel/web`), con la misma forma que la app de escritorio: **menú lateral con las
+secciones** (Equipos, Usuarios, Historiales, Contratistas) y, al lado, la pantalla de la sección.
+Las que todavía no existen se ven apagadas en el menú (`navegacion.ts`); cada pantalla nueva sólo
+agrega su ruta. Todas siguen el mismo orden: título, una fila de herramientas (acciones propias a
 la izquierda, conteo a la derecha) y la tabla AG Grid (`compartido/tabla.ts`). Material 3 con la
-paleta Tokyo Night, clara (Day) u oscura (Night) seg�n el sistema, igual que el escritorio.
+paleta Tokyo Night, clara (Day) u oscura (Night) según el sistema, igual que el escritorio.
 
-La p�gina no decide nada: muestra lo que responde el Worker y las reglas son del n�cleo. Falta
-todav�a el buscador de las tablas, que tambi�n es del n�cleo (reglas N1 y N2) y se carga en el
-navegador como WebAssembly, y la actualizaci�n en vivo (hoy se refresca cada 15 segundos).
+La página no decide nada: carga el núcleo (el dominio de Rust compilado a WebAssembly,
+`web/src/dominio-wasm`, hecho por `npm --prefix apps/panel run dominio`) y le pregunta. El nombre
+se ve en mayúscula al escribir, la cédula se normaliza, los mensajes de error son los del núcleo y
+el buscador y el resaltado de las tablas son sus reglas N1 y N2. Quedan apagados los filtros por
+columna de AG Grid, que compararían por su cuenta: vuelven cuando el núcleo decida también esos
+(`celdas_que_cumplen` ya está expuesta). La actualización en vivo falta: hoy se refresca cada 15
+segundos.
+
+## Usuarios (bloque L)
+
+`GET` y `POST /api/usuarios`, `PATCH /api/usuarios/:id` (cédula, nombre y activo; dar de baja es
+`activo = false`, nunca se borra) y `POST /api/usuarios/:id/clave` (restablecer). El Worker sólo
+orquesta (`usuarios.js`): **el núcleo decide** qué cédula y qué nombre valen y cómo quedan
+normalizados, que la cédula sea única (la cédula es editable; el usuario conserva su ID), cómo es
+la clave temporal (10 símbolos sin 0, O, 1 ni I, del azar que entrega el Worker) y qué cambió para
+la auditoría. La clave se cifra en la propia base con `crypto::argon2::generate` (una prueba de
+Rust comprueba que el login de Limen acepta ese hash) y se muestra una sola vez; nunca va a la
+auditoría. Hasta que entre Cloudflare Access, la auditoría anota los cambios del panel con el
+identificador nulo en vez de un usuario con nombre.
