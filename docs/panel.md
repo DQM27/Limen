@@ -52,3 +52,12 @@ sigue conectÃ¡ndose como antes (desarrollo y herramientas).
 
 **LÃ­mite conocido:** retirar un equipo impide que obtenga un token nuevo, pero la conexiÃ³n que ya
 tiene abierta sigue hasta que se cierre. Cortarla al instante (como Lattis) queda pendiente.
+
+## Persona adentro en otra unidad (regla A9)
+
+`GET /api/presencia/:clave` (la clave es la cédula, o `KOF-` y el código de empleado). Va con
+el token del equipo como Bearer, no con la clave del panel: el Worker lo verifica
+(`verificarJwt`) y mira la presencia de **todas** las unidades, cosa que un equipo no puede
+hacer por sí solo (la base sólo le deja ver la suya). Responde `{ adentro: null }` o
+`{ adentro: { unidad, via, desde } }`: nada más de la persona. Qué hacer con la respuesta lo
+decide el dominio (`presencia::verificar_no_adentro_en_otra_unidad`).
