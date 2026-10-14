@@ -110,7 +110,7 @@ mod tests {
             nombre: "ANA SOLANO".into(),
             empresa: EmpresaId::desde_uuid(Uuid::from_u128(500)),
             tipo_ingreso: tipo,
-            fecha_vencimiento_praind: vence.parse().unwrap(),
+            fecha_vencimiento_praind: Some(vence.parse().unwrap()),
             tiene_acceso,
         };
         RegistrarContratista::new(almacen.clone(), reloj_a(ENTRADA), almacen.ids())
@@ -852,7 +852,7 @@ mod tests {
             nombre: nombre.into(),
             empresa: EmpresaId::desde_uuid(Uuid::from_u128(500)),
             tipo_ingreso: TipoIngreso::Praind,
-            fecha_vencimiento_praind: "2027-01-01".parse().unwrap(),
+            fecha_vencimiento_praind: Some("2027-01-01".parse().unwrap()),
             tiene_acceso,
         };
         RegistrarContratista::new(almacen.clone(), reloj_a(ENTRADA), almacen.ids())

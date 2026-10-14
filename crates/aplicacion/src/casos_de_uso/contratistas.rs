@@ -33,7 +33,8 @@ pub struct ComandoContratista {
     pub nombre: String,
     pub empresa: EmpresaId,
     pub tipo_ingreso: TipoIngreso,
-    pub fecha_vencimiento_praind: NaiveDate,
+    /// Puede faltar sólo si no se le da el acceso (lo decide el dominio).
+    pub fecha_vencimiento_praind: Option<NaiveDate>,
     pub tiene_acceso: bool,
 }
 
@@ -58,6 +59,7 @@ pub struct ComandoValidarContratista {
     pub nombre: String,
     pub empresa: Option<EmpresaId>,
     pub fecha_vencimiento_praind: Option<NaiveDate>,
+    pub tiene_acceso: bool,
 }
 
 /// Dice de una vez todo lo que impide guardar el formulario de un
@@ -116,6 +118,7 @@ impl<F: FabricaUnidadDeTrabajo, R: Reloj> ValidarContratista<F, R> {
             nombre: &comando.nombre,
             empresa: comando.empresa,
             fecha_vencimiento_praind: comando.fecha_vencimiento_praind,
+            tiene_acceso: comando.tiene_acceso,
         };
         Ok(problemas(
             &borrador,

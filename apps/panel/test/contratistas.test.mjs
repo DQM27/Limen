@@ -92,6 +92,26 @@ test('registrar: el núcleo normaliza, se guarda con su búsqueda y queda audita
   );
 });
 
+test('registrar: negar el acceso a alguien no pide el PRAIND (queda como «sin PRAIND»)', async () => {
+  const llamadas = baseFalsa(base());
+  const { estado, cuerpo } = await registrar(ENV, {
+    ...FORMULARIO,
+    fecha_vencimiento_praind: '',
+    tiene_acceso: false,
+  });
+
+  assert.equal(estado, 201);
+  assert.equal(cuerpo.contratista.tiene_acceso, false);
+  assert.equal(cuerpo.contratista.fecha_vencimiento_praind, '1970-01-01');
+  const [escritura] = escrituras(llamadas);
+  assert.equal(escritura.variables.fecha, '1970-01-01T00:00:00Z');
+
+  baseFalsa(base());
+  const conAcceso = await registrar(ENV, { ...FORMULARIO, fecha_vencimiento_praind: '' });
+  assert.equal(conAcceso.estado, 422);
+  assert.equal(conAcceso.cuerpo.problemas[0].codigo, 'praind_requerido');
+});
+
 test('registrar: lo que no vale vuelve completo, campo por campo, y no se escribe nada', async () => {
   const llamadas = baseFalsa(base({ empresa: [ok([])] }));
   const { estado, cuerpo } = await registrar(ENV, {

@@ -1,6 +1,14 @@
 <form (submit)="guardar($event)">
   <div class="cabecera">
-    <h2 mat-dialog-title>{{ contratista ? 'Editar contratista' : 'Nuevo contratista' }}</h2>
+    <h2 mat-dialog-title>
+      {{
+        contratista
+          ? 'Editar contratista'
+          : sinAcceso
+            ? 'Negar el acceso a una persona'
+            : 'Nuevo contratista'
+      }}
+    </h2>
   </div>
   <mat-dialog-content>
     <div class="campos">
@@ -84,6 +92,8 @@
         />
         @if (mensaje('fecha_vencimiento_praind'); as texto) {
           <mat-hint class="mensaje-error">{{ texto }}</mat-hint>
+        } @else if (!tieneAcceso()) {
+          <mat-hint>No hace falta si no tiene acceso.</mat-hint>
         }
       </mat-form-field>
 

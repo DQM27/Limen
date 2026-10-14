@@ -4,6 +4,7 @@ import init, {
   datos_de_usuario,
   empresa_al_escribir,
   estado_de_conexion_del_equipo,
+  fecha_es_praind,
   filas_que_coinciden,
   mensaje_de_error_de_usuario,
   nombre_al_escribir,
@@ -67,6 +68,10 @@ export class NucleoWasm extends Nucleo {
 
   empresaAlEscribir(texto: string): string {
     return empresa_al_escribir(texto);
+  }
+
+  fechaEsPraind(fecha: string): boolean {
+    return fecha_es_praind(fecha);
   }
 
   praindVencido(fecha: string, ahoraMs: number): boolean {

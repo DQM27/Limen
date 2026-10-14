@@ -9,6 +9,9 @@
 //! - no se registra con un PRAIND vencido; al editar, el vencimiento sólo se
 //!   revisa si cambió la fecha (para poder quitarle el acceso o corregirle
 //!   el nombre a alguien con el PRAIND vencido);
+//! - a quien se registra con el acceso denegado no se le pide el PRAIND (A8:
+//!   se le vetó, no va a entrar); si luego se le devuelve el acceso, el
+//!   PRAIND sí tiene que estar al día;
 //! - no se le cambia la cédula mientras está adentro;
 //! - todo cambio queda en la auditoría.
 //!
@@ -50,27 +53,43 @@ impl fmt::Display for ContratistaId {
     }
 }
 
-/// Lo que llega del formulario, tal cual se escribió.
+/// La fecha de PRAIND de quien se registró con el acceso denegado y sin PRAIND:
+/// un día que ya pasó, así que vale como vencido si alguna vez se le devuelve
+/// el acceso sin ponerle uno.
+pub const SIN_PRAIND: NaiveDate = match NaiveDate::from_ymd_opt(1970, 1, 1) {
+    Some(fecha) => fecha,
+    None => panic!("fecha válida"),
+};
+
+/// ¿Esta fecha es un PRAIND de verdad, o la de quien nunca tuvo uno?
+pub fn tiene_praind(fecha: NaiveDate) -> bool {
+    fecha != SIN_PRAIND
+}
+
+/// Lo que llega del formulario, tal cual se escribió. La fecha del PRAIND puede
+/// faltar sólo si no se le da el acceso.
 #[derive(Debug, Clone, Copy)]
 pub struct DatosContratista<'a> {
     pub cedula: &'a str,
     pub nombre: &'a str,
     pub empresa: EmpresaId,
     pub tipo_ingreso: TipoIngreso,
-    pub fecha_vencimiento_praind: NaiveDate,
+    pub fecha_vencimiento_praind: Option<NaiveDate>,
     pub tiene_acceso: bool,
 }
 
 /// Lo que hay en el formulario mientras todavía puede estar incompleto: sin
 /// empresa elegida o sin fecha de PRAIND. Sirve para saber de una vez qué
-/// falta y qué está mal (ver [`problemas`]). El tipo de ingreso y el acceso
-/// siempre tienen un valor válido, así que no entran acá.
+/// falta y qué está mal (ver [`problemas`]). El tipo de ingreso siempre tiene
+/// un valor válido, así que no entra acá; el acceso sí, porque sin acceso no
+/// se pide el PRAIND.
 #[derive(Debug, Clone, Copy)]
 pub struct BorradorContratista<'a> {
     pub cedula: &'a str,
     pub nombre: &'a str,
     pub empresa: Option<EmpresaId>,
     pub fecha_vencimiento_praind: Option<NaiveDate>,
+    pub tiene_acceso: bool,
 }
 
 /// Lo que el caso de uso averiguó en la base antes de pedirle al dominio
@@ -171,10 +190,15 @@ pub fn problemas(
         Some(_) => {}
     }
     match borrador.fecha_vencimiento_praind {
+        // Sin acceso no se pide el PRAIND: no va a entrar.
+        None if !borrador.tiene_acceso => {}
         None => problemas.push(ErrorContratista::PraindRequerido),
         Some(fecha) => {
-            let cambia = anterior.is_none_or(|a| a.fecha_vencimiento_praind != fecha);
-            if cambia && praind_vencido(fecha, hoy) {
+            // Se revisa si es nuevo, si cambió la fecha o si se le devuelve el acceso.
+            let cambia = anterior.is_none_or(|a| {
+                a.fecha_vencimiento_praind != fecha || (!a.tiene_acceso && borrador.tiene_acceso)
+            });
+            if borrador.tiene_acceso && cambia && praind_vencido(fecha, hoy) {
                 problemas.push(ErrorContratista::PraindVencido);
             }
         }
@@ -202,7 +226,8 @@ fn primer_problema(
         cedula: datos.cedula,
         nombre: datos.nombre,
         empresa: Some(datos.empresa),
-        fecha_vencimiento_praind: Some(datos.fecha_vencimiento_praind),
+        fecha_vencimiento_praind: datos.fecha_vencimiento_praind,
+        tiene_acceso: datos.tiene_acceso,
     };
     problemas(&borrador, hechos, hoy, anterior)
         .into_iter()
@@ -258,7 +283,7 @@ impl Contratista {
             nombre,
             empresa: datos.empresa,
             tipo_ingreso: datos.tipo_ingreso,
-            fecha_vencimiento_praind: datos.fecha_vencimiento_praind,
+            fecha_vencimiento_praind: datos.fecha_vencimiento_praind.unwrap_or(SIN_PRAIND),
             tiene_acceso: datos.tiene_acceso,
         })
     }
@@ -279,7 +304,10 @@ impl Contratista {
         self.nombre = nombre;
         self.empresa = datos.empresa;
         self.tipo_ingreso = datos.tipo_ingreso;
-        self.fecha_vencimiento_praind = datos.fecha_vencimiento_praind;
+        // Si no se da el PRAIND (sólo sin acceso) queda el que tenía.
+        self.fecha_vencimiento_praind = datos
+            .fecha_vencimiento_praind
+            .unwrap_or(self.fecha_vencimiento_praind);
         self.tiene_acceso = datos.tiene_acceso;
         Ok(diferencias(antes, self.campos_auditables()))
     }
@@ -384,7 +412,7 @@ mod tests {
             nombre: "  josé  peña ",
             empresa: empresa(),
             tipo_ingreso: TipoIngreso::Praind,
-            fecha_vencimiento_praind: fecha("2027-01-01"),
+            fecha_vencimiento_praind: Some(fecha("2027-01-01")),
             tiene_acceso: true,
         }
     }
@@ -478,14 +506,14 @@ mod tests {
     #[test]
     fn no_se_registra_con_praind_vencido_pero_vencer_hoy_es_valido() {
         let mut vencido = datos();
-        vencido.fecha_vencimiento_praind = fecha("2026-10-08");
+        vencido.fecha_vencimiento_praind = Some(fecha("2026-10-08"));
         assert_eq!(
             registrar(vencido, hechos()),
             Err(ErrorContratista::PraindVencido)
         );
 
         let mut vence_hoy = datos();
-        vence_hoy.fecha_vencimiento_praind = hoy();
+        vence_hoy.fecha_vencimiento_praind = Some(hoy());
         assert!(registrar(vence_hoy, hechos()).is_ok());
     }
 
@@ -507,6 +535,7 @@ mod tests {
             nombre: "josé peña",
             empresa: Some(empresa()),
             fecha_vencimiento_praind: Some(fecha("2027-01-01")),
+            tiene_acceso: true,
         }
     }
 
@@ -522,6 +551,7 @@ mod tests {
             nombre: " ",
             empresa: None,
             fecha_vencimiento_praind: None,
+            tiene_acceso: true,
         };
         assert_eq!(
             problemas(&vacio, hechos(), hoy(), None),
@@ -541,6 +571,7 @@ mod tests {
             nombre: "Ana 2",
             empresa: Some(empresa()),
             fecha_vencimiento_praind: Some(fecha("2026-10-08")),
+            tiene_acceso: true,
         };
         let sin_empresa = HechosContratista {
             empresa_existe: false,
@@ -665,7 +696,7 @@ mod tests {
         let antes = contratista.clone();
         let mut invalidos = datos();
         invalidos.nombre = "otro nombre";
-        invalidos.fecha_vencimiento_praind = fecha("2020-01-01");
+        invalidos.fecha_vencimiento_praind = Some(fecha("2020-01-01"));
         assert_eq!(
             contratista.editar(invalidos, hechos(), hoy()),
             Err(ErrorContratista::PraindVencido),
@@ -693,7 +724,7 @@ mod tests {
         );
 
         let mut fecha_vencida = datos();
-        fecha_vencida.fecha_vencimiento_praind = fecha("2027-05-01");
+        fecha_vencida.fecha_vencimiento_praind = Some(fecha("2027-05-01"));
         assert_eq!(
             contratista.editar(fecha_vencida, hechos(), mas_tarde),
             Err(ErrorContratista::PraindVencido)
@@ -735,6 +766,85 @@ mod tests {
             ..hechos()
         };
         assert!(contratista.editar(datos(), en_uso, hoy()).is_ok());
+    }
+
+    fn sin_acceso_ni_praind() -> DatosContratista<'static> {
+        DatosContratista {
+            fecha_vencimiento_praind: None,
+            tiene_acceso: false,
+            ..datos()
+        }
+    }
+
+    #[test]
+    fn a_quien_se_registra_sin_acceso_no_se_le_pide_el_praind() {
+        let vetado = registrar(sin_acceso_ni_praind(), hechos()).unwrap();
+        assert!(!vetado.tiene_acceso());
+        assert_eq!(vetado.fecha_vencimiento_praind(), SIN_PRAIND);
+        assert!(!tiene_praind(vetado.fecha_vencimiento_praind()));
+        assert!(tiene_praind(fecha("2027-01-01")));
+
+        let con_acceso = DatosContratista {
+            tiene_acceso: true,
+            ..sin_acceso_ni_praind()
+        };
+        assert_eq!(
+            registrar(con_acceso, hechos()),
+            Err(ErrorContratista::PraindRequerido),
+            "con acceso sí hace falta"
+        );
+    }
+
+    #[test]
+    fn sin_acceso_tampoco_importa_que_el_praind_este_vencido() {
+        let vencido = DatosContratista {
+            fecha_vencimiento_praind: Some(fecha("2020-01-01")),
+            tiene_acceso: false,
+            ..datos()
+        };
+        assert!(registrar(vencido, hechos()).is_ok());
+    }
+
+    #[test]
+    fn al_devolver_el_acceso_el_praind_tiene_que_estar_al_dia() {
+        let mut vetado = registrar(sin_acceso_ni_praind(), hechos()).unwrap();
+
+        let sin_fecha = DatosContratista {
+            fecha_vencimiento_praind: None,
+            ..datos()
+        };
+        assert_eq!(
+            vetado.editar(sin_fecha, hechos(), hoy()),
+            Err(ErrorContratista::PraindRequerido)
+        );
+
+        let con_la_vieja = DatosContratista {
+            fecha_vencimiento_praind: Some(SIN_PRAIND),
+            ..datos()
+        };
+        assert_eq!(
+            vetado.editar(con_la_vieja, hechos(), hoy()),
+            Err(ErrorContratista::PraindVencido),
+            "devolverle el acceso con un PRAIND vencido no se puede"
+        );
+
+        assert!(vetado.editar(datos(), hechos(), hoy()).is_ok());
+        assert!(vetado.tiene_acceso());
+        assert_eq!(vetado.fecha_vencimiento_praind(), fecha("2027-01-01"));
+    }
+
+    #[test]
+    fn quitar_el_acceso_sin_dar_fecha_conserva_el_praind() {
+        let mut contratista = registrado();
+        let quitar = DatosContratista {
+            fecha_vencimiento_praind: None,
+            tiene_acceso: false,
+            ..datos()
+        };
+        let cambios = contratista.editar(quitar, hechos(), hoy()).unwrap();
+        let campos: Vec<_> = cambios.iter().map(|cambio| cambio.campo).collect();
+        assert_eq!(campos, ["tiene_acceso"], "la fecha no se borra");
+        assert_eq!(contratista.fecha_vencimiento_praind(), fecha("2027-01-01"));
     }
 
     #[test]

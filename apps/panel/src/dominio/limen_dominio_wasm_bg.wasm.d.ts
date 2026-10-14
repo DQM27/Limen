@@ -17,6 +17,7 @@ export const empresa_al_escribir: (a: number, b: number) => [number, number];
 export const empresa_evaluar: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
 export const empresa_nombre: (a: number, b: number) => [number, number];
 export const estado_de_conexion_del_equipo: (a: number, b: number, c: number) => [number, number, number, number];
+export const fecha_es_praind: (a: number, b: number) => number;
 export const filas_que_coinciden: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const generar_codigo: (a: number, b: number) => [number, number, number, number];
 export const leer_codigo: (a: number, b: number) => [number, number, number, number];

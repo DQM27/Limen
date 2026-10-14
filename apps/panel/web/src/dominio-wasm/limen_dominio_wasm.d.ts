@@ -76,6 +76,11 @@ export function empresa_nombre(texto: string): string;
 export function estado_de_conexion_del_equipo(anuncia_en_linea: boolean, visto_ms: number, ahora_ms: number): string;
 
 /**
+ * ¿Es un PRAIND de verdad, o la fecha de quien se registró sin acceso y sin PRAIND?
+ */
+export function fecha_es_praind(fecha: string): boolean;
+
+/**
  * De cada fila (un arreglo de `{ campo, texto }`), si coincide con el buscador.
  */
 export function filas_que_coinciden(buscado: string, filas: string): string;
@@ -165,6 +170,7 @@ export interface InitOutput {
     readonly empresa_evaluar: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
     readonly empresa_nombre: (a: number, b: number) => [number, number];
     readonly estado_de_conexion_del_equipo: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly fecha_es_praind: (a: number, b: number) => number;
     readonly filas_que_coinciden: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly generar_codigo: (a: number, b: number) => [number, number, number, number];
     readonly leer_codigo: (a: number, b: number) => [number, number, number, number];

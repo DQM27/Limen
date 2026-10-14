@@ -359,15 +359,13 @@ impl ContratistaEntrada {
         let empresa = borrador
             .empresa
             .ok_or_else(|| falta(ErrorContratista::EmpresaRequerida))?;
-        let fecha_vencimiento_praind = borrador
-            .fecha_vencimiento_praind
-            .ok_or_else(|| falta(ErrorContratista::PraindRequerido))?;
         Ok(ComandoContratista {
             cedula: self.cedula.clone(),
             nombre: self.nombre.clone(),
             empresa,
             tipo_ingreso: self.leer_tipo_ingreso()?,
-            fecha_vencimiento_praind,
+            // Que falte el PRAIND lo decide el dominio: sólo se pide si hay acceso.
+            fecha_vencimiento_praind: borrador.fecha_vencimiento_praind,
             tiene_acceso: self.tiene_acceso,
         })
     }
@@ -398,6 +396,7 @@ impl ContratistaEntrada {
             nombre: self.nombre.clone(),
             empresa,
             fecha_vencimiento_praind,
+            tiene_acceso: self.tiene_acceso,
         })
     }
 

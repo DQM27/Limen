@@ -97,10 +97,17 @@ export class ContratistasPagina {
       headerName: 'Vence PRAIND',
       flex: 1,
       minWidth: 120,
-      valueFormatter: ({ value }) => soloFecha(value),
+      // Quien se registró sin acceso y sin PRAIND no tiene fecha que mostrar.
+      valueFormatter: ({ value }) =>
+        this.nucleo.fechaEsPraind(String(value)) ? soloFecha(value) : 'Sin PRAIND',
       // Si está vencido lo dice el núcleo; la celda sólo se pinta.
-      cellClass: ({ value }) =>
-        this.nucleo.praindVencido(String(value), Date.now()) ? 'estado-malo' : 'estado-bueno',
+      cellClass: ({ value }) => {
+        const fecha = String(value);
+        if (!this.nucleo.fechaEsPraind(fecha)) {
+          return 'estado-neutro';
+        }
+        return this.nucleo.praindVencido(fecha, Date.now()) ? 'estado-malo' : 'estado-bueno';
+      },
     },
     {
       field: 'tiene_acceso',
@@ -153,6 +160,11 @@ export class ContratistasPagina {
     this.abrirDialogo({ empresas: this.empresas() });
   }
 
+  /** Negar el acceso a una persona que quizá nunca fue contratista: no se le pide el PRAIND. */
+  protected negarAcceso(): void {
+    this.abrirDialogo({ empresas: this.empresas(), sinAcceso: true });
+  }
+
   private editar(contratista: Contratista): void {
     this.abrirDialogo({ contratista, empresas: this.empresas() });
   }
@@ -202,6 +214,11 @@ export class ContratistasPagina {
       );
       await this.cargar();
     };
+    if (tieneAcceso && !this.nucleo.fechaEsPraind(contratista.fecha_vencimiento_praind)) {
+      // Nunca tuvo PRAIND: para devolverle el acceso hay que ponerle uno, en el formulario.
+      this.editar(contratista);
+      return;
+    }
     if (tieneAcceso) {
       guardar().catch((error: unknown) => this.avisarError(error));
       return;

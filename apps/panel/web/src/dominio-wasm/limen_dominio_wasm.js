@@ -343,6 +343,18 @@ export function estado_de_conexion_del_equipo(anuncia_en_linea, visto_ms, ahora_
 }
 
 /**
+ * ¿Es un PRAIND de verdad, o la fecha de quien se registró sin acceso y sin PRAIND?
+ * @param {string} fecha
+ * @returns {boolean}
+ */
+export function fecha_es_praind(fecha) {
+    const ptr0 = passStringToWasm0(fecha, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.fecha_es_praind(ptr0, len0);
+    return ret !== 0;
+}
+
+/**
  * De cada fila (un arreglo de `{ campo, texto }`), si coincide con el buscador.
  * @param {string} buscado
  * @param {string} filas

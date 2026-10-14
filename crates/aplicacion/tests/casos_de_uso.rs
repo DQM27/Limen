@@ -68,7 +68,7 @@ mod tests {
             nombre: "  josé  peña ".into(),
             empresa,
             tipo_ingreso: TipoIngreso::Praind,
-            fecha_vencimiento_praind: fecha("2027-01-01"),
+            fecha_vencimiento_praind: Some(fecha("2027-01-01")),
             tiene_acceso: true,
         }
     }
@@ -160,10 +160,45 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn se_puede_vetar_a_alguien_sin_pedirle_el_praind() {
+        let (almacen, empresa) = almacen_con_empresa();
+        let vetado = ComandoContratista {
+            fecha_vencimiento_praind: None,
+            tiene_acceso: false,
+            ..comando(empresa)
+        };
+        registrar(&almacen)
+            .ejecutar(&sesion(), &vetado)
+            .await
+            .unwrap();
+
+        let ficha = ConsultarContratista::new(almacen.clone(), reloj())
+            .ejecutar("1-1111-1111")
+            .await
+            .unwrap();
+        assert_eq!(
+            ficha.acceso,
+            ResultadoAcceso::Denegado(MotivoDenegacion::SinAcceso),
+            "queda vetado por todas las vías"
+        );
+
+        let con_acceso = ComandoContratista {
+            cedula: "2-2222-2222".into(),
+            fecha_vencimiento_praind: None,
+            ..comando(empresa)
+        };
+        assert_eq!(
+            registrar(&almacen).ejecutar(&sesion(), &con_acceso).await,
+            Err(ErrorCaso::Negocio(ErrorContratista::PraindRequerido)),
+            "con acceso, el PRAIND sí hace falta"
+        );
+    }
+
+    #[tokio::test]
     async fn no_se_registra_con_el_praind_vencido() {
         let (almacen, empresa) = almacen_con_empresa();
         let mut vencido = comando(empresa);
-        vencido.fecha_vencimiento_praind = fecha("2026-10-08");
+        vencido.fecha_vencimiento_praind = Some(fecha("2026-10-08"));
         assert_eq!(
             registrar(&almacen).ejecutar(&sesion(), &vencido).await,
             Err(ErrorCaso::Negocio(ErrorContratista::PraindVencido))
@@ -347,6 +382,7 @@ mod tests {
             nombre: "josé peña".into(),
             empresa,
             fecha_vencimiento_praind: Some(fecha("2027-01-01")),
+            tiene_acceso: true,
         }
     }
 
@@ -369,6 +405,7 @@ mod tests {
             nombre: String::new(),
             empresa: None,
             fecha_vencimiento_praind: None,
+            tiene_acceso: true,
         };
         assert_eq!(
             validar(&almacen).ejecutar(None, &vacio).await,
@@ -460,7 +497,7 @@ mod tests {
     async fn consulta_por_cedula_en_cualquier_formato_y_dice_si_puede_entrar() {
         let (almacen, empresa) = almacen_con_empresa();
         let mut por_vencer = comando(empresa);
-        por_vencer.fecha_vencimiento_praind = fecha("2026-11-01");
+        por_vencer.fecha_vencimiento_praind = Some(fecha("2026-11-01"));
         registrar(&almacen)
             .ejecutar(&sesion(), &por_vencer)
             .await

@@ -35,6 +35,9 @@ class NucleoFalso extends Nucleo {
   empresaAlEscribir(texto: string): string {
     return texto.toUpperCase();
   }
+  fechaEsPraind(): boolean {
+    return true;
+  }
   praindVencido(): boolean {
     return false;
   }

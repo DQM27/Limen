@@ -43,9 +43,7 @@ que está desplegado en `limen.megabrisas.com` sale de esta rama). Detalle en [`
    [`panel.md`](panel.md). Pendiente: verlo en el navegador (hay que desplegar) y renombrar empresas (el dominio ya
    puede; falta la pantalla). Tropiezo: `npm --prefix apps/panel run dominio` falla si no se corre desde la raíz del
    repositorio con el cwd correcto; si pasa, correr los dos `wasm-bindgen` a mano desde la raíz.
-2. **Acceso denegado por cédula:** quien está vetado no entra por **ninguna** vía (contratista, proveedor o
-   correo). El catálogo se mantiene al día en la nube y, si no cuesta, se valida en cada registro. En Lattis fue
-   difícil: se puede ver ahí como referencia. Mirar primero qué ya hace `crates/aplicacion/src/casos_de_uso/veto.rs`.
+2. ~~Acceso denegado por cédula~~ **Hecho (sin PR)**: la regla A8 ya negaba por todas las vías con el interruptor de acceso del contratista; faltaba poder vetar a quien nunca fue contratista. Regla B8b: con el acceso denegado no se pide el PRAIND (queda `SIN_PRAIND`); botón «Negar acceso a una persona» en el panel. Decidido con el dueño: se hace como Lattis (mismo interruptor, sin lista aparte) y **no** se verifica en la nube en cada registro (queda para después; iría sobre la rama del PR #23, como A9). Pendiente: el formulario del escritorio ya acepta vetar sin PRAIND por el núcleo, pero su tabla muestra la fecha 1970 como cualquier otra.
 3. Historiales (sólo lectura, con filtros por unidad y fecha), alertas con nombre de la persona en los ingresos y,
    más adelante, Cloudflare Access para saber quién hizo cada cambio en el panel (hoy la auditoría anota un
    identificador nulo).

@@ -100,6 +100,8 @@ puede devolver. En la página, la columna «Vence PRAIND» se pinta según lo qu
 empresa se elige entre las que existen (filtradas con la búsqueda N2 del núcleo) y una nueva se crea
 con «+».
 
+**Negar el acceso (A8):** el botón «Negar acceso a una persona» abre el mismo formulario con el acceso apagado. A quien nunca fue contratista no se le pide el PRAIND (regla B8b del núcleo: queda como «Sin PRAIND»); cédula, nombre y empresa sí. Para devolverle el acceso se edita y se le pone un PRAIND vigente. Vale por todas las vías, igual que el interruptor de siempre.
+
 Cosas que costaron un tropiezo: SurrealDB lee como UUID todo texto que lo parezca, así que al
 guardar la auditoría (la empresa del alta es un UUID) se devuelve a texto con `<string>`; y la
 auditoría es inmutable, por eso las pruebas contra la nube dejan sus entradas de auditoría.

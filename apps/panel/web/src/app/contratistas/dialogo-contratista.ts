@@ -31,6 +31,8 @@ export interface DatosDialogoContratista {
   /** Sin contratista, es un alta; con contratista, una edición. */
   contratista?: Contratista;
   empresas: EmpresaCatalogo[];
+  /** Un alta que empieza con el acceso negado (el PRAIND no hace falta). */
+  sinAcceso?: boolean;
 }
 
 /** Lo que el diálogo devuelve al cerrarse: el contratista guardado y si era alta o edición. */
@@ -78,6 +80,7 @@ export class DialogoContratista {
   private readonly api = inject(ApiContratistas);
   private readonly datos = inject<DatosDialogoContratista>(MAT_DIALOG_DATA);
   protected readonly contratista = this.datos.contratista;
+  protected readonly sinAcceso = this.datos.sinAcceso === true;
   protected readonly etiquetaDeTipo = etiquetaDeTipo;
 
   protected readonly cedula = signal(this.contratista?.cedula ?? '');
@@ -91,8 +94,13 @@ export class DialogoContratista {
       : null,
   );
   protected readonly tipo = signal<TipoIngreso>(this.contratista?.tipo_ingreso ?? 'PRAIND');
-  protected readonly fecha = signal(this.contratista?.fecha_vencimiento_praind ?? '');
-  protected readonly tieneAcceso = signal(this.contratista?.tiene_acceso ?? true);
+  /** La fecha de quien nunca tuvo PRAIND no se muestra en el formulario. */
+  protected readonly fecha = signal(
+    this.contratista && this.nucleo.fechaEsPraind(this.contratista.fecha_vencimiento_praind)
+      ? this.contratista.fecha_vencimiento_praind
+      : '',
+  );
+  protected readonly tieneAcceso = signal(this.contratista?.tiene_acceso ?? !this.datos.sinAcceso);
 
   protected readonly enviando = signal(false);
   protected readonly problemas = signal<Problema[]>([]);

@@ -15,7 +15,7 @@ use limen_dominio::cedula::Cedula;
 use limen_dominio::conexion_equipo::estado_de_conexion;
 use limen_dominio::contratista::{
     BorradorContratista, Contratista, ContratistaGuardado, ContratistaId, DatosContratista,
-    ErrorContratista, HechosContratista, cedula_de_contratista, problemas,
+    ErrorContratista, HechosContratista, cedula_de_contratista, problemas, tiene_praind,
 };
 use limen_dominio::empresa::{
     Empresa, EmpresaId, HechosEmpresa, NombreEmpresa, nombre_empresa_mientras_se_escribe,
@@ -594,6 +594,7 @@ fn regla_contratista(entrada: &str) -> Result<String, Motivo> {
         nombre: texto_opcional(formulario, "nombre"),
         empresa,
         fecha_vencimiento_praind: fecha,
+        tiene_acceso: booleano(formulario, "tiene_acceso"),
     };
     let lista = problemas(&borrador, hechos, hoy, anterior.as_ref());
     if !lista.is_empty() {
@@ -610,8 +611,8 @@ fn regla_contratista(entrada: &str) -> Result<String, Motivo> {
         return Ok(json!({ "problemas": lista }).to_string());
     }
 
-    // Sin problemas, la empresa y la fecha están.
-    let (Some(empresa), Some(fecha)) = (empresa, fecha) else {
+    // Sin problemas, la empresa está (y la fecha, salvo que no se dé el acceso).
+    let Some(empresa) = empresa else {
         return Err("json_invalido");
     };
     let datos = DatosContratista {
@@ -745,6 +746,12 @@ fn regla_praind_vencido(fecha: &str, ahora_ms: f64) -> bool {
 #[wasm_bindgen]
 pub fn praind_esta_vencido(fecha: &str, ahora_ms: f64) -> bool {
     regla_praind_vencido(fecha, ahora_ms)
+}
+
+/// ¿Es un PRAIND de verdad, o la fecha de quien se registró sin acceso y sin PRAIND?
+#[wasm_bindgen]
+pub fn fecha_es_praind(fecha: &str) -> bool {
+    fecha.parse::<NaiveDate>().is_ok_and(tiene_praind)
 }
 
 /// El nombre de empresa como se ve mientras se escribe (mayúscula, sin tocar los espacios).
@@ -1116,6 +1123,19 @@ mod tests {
         assert_eq!(regla_contratista(&sin_id), Err("id_invalido"));
         assert_eq!(regla_cedula_de_contratista("1-1111-1111"), "111111111");
         assert_eq!(regla_cedula_de_contratista("AB1"), "");
+    }
+
+    #[test]
+    fn quien_se_registra_sin_acceso_no_lleva_praind() {
+        let sin_acceso = json!({ "borrador": {
+            "cedula": "1-1111-1111", "nombre": "ana", "empresa": EMPRESA,
+            "tipo_ingreso": "PRAIND", "fecha_vencimiento_praind": "",
+            "tiene_acceso": false } });
+        let respuesta = json_de(&regla_contratista(&pedido_de_contratista(&sin_acceso)).unwrap());
+        assert_eq!(respuesta["problemas"], json!([]));
+        assert_eq!(respuesta["datos"]["fecha_vencimiento_praind"], "1970-01-01");
+        assert!(!fecha_es_praind("1970-01-01"));
+        assert!(fecha_es_praind("2027-01-01"));
     }
 
     #[test]

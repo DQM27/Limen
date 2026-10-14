@@ -57,6 +57,9 @@ export abstract class Nucleo {
   /** El nombre de una empresa como se ve mientras se escribe (mayúscula, sin tocar los espacios). */
   abstract empresaAlEscribir(texto: string): string;
 
+  /** ¿Es un PRAIND de verdad, o la fecha de quien se registró sin acceso y sin PRAIND? */
+  abstract fechaEsPraind(fecha: string): boolean;
+
   /** ¿Está vencido el PRAIND que vence en `fecha` (`AAAA-MM-DD`)? `ahoraMs`: la hora de ahora. */
   abstract praindVencido(fecha: string, ahoraMs: number): boolean;
 }

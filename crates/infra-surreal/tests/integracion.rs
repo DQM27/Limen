@@ -47,7 +47,7 @@ mod tests {
             nombre: "josé peña".into(),
             empresa,
             tipo_ingreso: TipoIngreso::Praind,
-            fecha_vencimiento_praind: NaiveDate::from_ymd_opt(2027, 1, 1).unwrap(),
+            fecha_vencimiento_praind: Some(NaiveDate::from_ymd_opt(2027, 1, 1).unwrap()),
             tiene_acceso: true,
         }
     }

@@ -204,7 +204,9 @@ mod tests {
                         nombre: "josé peña".into(),
                         empresa: EmpresaId::desde_uuid(Uuid::from_u128(500)),
                         tipo_ingreso: TipoIngreso::Praind,
-                        fecha_vencimiento_praind: NaiveDate::from_ymd_opt(2027, 1, 1).unwrap(),
+                        fecha_vencimiento_praind: Some(
+                            NaiveDate::from_ymd_opt(2027, 1, 1).unwrap(),
+                        ),
                         tiene_acceso: false,
                     },
                 )
