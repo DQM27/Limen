@@ -14,6 +14,24 @@ import { AgGridAngular } from 'ag-grid-angular';
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 /**
+ * AG Grid elige claro u oscuro según este atributo del documento (sin él se queda en
+ * claro). Se deja igual al esquema del sistema, como el resto de la página.
+ */
+function ajustarEsquemaDelGrid(): void {
+  if (typeof document === 'undefined' || typeof matchMedia === 'undefined') {
+    return;
+  }
+  const consulta = matchMedia('(prefers-color-scheme: dark)');
+  const aplicar = (): void => {
+    document.body.dataset['agThemeMode'] = consulta.matches ? 'dark' : 'light';
+  };
+  aplicar();
+  consulta.addEventListener?.('change', aplicar);
+}
+
+ajustarEsquemaDelGrid();
+
+/**
  * La tabla de todo el panel, igual que la de la app de escritorio: AG Grid con
  * su aspecto de serie (claro u oscuro según el sistema, con los colores de
  * Tokyo Night), una sola fila de herramientas y textos en español. Cada
