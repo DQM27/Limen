@@ -332,3 +332,48 @@ y `limen-nube esquema` con un usuario `EDITOR` o superior. Después, en el Worke
 - Un equipo sin conexión por más tiempo que el diario retenga debería volver a hacer su carga
   completa (cuando exista la purga).
 - Las tablas de los equipos (`dispositivo`, `conexion`, …) las lee sólo el panel.
+
+## 14. El panel en tiempo real (hecho)
+
+La página del panel se conecta **directo a la base** (WebSocket, `wss://…/rpc`) y la base le avisa al
+instante de lo que cambia (`LIVE SELECT` de `conexion`, `usuario`, `dispositivo` y `hecho`). Con eso
+la página actualiza sus tablas sin esperar y muestra avisos (usuario desactivado, equipo que se
+conecta, se desconecta o pierde la señal, ingreso nuevo…), con los mismos toasts del escritorio.
+
+**Cómo funciona**
+
+1. La página pide al Worker `POST /api/en-vivo` (con la clave del panel) y recibe un token de **sólo
+   lectura** de una hora, firmado con `PANEL_VIVO_SECRETO` (un secreto aparte del de los equipos). Antes
+   de que venza, la página pide otro y se vuelve a conectar; si se corta, reintenta sola.
+2. La base lo acepta con `DEFINE ACCESS panel ... TYPE RECORD WITH JWT` (igual que el de los equipos:
+   lleva la clave de firma, así que **no está en el repositorio**; ver abajo).
+3. **Lo que el panel puede hacer lo decide la base**, no la página (`crates/infra-nube/src/esquema_nube.surql`):
+   ve los hechos de todas las unidades, los equipos y su conexión y los usuarios, pero **nunca la clave
+   (el hash) de un usuario**, y no escribe nada. Los permisos «para todos» (`FULL`) de los catálogos y de
+   la auditoría valían también para el panel; ahora escribir queda en `$access = 'equipo'`.
+   `crates/infra-nube/tests/panel_en_vivo.rs` lo comprueba con una base en memoria: el panel lee y no
+   escribe, y los equipos siguen viendo sólo su unidad, leyendo la clave de los usuarios y editando los
+   catálogos.
+4. Cómo está conectado un equipo (en línea, sin señal, desconectado) lo decide el núcleo
+   (`dominio/conexion_equipo.rs`): el Worker lo calcula al leer y la página lo recalcula con la hora de
+   ahora, porque un equipo que deja de avisar no manda ningún cambio.
+
+**Para activarlo en una nube** (una sola vez; la clave sale de `PANEL_VIVO_SECRETO`):
+
+```sql
+DEFINE ACCESS OVERWRITE panel ON DATABASE TYPE RECORD WITH JWT ALGORITHM HS512
+    KEY '<PANEL_VIVO_SECRETO>'
+    AUTHENTICATE { RETURN type::record('panel_lector', 'panel') }
+    DURATION FOR SESSION 1h;
+```
+
+como administrador de la base (la consola de SurrealDB Cloud), y `limen-nube esquema` con un usuario
+`EDITOR` o superior para los permisos. Después, en el Worker: `wrangler secret put PANEL_VIVO_SECRETO` y
+`npm run publicar`. Sin el secreto, `/api/en-vivo` responde 503 y la página funciona igual, sin tiempo real
+(se actualiza cada 15 segundos).
+
+**Lo que falta**
+
+- Las alertas sólo ven lo que ocurre mientras la página está abierta: no hay historial de alertas (eso
+  será la sección Historiales).
+- Un aviso de un ingreso no lleva todavía el nombre de la persona, sólo la vía, la unidad y la hora.
