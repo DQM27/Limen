@@ -149,7 +149,7 @@ test('editar: cambia la cédula y el nombre, los normaliza el núcleo y queda en
   );
 });
 
-test('editar: dar de baja y reactivar es cambiar «activo»; no se borra a nadie', async () => {
+test('editar: desactivar y activar es cambiar «activo»; no se borra a nadie', async () => {
   const llamadas = baseFalsa(conAna());
   const { estado, cuerpo } = await editar(ENV, ID, {
     cedula: '111111111',

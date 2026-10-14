@@ -72,8 +72,8 @@ segundos.
 
 ## Usuarios (bloque L)
 
-`GET` y `POST /api/usuarios`, `PATCH /api/usuarios/:id` (cédula, nombre y activo; dar de baja es
-`activo = false`, nunca se borra) y `POST /api/usuarios/:id/clave` (restablecer). El Worker sólo
+`GET` y `POST /api/usuarios`, `PATCH /api/usuarios/:id` (cédula, nombre y activo; desactivar es
+`activo = false`: sólo impide iniciar sesión, se revierte con el interruptor y a nadie se borra) y `POST /api/usuarios/:id/clave` (restablecer). El Worker sólo
 orquesta (`usuarios.js`): **el núcleo decide** qué cédula y qué nombre valen y cómo quedan
 normalizados, que la cédula sea única (la cédula es editable; el usuario conserva su ID), cómo es
 la clave temporal (10 símbolos sin 0, O, 1 ni I, del azar que entrega el Worker) y qué cambió para

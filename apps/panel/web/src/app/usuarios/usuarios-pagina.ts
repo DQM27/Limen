@@ -28,8 +28,9 @@ const CADA_CUANTO_MS = 15_000;
 /**
  * Usuarios: quienes operan el sistema (bloque L). Son globales: se crean y se administran
  * aquí, en la nube; los equipos sólo los bajan para iniciar sesión. Crear, editar la cédula y
- * el nombre, dar de baja y reactivar (nunca se borra a nadie) y restablecer la clave. La
- * pantalla no decide nada: el núcleo normaliza, valida y busca; el Worker guarda.
+ * el nombre, activar o desactivar con un interruptor (un usuario nunca se borra: desactivado
+ * sólo deja de poder iniciar sesión, y se vuelve a activar cuando se quiera) y restablecer la
+ * clave. La pantalla no decide nada: el núcleo normaliza, valida y busca; el Worker guarda.
  */
 @Component({
   selector: 'app-usuarios-pagina',
@@ -70,13 +71,12 @@ export class UsuariosPagina {
     },
     {
       field: 'activo',
-      headerName: 'Estado',
-      // Un sí/no sería una casilla en AG Grid: se muestra el texto.
+      headerName: 'Activo',
+      // Un sí/no sería una casilla en AG Grid: aquí es un interruptor.
       cellDataType: false,
-      flex: 1,
-      minWidth: 110,
-      valueFormatter: ({ value }) => (value ? 'Activo' : 'De baja'),
-      cellClass: ({ value }) => (value ? 'estado-bueno' : 'estado-malo'),
+      flex: 0.8,
+      minWidth: 100,
+      cellRenderer: (parametros: ICellRendererParams<Usuario>) => this.interruptor(parametros),
     },
     {
       field: 'debe_cambiar_clave',
@@ -156,25 +156,31 @@ export class UsuariosPagina {
     );
   }
 
-  /** Dar de baja o reactivar: sólo cambia «activo»; a nadie se le borra nada. */
-  private cambiarEstado(usuario: Usuario): void {
+  /**
+   * Activar o desactivar: sólo cambia «activo»; a nadie se le borra nada y se revierte con otro
+   * clic. Desactivar pide confirmación (deja a alguien sin entrar); activar, no.
+   */
+  private cambiarActivo(usuario: Usuario): void {
     const activo = !usuario.activo;
+    const guardar = async (): Promise<void> => {
+      await this.api.editar(usuario.id, {
+        cedula: usuario.cedula,
+        nombre: usuario.nombre,
+        activo,
+      });
+      await this.cargar();
+    };
+    if (activo) {
+      guardar().catch((error: unknown) => this.error.set(this.mensaje(error)));
+      return;
+    }
     this.confirmar(
       {
-        titulo: activo ? 'Reactivar usuario' : 'Dar de baja',
-        mensaje: activo
-          ? `¿Reactivar a «${usuario.nombre}»? Podrá volver a iniciar sesión.`
-          : `¿Dar de baja a «${usuario.nombre}»? Ya no podrá iniciar sesión, pero lo que registró se conserva.`,
-        confirmar: activo ? 'Reactivar' : 'Dar de baja',
+        titulo: 'Desactivar usuario',
+        mensaje: `¿Desactivar a «${usuario.nombre}»? Ya no podrá iniciar sesión, pero no se borra nada: lo que registró se conserva y lo puede volver a activar cuando quiera.`,
+        confirmar: 'Desactivar',
       },
-      async () => {
-        await this.api.editar(usuario.id, {
-          cedula: usuario.cedula,
-          nombre: usuario.nombre,
-          activo,
-        });
-        await this.cargar();
-      },
+      guardar,
     );
   }
 
@@ -207,10 +213,27 @@ export class UsuariosPagina {
     };
     boton('Editar', '', () => this.editar(usuario));
     boton('Clave', '', () => this.restablecerClave(usuario));
-    boton(usuario.activo ? 'Dar de baja' : 'Reactivar', usuario.activo ? 'peligro' : '', () =>
-      this.cambiarEstado(usuario),
-    );
     return contenedor;
+  }
+
+  /** El interruptor de la fila: encendido es «activo». No cambia solo: espera a que la nube responda. */
+  private interruptor(parametros: ICellRendererParams<Usuario>): HTMLElement {
+    const usuario = parametros.data;
+    const boton = document.createElement('button');
+    if (!usuario) {
+      return boton;
+    }
+    boton.type = 'button';
+    boton.className = 'interruptor';
+    boton.setAttribute('role', 'switch');
+    boton.setAttribute('aria-checked', String(usuario.activo));
+    boton.setAttribute(
+      'aria-label',
+      `${usuario.activo ? 'Desactivar' : 'Activar'} a ${usuario.nombre}`,
+    );
+    boton.append(document.createElement('span'));
+    boton.addEventListener('click', () => this.cambiarActivo(usuario));
+    return boton;
   }
 
   private async cargar(): Promise<void> {

@@ -97,3 +97,44 @@ h1 {
     }
   }
 }
+
+// El interruptor de «activo» de una fila (la celda la dibuja AG Grid, fuera de los componentes).
+.interruptor {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--mat-sys-outline);
+  border-radius: 10px;
+  background: var(--mat-sys-surface-container-highest);
+  vertical-align: middle;
+  cursor: pointer;
+
+  span {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--mat-sys-outline);
+    transition:
+      transform 120ms ease,
+      background 120ms ease;
+  }
+
+  &[aria-checked='true'] {
+    border-color: var(--mat-sys-primary);
+    background: var(--mat-sys-primary);
+
+    span {
+      background: var(--mat-sys-on-primary);
+      transform: translateX(16px);
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 2px;
+  }
+}

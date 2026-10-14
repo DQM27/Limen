@@ -1,5 +1,5 @@
-// Usuarios (bloque L): crear, editar (cédula, nombre y activo), dar de baja y reactivar, y
-// restablecer la clave. Los usuarios son globales y los administra la nube; el equipo sólo los
+// Usuarios (bloque L): crear, editar (cédula, nombre y activo; activar o desactivar, nunca
+// borrar) y restablecer la clave. Los usuarios son globales y los administra la nube; el equipo sólo los
 // baja. Aquí sólo se orquesta: leer, guardar y anotar la auditoría. **Todo lo que se decide lo
 // decide el núcleo** (`dominio.js`): qué cédula y qué nombre valen y cómo quedan normalizados,
 // que la cédula sea única, qué cambió y cómo es la clave temporal.
@@ -150,7 +150,7 @@ export function crear(env, cuerpo) {
   });
 }
 
-/** Cambia la cédula, el nombre y si está activo (dar de baja o reactivar no borra a nadie). */
+/** Cambia la cédula, el nombre y si está activo (activar o desactivar no borra a nadie). */
 export function editar(env, id, cuerpo) {
   return aplicar(async () => {
     if (typeof cuerpo?.activo !== 'boolean') throw new ErrorDeRegla('datos_invalidos');
