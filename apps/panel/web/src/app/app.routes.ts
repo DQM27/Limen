@@ -13,6 +13,11 @@ export const routes: Routes = [
     loadComponent: () => import('./usuarios/usuarios-pagina').then((m) => m.UsuariosPagina),
   },
   {
+    path: 'ingresos',
+    title: 'Ingresos · Limen',
+    loadComponent: () => import('./ingresos/ingresos-pagina').then((m) => m.IngresosPagina),
+  },
+  {
     path: 'contratistas',
     title: 'Contratistas · Limen',
     loadComponent: () =>

@@ -71,6 +71,30 @@ export class DatosDeUsuario {
 if (Symbol.dispose) DatosDeUsuario.prototype[Symbol.dispose] = DatosDeUsuario.prototype.free;
 
 /**
+ * Los accesos rápidos de fecha. JSON `{ por_omision, atajos: [{ codigo, etiqueta, corta, desde, hasta }] }`.
+ * @param {number} ahora_ms
+ * @returns {string}
+ */
+export function atajos_de_fecha(ahora_ms) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ret = wasm.atajos_de_fecha(ahora_ms);
+        var ptr1 = ret[0];
+        var len1 = ret[1];
+        if (ret[3]) {
+            ptr1 = 0; len1 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred2_0 = ptr1;
+        deferred2_1 = len1;
+        return getStringFromWasm0(ptr1, len1);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
  * Lo escrito en el buscador de una tabla como se ve (mayúsculas, sin tildes; regla N3).
  * @param {string} texto
  * @returns {string}
@@ -410,6 +434,35 @@ export function generar_codigo(azar) {
 }
 
 /**
+ * Los instantes UTC de un rango de días, o su problema. JSON `{ problema, desde, hasta }`.
+ * @param {string} desde
+ * @param {string} hasta
+ * @returns {string}
+ */
+export function instantes_del_rango(desde, hasta) {
+    let deferred4_0;
+    let deferred4_1;
+    try {
+        const ptr0 = passStringToWasm0(desde, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(hasta, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.instantes_del_rango(ptr0, len0, ptr1, len1);
+        var ptr3 = ret[0];
+        var len3 = ret[1];
+        if (ret[3]) {
+            ptr3 = 0; len3 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred4_0 = ptr3;
+        deferred4_1 = len3;
+        return getStringFromWasm0(ptr3, len3);
+    } finally {
+        wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
+    }
+}
+
+/**
  * Lee lo que escribió o escaneó una persona y lo deja en su forma canónica (lo que se
  * transforma en huella).
  * @param {string} texto
@@ -434,6 +487,15 @@ export function leer_codigo(texto) {
     } finally {
         wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
     }
+}
+
+/**
+ * Cuántos movimientos trae el historial como máximo.
+ * @returns {number}
+ */
+export function maximo_de_movimientos() {
+    const ret = wasm.maximo_de_movimientos();
+    return ret;
 }
 
 /**
@@ -521,6 +583,32 @@ export function nombre_al_escribir(texto) {
         return getStringFromWasm0(ret[0], ret[1]);
     } finally {
         wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * El orden en que se muestran los movimientos del historial (posiciones, en JSON).
+ * @param {string} movimientos
+ * @returns {string}
+ */
+export function orden_de_movimientos(movimientos) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(movimientos, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.orden_de_movimientos(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
     }
 }
 

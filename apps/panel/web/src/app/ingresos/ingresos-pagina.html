@@ -1,0 +1,87 @@
+<h1 class="solo-lectores">Ingresos</h1>
+
+<div class="filtros" role="group" aria-label="Filtros de ingresos">
+  <mat-button-toggle-group
+    aria-label="Qué mostrar"
+    hideSingleSelectionIndicator
+    [value]="estado()"
+    (change)="elegirEstado($event.value)"
+  >
+    <mat-button-toggle value="adentro">
+      <mat-icon aria-hidden="true">sensors</mat-icon>
+      Adentro ahora
+    </mat-button-toggle>
+    <mat-button-toggle value="historial">
+      <mat-icon aria-hidden="true">history</mat-icon>
+      Historial
+    </mat-button-toggle>
+  </mat-button-toggle-group>
+
+  <mat-button-toggle-group
+    aria-label="Vía de ingreso"
+    hideSingleSelectionIndicator
+    [value]="via()"
+    (change)="elegirVia($event.value)"
+  >
+    @for (opcion of vias; track opcion.codigo) {
+      <mat-button-toggle [value]="opcion.codigo">{{ opcion.etiqueta }}</mat-button-toggle>
+    }
+  </mat-button-toggle-group>
+
+  <label class="unidad">
+    <span class="solo-lectores">Unidad</span>
+    <select [value]="unidad()" (change)="elegirUnidad($event)">
+      <option value="">Todas las unidades</option>
+      @for (u of unidades(); track u.codigo) {
+        <option [value]="u.codigo" [selected]="u.codigo === unidad()">{{ u.nombre }}</option>
+      }
+    </select>
+  </label>
+</div>
+
+@if (enHistorial()) {
+  <div class="filtros" role="group" aria-label="Rango de fechas">
+    <mat-button-toggle-group
+      aria-label="Rango de fechas"
+      hideSingleSelectionIndicator
+      [value]="atajo()"
+      (change)="elegirAtajo($event.value)"
+    >
+      @for (a of atajos(); track a.codigo) {
+        <mat-button-toggle [value]="a.codigo" [title]="a.etiqueta">{{ a.corta }}</mat-button-toggle>
+      }
+    </mat-button-toggle-group>
+
+    <div class="fechas">
+      <label>
+        Desde
+        <input type="date" [value]="desde()" (change)="escribirDesde($event)" />
+      </label>
+      <label>
+        Hasta
+        <input type="date" [value]="hasta()" (change)="escribirHasta($event)" />
+      </label>
+    </div>
+    @if (errorDeRango(); as mensaje) {
+      <p class="error" role="alert">{{ mensaje }}</p>
+    }
+  </div>
+}
+
+@if (truncado()) {
+  <p class="aviso" role="status">
+    Hay más movimientos de los que se muestran (los más recientes). Acote las fechas para ver el
+    resto.
+  </p>
+}
+
+<app-tabla
+  etiqueta="Ingresos"
+  marcador="Cédula, nombre o empresa…"
+  [columnas]="columnas()"
+  [filas]="filas()"
+  [cargando]="cargando()"
+  [idFila]="idFila"
+  [camposDeBusqueda]="camposDeBusqueda"
+  [mensajeVacio]="mensajeVacio()"
+/>

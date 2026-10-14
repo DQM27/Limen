@@ -105,7 +105,7 @@ pub struct ContratistaEnLista {
 
 /// Cuántos movimientos trae el historial como máximo: más no se leen en una
 /// pantalla, y quien necesite todo acota las fechas.
-pub const MAXIMO_MOVIMIENTOS: usize = 20_000;
+pub const MAXIMO_MOVIMIENTOS: usize = limen_dominio::historial::MAXIMO_MOVIMIENTOS;
 
 pub type ErrorHistorial = ErrorCaso<ErrorRango>;
 

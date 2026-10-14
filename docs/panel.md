@@ -82,6 +82,10 @@ Rust comprueba que el login de Limen acepta ese hash) y se muestra una sola vez;
 auditoría. Hasta que entre Cloudflare Access, la auditoría anota los cambios del panel con el
 identificador nulo en vez de un usuario con nombre.
 
+## Ingresos (regla N4)
+
+`GET /api/ingresos?estado=adentro|historial&via=&unidad=&desde=&hasta=` y `GET /api/ingresos/atajos`. Una sola pantalla para **lo que está pasando** (botón «Adentro ahora») y **lo que ya pasó** («Historial»), con filtros por vía y por unidad y, en el historial, los accesos rápidos de fecha. El Worker (`ingresos.js`) lee las cuatro tablas (`ingreso_contratista`, `ingreso_proveedor`, `ingreso_correo` y `prestamo_kof`, que para el personal KOF son la entrega y la devolución del gafete) y las junta; **el núcleo decide** los accesos rápidos y su rango por omisión, qué instantes abarca un rango (`instantes_del_rango`), el orden (`orden_de_movimientos`) y el tope (`maximo_de_movimientos`). Quien registró cada marca sale del nombre del usuario en la nube; si la nube no lo conoce (los ingresos importados de Lattis), queda «—». La página se vuelve a leer con cada hecho (entrada o salida) que avisa la base en vivo.
+
 ## Contratistas (bloque B)
 
 `GET /api/contratistas` (contratistas y empresas), `POST /api/contratistas`, `PATCH

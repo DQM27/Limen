@@ -13,6 +13,6 @@ export interface Seccion {
 export const SECCIONES: readonly Seccion[] = [
   { etiqueta: 'Equipos', icono: 'devices', ruta: '/equipos' },
   { etiqueta: 'Usuarios', icono: 'group', ruta: '/usuarios' },
-  { etiqueta: 'Historiales', icono: 'history' },
+  { etiqueta: 'Ingresos', icono: 'meeting_room', ruta: '/ingresos' },
   { etiqueta: 'Contratistas', icono: 'engineering', ruta: '/contratistas' },
 ];

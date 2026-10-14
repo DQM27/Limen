@@ -14,6 +14,11 @@ export class DatosDeUsuario {
 }
 
 /**
+ * Los accesos rápidos de fecha. JSON `{ por_omision, atajos: [{ codigo, etiqueta, corta, desde, hasta }] }`.
+ */
+export function atajos_de_fecha(ahora_ms: number): string;
+
+/**
  * Lo escrito en el buscador de una tabla como se ve (mayúsculas, sin tildes; regla N3).
  */
 export function buscador_al_escribir(texto: string): string;
@@ -91,10 +96,20 @@ export function filas_que_coinciden(buscado: string, filas: string): string;
 export function generar_codigo(azar: Uint8Array): string;
 
 /**
+ * Los instantes UTC de un rango de días, o su problema. JSON `{ problema, desde, hasta }`.
+ */
+export function instantes_del_rango(desde: string, hasta: string): string;
+
+/**
  * Lee lo que escribió o escaneó una persona y lo deja en su forma canónica (lo que se
  * transforma en huella).
  */
 export function leer_codigo(texto: string): string;
+
+/**
+ * Cuántos movimientos trae el historial como máximo.
+ */
+export function maximo_de_movimientos(): number;
 
 /**
  * El mensaje que el núcleo da a un error de usuario, por su código (vacío si no es de los
@@ -117,6 +132,11 @@ export function motivo_de_rechazo_del_equipo(vinculado: boolean, retirado: boole
  * El nombre como se ve mientras se escribe (mayúscula, sin tocar los espacios).
  */
 export function nombre_al_escribir(texto: string): string;
+
+/**
+ * El orden en que se muestran los movimientos del historial (posiciones, en JSON).
+ */
+export function orden_de_movimientos(movimientos: string): string;
 
 /**
  * ¿Está vencido el PRAIND que vence en `fecha` (`AAAA-MM-DD`)? Hoy es el de Costa Rica.
@@ -159,6 +179,7 @@ export interface InitOutput {
     readonly __wbg_get_datosdeusuario_nombre: (a: number) => [number, number];
     readonly __wbg_set_datosdeusuario_cedula: (a: number, b: number, c: number) => void;
     readonly __wbg_set_datosdeusuario_nombre: (a: number, b: number, c: number) => void;
+    readonly atajos_de_fecha: (a: number) => [number, number, number, number];
     readonly buscador_al_escribir: (a: number, b: number) => [number, number];
     readonly celdas_que_cumplen: (a: number, b: number) => [number, number, number, number];
     readonly clave_temporal: (a: number, b: number, c: number, d: number) => [number, number, number, number];
@@ -173,11 +194,14 @@ export interface InitOutput {
     readonly fecha_es_praind: (a: number, b: number) => number;
     readonly filas_que_coinciden: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly generar_codigo: (a: number, b: number) => [number, number, number, number];
+    readonly instantes_del_rango: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly leer_codigo: (a: number, b: number) => [number, number, number, number];
+    readonly maximo_de_movimientos: () => number;
     readonly mensaje_de_error_de_usuario: (a: number, b: number) => [number, number];
     readonly motivo_de_rechazo: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly motivo_de_rechazo_del_equipo: (a: number, b: number) => [number, number];
     readonly nombre_al_escribir: (a: number, b: number) => [number, number];
+    readonly orden_de_movimientos: (a: number, b: number) => [number, number, number, number];
     readonly praind_esta_vencido: (a: number, b: number, c: number) => number;
     readonly resaltar_coincidencias: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
     readonly usuario_para_alta: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
@@ -185,10 +209,10 @@ export interface InitOutput {
     readonly usuario_para_restablecer: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
     readonly vigencia_minutos: () => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;
+    readonly __externref_table_dealloc: (a: number) => void;
+    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
-    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
-    readonly __externref_table_dealloc: (a: number) => void;
     readonly __wbindgen_start: () => void;
 }
 

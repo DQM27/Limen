@@ -7,6 +7,7 @@ import { acceso } from './acceso.js';
 import { estado_de_conexion_del_equipo } from './dominio.js';
 import { enVivo } from './en_vivo.js';
 import { canjear, listar, registrar, retirar, unidades } from './vinculacion.js';
+import { atajos as atajosDeFecha, listar as listarIngresos } from './ingresos.js';
 import {
   crearEmpresa,
   editar as editarContratista,
@@ -145,6 +146,13 @@ async function atender(request, env) {
     }
     if (pathname === '/api/empresas' && request.method === 'POST') {
       return json(await crearEmpresa(env, await cuerpoJson()));
+    }
+    // Ingresos de todas las unidades: los de ahora y el historial. El núcleo decide fechas y orden.
+    if (pathname === '/api/ingresos/atajos' && request.method === 'GET') {
+      return json(atajosDeFecha());
+    }
+    if (pathname === '/api/ingresos' && request.method === 'GET') {
+      return json(await listarIngresos(env, Object.fromEntries(new URL(request.url).searchParams)));
     }
     if (pathname.startsWith('/api/')) return Response.json({ error: 'no_existe' }, { status: 404 });
     return env.ASSETS.fetch(request);

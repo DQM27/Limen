@@ -6,7 +6,21 @@
 //! recibe del reloj). Un extremo vacío está abierto: "desde siempre" o "hasta
 //! hoy y lo que venga".
 
-use chrono::{Datelike, Days, Months, NaiveDate};
+use chrono::{DateTime, Datelike, Days, Duration, Months, NaiveDate, NaiveTime, TimeZone, Utc};
+
+/// Costa Rica va seis horas detrás de UTC todo el año (no cambia la hora).
+const HORAS_DETRAS_DE_UTC: i64 = 6;
+
+/// El primer instante de `dia` en Costa Rica, en UTC. Con él se convierten los días
+/// que elige la persona en los instantes con que se guardan los movimientos.
+pub fn inicio_del_dia_en_costa_rica(dia: NaiveDate) -> DateTime<Utc> {
+    Utc.from_utc_datetime(&dia.and_time(NaiveTime::MIN)) + Duration::hours(HORAS_DETRAS_DE_UTC)
+}
+
+/// El día de hoy en Costa Rica a partir de un instante.
+pub fn hoy_en_costa_rica(ahora: DateTime<Utc>) -> NaiveDate {
+    (ahora - Duration::hours(HORAS_DETRAS_DE_UTC)).date_naive()
+}
 
 /// Cuántos meses hacia atrás abre el historial por omisión.
 pub const MESES_POR_OMISION: u32 = 6;
@@ -55,6 +69,17 @@ impl RangoFechas {
 
     pub const fn hasta(&self) -> Option<NaiveDate> {
         self.hasta
+    }
+
+    /// El rango como instantes `[desde, hasta)` en UTC: arranca al inicio del primer día y
+    /// termina al inicio del día siguiente al último, así el día final entra completo.
+    pub fn instantes(&self) -> (Option<DateTime<Utc>>, Option<DateTime<Utc>>) {
+        (
+            self.desde.map(inicio_del_dia_en_costa_rica),
+            self.hasta
+                .and_then(|dia| dia.checked_add_days(Days::new(1)))
+                .map(inicio_del_dia_en_costa_rica),
+        )
     }
 }
 
@@ -194,6 +219,29 @@ mod tests {
 
     fn par(desde: &str, hasta: &str) -> (Option<String>, Option<String>) {
         (Some(desde.into()), Some(hasta.into()))
+    }
+
+    #[test]
+    fn los_dias_de_costa_rica_empiezan_a_las_seis_de_la_manana_utc() {
+        assert_eq!(
+            inicio_del_dia_en_costa_rica(fecha("2026-10-14")).to_rfc3339(),
+            "2026-10-14T06:00:00+00:00"
+        );
+        // A las 05:59 UTC todavía es el día anterior en Costa Rica.
+        let ahora: DateTime<Utc> = "2026-10-14T05:59:00Z".parse().unwrap();
+        assert_eq!(hoy_en_costa_rica(ahora), fecha("2026-10-13"));
+        let ahora: DateTime<Utc> = "2026-10-14T06:00:00Z".parse().unwrap();
+        assert_eq!(hoy_en_costa_rica(ahora), fecha("2026-10-14"));
+    }
+
+    #[test]
+    fn el_rango_en_instantes_incluye_completo_el_dia_final() {
+        let rango =
+            RangoFechas::nuevo(Some(fecha("2026-10-13")), Some(fecha("2026-10-14"))).unwrap();
+        let (desde, hasta) = rango.instantes();
+        assert_eq!(desde.unwrap().to_rfc3339(), "2026-10-13T06:00:00+00:00");
+        assert_eq!(hasta.unwrap().to_rfc3339(), "2026-10-15T06:00:00+00:00");
+        assert_eq!(RangoFechas::abierto().instantes(), (None, None));
     }
 
     #[test]

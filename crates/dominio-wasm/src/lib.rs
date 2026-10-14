@@ -8,7 +8,7 @@
 //! Cada regla vive en una función normal (`regla_*`, que se prueba aquí) y la exportada
 //! sólo convierte el error: `JsValue` no existe fuera de WebAssembly.
 
-use chrono::{DateTime, Duration, NaiveDate, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use limen_dominio::auditoria::CambioCampo;
 use limen_dominio::busqueda::{buscador_mientras_se_escribe, plegar};
 use limen_dominio::cedula::Cedula;
@@ -23,9 +23,11 @@ use limen_dominio::empresa::{
 use limen_dominio::filtro_de_tabla::{
     CampoDeFila, Operacion, cumple_filtro_de_columna, fila_coincide,
 };
+use limen_dominio::historial::{MAXIMO_MOVIMIENTOS, orden_del_historial};
 use limen_dominio::nombre::{NombrePersona, nombre_mientras_se_escribe};
 use limen_dominio::operador::OperadorId;
 use limen_dominio::praind::praind_vencido;
+use limen_dominio::rango_fechas::{Atajo, RangoFechas, hoy_en_costa_rica};
 use limen_dominio::resaltado::{Campo, resaltar};
 use limen_dominio::tipo_ingreso::TipoIngreso;
 use limen_dominio::usuario::{
@@ -491,11 +493,106 @@ pub fn clave_temporal(azar: &[u8], cedula: &str) -> Result<String, JsValue> {
     regla_clave_temporal(azar, cedula).map_err(a_js)
 }
 
+// --- Historial de ingresos: calendario, orden y tope ---
+
+fn fecha_opcional(texto: &str) -> Result<Option<NaiveDate>, Motivo> {
+    match texto {
+        "" => Ok(None),
+        texto => texto.parse().map(Some).map_err(|_| "fecha_invalida"),
+    }
+}
+
+fn texto_de_fecha(fecha: Option<NaiveDate>) -> serde_json::Value {
+    fecha.map_or(serde_json::Value::Null, |f| json!(f.to_string()))
+}
+
+/// Los accesos rápidos de fecha (hoy, esta semana…) con el rango que da cada uno y el que abre
+/// el historial por omisión.
+fn regla_atajos_de_fecha(ahora_ms: f64) -> Result<String, Motivo> {
+    let hoy = hoy_de_costa_rica(ahora_ms)?;
+    let atajos: Vec<_> = Atajo::TODOS
+        .into_iter()
+        .map(|atajo| {
+            let rango = atajo.rango(hoy);
+            json!({
+                "codigo": atajo.codigo(),
+                "etiqueta": atajo.etiqueta(),
+                "corta": atajo.corta(),
+                "desde": texto_de_fecha(rango.desde()),
+                "hasta": texto_de_fecha(rango.hasta()),
+            })
+        })
+        .collect();
+    Ok(json!({ "por_omision": Atajo::POR_OMISION.codigo(), "atajos": atajos }).to_string())
+}
+
+/// Un rango de días (`AAAA-MM-DD`, vacío = abierto) como los instantes UTC que entran en él, o
+/// el problema que lo impide.
+fn regla_instantes_del_rango(desde: &str, hasta: &str) -> Result<String, Motivo> {
+    let rango = match RangoFechas::nuevo(fecha_opcional(desde)?, fecha_opcional(hasta)?) {
+        Ok(rango) => rango,
+        Err(error) => {
+            return Ok(json!({ "problema": {
+                "codigo": error.codigo(),
+                "campo": "hasta",
+                "mensaje": error.to_string(),
+            } })
+            .to_string());
+        }
+    };
+    let (desde, hasta) = rango.instantes();
+    Ok(json!({
+        "problema": null,
+        "desde": desde.map(|d| d.to_rfc3339()),
+        "hasta": hasta.map(|h| h.to_rfc3339()),
+    })
+    .to_string())
+}
+
+/// Las posiciones de los movimientos (`[{ entrada, identidad }]`, `entrada` en ISO) ya en el
+/// orden en que se muestran.
+fn regla_orden_del_historial(movimientos: &str) -> Result<String, Motivo> {
+    let movimientos: Vec<(DateTime<Utc>, String)> = lista_de(&leer_json(movimientos)?)?
+        .iter()
+        .map(|m| {
+            let entrada = texto_de(m, "entrada")?
+                .parse()
+                .map_err(|_| "fecha_invalida")?;
+            Ok((entrada, texto_de(m, "identidad")?.to_owned()))
+        })
+        .collect::<Result<_, Motivo>>()?;
+    Ok(json!(orden_del_historial(&movimientos)).to_string())
+}
+
+/// Los accesos rápidos de fecha. JSON `{ por_omision, atajos: [{ codigo, etiqueta, corta, desde, hasta }] }`.
+#[wasm_bindgen]
+pub fn atajos_de_fecha(ahora_ms: f64) -> Result<String, JsValue> {
+    regla_atajos_de_fecha(ahora_ms).map_err(a_js)
+}
+
+/// Los instantes UTC de un rango de días, o su problema. JSON `{ problema, desde, hasta }`.
+#[wasm_bindgen]
+pub fn instantes_del_rango(desde: &str, hasta: &str) -> Result<String, JsValue> {
+    regla_instantes_del_rango(desde, hasta).map_err(a_js)
+}
+
+/// El orden en que se muestran los movimientos del historial (posiciones, en JSON).
+#[wasm_bindgen]
+pub fn orden_de_movimientos(movimientos: &str) -> Result<String, JsValue> {
+    regla_orden_del_historial(movimientos).map_err(a_js)
+}
+
+/// Cuántos movimientos trae el historial como máximo.
+#[wasm_bindgen]
+pub fn maximo_de_movimientos() -> f64 {
+    f64::from(u32::try_from(MAXIMO_MOVIMIENTOS).unwrap_or(u32::MAX))
+}
+
 // --- Contratistas y sus empresas ---
 
-/// El día de hoy en la instalación. Costa Rica va seis horas detrás de UTC todo el año.
+/// El día de hoy en la instalación (Costa Rica).
 fn hoy_de_costa_rica(ahora_ms: f64) -> Result<NaiveDate, Motivo> {
-    Ok((instante(ahora_ms)? - Duration::hours(6)).date_naive())
+    Ok(hoy_en_costa_rica(instante(ahora_ms)?))
 }
 
 fn texto_opcional<'a>(valor: &'a serde_json::Value, clave: &str) -> &'a str {
@@ -975,6 +1072,46 @@ mod tests {
             regla_estado_de_conexion(true, f64::MAX, minutos(1.0)),
             Err("fecha_invalida")
         );
+    }
+
+    #[test]
+    fn los_atajos_de_fecha_salen_del_nucleo_con_el_dia_de_costa_rica() {
+        let respuesta = json_de(&regla_atajos_de_fecha(AHORA_MS).unwrap());
+        assert_eq!(respuesta["por_omision"], "ULTIMOS_6_MESES");
+        let atajos = respuesta["atajos"].as_array().unwrap();
+        assert_eq!(atajos.len(), 10);
+        assert_eq!(atajos[0]["codigo"], "HOY");
+        assert_eq!(atajos[0]["desde"], "2026-10-14");
+        assert_eq!(atajos[0]["hasta"], "2026-10-14");
+        assert_eq!(atajos[9]["desde"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn el_rango_se_vuelve_instantes_o_dice_por_que_no() {
+        let bien = json_de(&regla_instantes_del_rango("2026-10-13", "2026-10-14").unwrap());
+        assert_eq!(bien["desde"], "2026-10-13T06:00:00+00:00");
+        assert_eq!(bien["hasta"], "2026-10-15T06:00:00+00:00");
+        let abierto = json_de(&regla_instantes_del_rango("", "").unwrap());
+        assert_eq!(abierto["desde"], serde_json::Value::Null);
+        let mal = json_de(&regla_instantes_del_rango("2026-10-14", "2026-10-13").unwrap());
+        assert_eq!(mal["problema"]["codigo"], "rango_invertido");
+        assert_eq!(mal["problema"]["campo"], "hasta");
+        assert_eq!(regla_instantes_del_rango("ayer", ""), Err("fecha_invalida"));
+    }
+
+    #[test]
+    fn el_orden_del_historial_lo_da_el_nucleo() {
+        let movimientos = r#"[
+            {"entrada":"2026-10-14T10:00:00Z","identidad":"222"},
+            {"entrada":"2026-10-14T12:00:00Z","identidad":"333"},
+            {"entrada":"2026-10-14T10:00:00Z","identidad":"111"}
+        ]"#;
+        assert_eq!(
+            regla_orden_del_historial(movimientos),
+            Ok("[1,2,0]".to_owned())
+        );
+        assert_eq!(regla_orden_del_historial("x"), Err("json_invalido"));
+        assert!((maximo_de_movimientos() - 20_000.0).abs() < f64::EPSILON);
     }
 
     #[test]

@@ -1,0 +1,66 @@
+:host {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+}
+
+// Una fila de botones de filtro; si no caben, bajan.
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+// Botones segmentados compactos (la altura de los campos de la app).
+mat-button-toggle-group {
+  --mat-button-toggle-height: 34px;
+  --mat-button-toggle-label-text-size: 13px;
+  --mat-button-toggle-legacy-height: 34px;
+}
+
+.unidad select,
+.fechas input {
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-medium);
+}
+
+.fechas {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--mat-sys-on-surface-variant);
+    font: var(--mat-sys-body-small);
+  }
+}
+
+.error,
+.aviso {
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font: var(--mat-sys-body-medium);
+}
+
+.error {
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+}
+
+.aviso {
+  background: var(--mat-sys-tertiary-container);
+  color: var(--mat-sys-on-tertiary-container);
+}

@@ -22,6 +22,7 @@ pub mod filtro_de_tabla;
 pub mod gafete;
 pub mod gafete_prestado;
 pub mod hecho;
+pub mod historial;
 pub mod ingreso_contratista;
 pub mod ingreso_correo;
 pub mod ingreso_proveedor;

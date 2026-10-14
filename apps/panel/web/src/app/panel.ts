@@ -162,3 +162,54 @@ export const editarContratista = async (
 
 export const crearEmpresa = async (nombre: string): Promise<EmpresaCatalogo> =>
   (await pedir<{ empresa: EmpresaCatalogo }>('/api/empresas', 'POST', { nombre })).empresa;
+
+export type ViaDeIngreso = 'CONTRATISTA' | 'PROVEEDOR' | 'CORREO' | 'KOF';
+
+/** Un ingreso (o la entrega del gafete provisional del personal KOF) de cualquier unidad. */
+export interface Ingreso {
+  id: string;
+  via: ViaDeIngreso;
+  unidad: string;
+  /** La cédula o, para el personal KOF, el código de empleado. */
+  identidad: string;
+  nombre: string;
+  /** La empresa, el motivo de la visita o «Personal KOF». */
+  procedencia: string;
+  placa: string | null;
+  gafete: number | null;
+  sin_gafete: boolean;
+  entrada: string;
+  entrada_por: string | null;
+  /** `null` mientras siga adentro. */
+  salida: string | null;
+  salida_por: string | null;
+}
+
+export interface ListaDeIngresos {
+  ingresos: Ingreso[];
+  /** Hay más movimientos de los que se traen: se muestran los más recientes. */
+  truncado: boolean;
+}
+
+/** Un acceso rápido de fecha tal como lo da el núcleo (`desde` y `hasta` son `AAAA-MM-DD` o `null`). */
+export interface AtajoDeFecha {
+  codigo: string;
+  etiqueta: string;
+  corta: string;
+  desde: string | null;
+  hasta: string | null;
+}
+
+export interface FiltroDeIngresos {
+  estado: 'adentro' | 'historial';
+  via: ViaDeIngreso | '';
+  unidad: string;
+  desde: string;
+  hasta: string;
+}
+
+export const listarIngresos = (filtro: FiltroDeIngresos): Promise<ListaDeIngresos> =>
+  pedir(`/api/ingresos?${new URLSearchParams({ ...filtro })}`);
+
+export const listarAtajosDeFecha = (): Promise<{ por_omision: string; atajos: AtajoDeFecha[] }> =>
+  pedir('/api/ingresos/atajos');
