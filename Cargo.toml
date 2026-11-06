@@ -26,9 +26,9 @@ thiserror = "2"
 uuid = { version = "1", features = ["v7"] }
 chrono-tz = { version = "0.10", default-features = false, features = ["std"] }
 # Argon2id para las claves (bloque L). Ya entraba con SurrealDB.
-argon2 = "0.5"
+argon2 = "0.6"
 # `getrandom`: la sal sale del generador del sistema operativo.
-password-hash = { version = "0.5", features = ["getrandom"] }
+password-hash = { version = "0.6", features = ["getrandom"] }
 proptest = "1"
 log = "0.4"
 serde = { version = "1", features = ["derive"] }

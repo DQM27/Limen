@@ -28,17 +28,17 @@ tokio = { workspace = true, features = ["time", "sync"] }
 # Para leer los avisos en vivo de la nube (`LIVE SELECT`).
 futures = "0.3"
 # Espera aleatoria (*jitter*) de los reintentos (`espera.rs`, docs/nube.md sección 11). No es para claves ni nonces.
-rand = "0.9"
+rand = "0.10"
 # Vinculación del equipo con su código (docs/panel.md): el equipo genera su par de claves
 # P-256 (la privada no sale de él) y canjea el código en el Worker del panel.
-base64 = "0.22"
+base64 = "0.23"
 p256 = { version = "0.13", features = ["ecdsa", "jwk"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 [dev-dependencies]
 # Para firmar, en las pruebas, el token que en producción emite el Worker del panel.
-hmac = "0.12"
-sha2 = "0.10"
+hmac = "0.13"
+sha2 = "0.11"
 
 [lints]
 workspace = true
